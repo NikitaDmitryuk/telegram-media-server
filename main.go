@@ -5,25 +5,28 @@ import (
 
 	"fmt"
 
-	"bbg_telegram_media_server/config"
-
 	"github.com/joho/godotenv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func main() {
+var GlobalConfig *Config
 
+func init() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Panic(err)
 		fmt.Println("Error loading .env file")
 		return
 	}
+	GlobalConfig = NewConfig()
+	initDB()
+}
 
-	cfg := config.NewConfig()
+func main() {
 
-	bot, err := tgbotapi.NewBotAPI(cfg.BotToken)
+
+	bot, err := tgbotapi.NewBotAPI(GlobalConfig.BotToken)
 	if err != nil {
 		log.Panic(err)
 	}
