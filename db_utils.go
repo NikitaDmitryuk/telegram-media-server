@@ -51,3 +51,73 @@ func addMovie(name, uploadedFile, torrentFile string) {
 }
 
 // Other functions (setLoaded, getMovieByID, removeMovie, getMovieList, login, updateDownloadedPercentage, checkUser) go here...
+
+func removeMovie(movieID int) {
+	stmt, err := db.Prepare("DELETE FROM Movie WHERE ID = ?")
+	if err != nil {
+		panic(err)
+	}
+	_, err = stmt.Exec(movieID)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func getMovieList() []Movie {
+	rows, err := db.Query("SELECT ID, NAME, DOWNLOADED, DOWNLOADED_PERCENTAGE FROM Movie ORDER BY ID")
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+
+	var movies []Movie
+	for rows.Next() {
+		var movie Movie
+		err := rows.Scan(&movie.ID, &movie.Name, &movie.Downloaded, &movie.DownloadedPercentage)
+		if err != nil {
+			panic(err)
+		}
+		movies = append(movies, movie)
+	}
+	return movies
+}
+
+func login(password string, chatID int64, userName string) bool {
+	if password == GlobalConfig.Password {
+		stmt, err := db.Prepare("INSERT INTO User (NAME, CHAT_ID) VALUES (?, ?)")
+		if err != nil {
+			panic(err)
+		}
+		_, err = stmt.Exec(userName, chatID)
+		if err != nil {
+			panic(err)
+		}
+		return true
+	}
+	return false
+}
+
+func updateDownloadedPercentage(name string, percentage int64) {
+	stmt, err := db.Prepare("UPDATE Movie SET DOWNLOADED_PERCENTAGE = ? WHERE NAME = ?")
+	if err != nil {
+		panic(err)
+	}
+	_, err = stmt.Exec(percentage, name)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func checkUser(chatID int64) bool {
+	stmt, err := db.Prepare("SELECT * FROM User WHERE CHAT_ID = ?")
+	if err != nil {
+		panic(err)
+	}
+	rows, err := stmt.Query(chatID)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+
+	return rows.Next()
+}
