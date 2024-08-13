@@ -11,6 +11,13 @@ import (
 
 var db *sql.DB
 
+type Movie struct {
+	ID                   int
+	Name                 string
+	Downloaded           bool
+	DownloadedPercentage int
+}
+
 func initDB() {
 	dbPath := filepath.Join(GlobalConfig.MoviePath, "movie.db")
 	db, _ = sql.Open("sqlite3", dbPath)
@@ -97,17 +104,6 @@ func login(password string, chatID int64, userName string) bool {
 	return false
 }
 
-func updateDownloadedPercentage(name string, percentage int64) {
-	stmt, err := db.Prepare("UPDATE Movie SET DOWNLOADED_PERCENTAGE = ? WHERE NAME = ?")
-	if err != nil {
-		panic(err)
-	}
-	_, err = stmt.Exec(percentage, name)
-	if err != nil {
-		panic(err)
-	}
-}
-
 func checkUser(chatID int64) bool {
 	stmt, err := db.Prepare("SELECT * FROM User WHERE CHAT_ID = ?")
 	if err != nil {
@@ -120,4 +116,42 @@ func checkUser(chatID int64) bool {
 	defer rows.Close()
 
 	return rows.Next()
+}
+
+func updateDownloadedPercentage(name string, percentage int) {
+	log.Printf("%s %d", name, percentage)
+	_, err := db.Exec(`
+		UPDATE Movie
+		SET DOWNLOADED_PERCENTAGE = ?
+		WHERE NAME = ?
+	`, percentage, name)
+	if err != nil {
+		log.Printf("failed to update download percentage: %v", err)
+	}
+}
+
+func setLoaded(name string) {
+	_, err := db.Exec(`
+		UPDATE Movie
+		SET DOWNLOADED = 1
+		WHERE NAME = ?
+	`, name)
+	if err != nil {
+		log.Printf("failed to set movie as downloaded: %v", err)
+	}
+}
+
+func getMovieByID(movieID int) (string, string, string, error) {
+	row := db.QueryRow(`
+		SELECT NAME, UPLOADED_FILE, TORRENT_FILE
+		FROM Movie
+		WHERE ID = ?
+	`, movieID)
+
+	var name, uploadedFile, torrentFile string
+	err := row.Scan(&name, &uploadedFile, &torrentFile)
+	if err != nil {
+		return "", "", "", err
+	}
+	return name, uploadedFile, torrentFile, nil
 }

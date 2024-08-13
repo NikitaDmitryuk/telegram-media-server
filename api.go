@@ -7,12 +7,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-type Movie struct {
-	ID                   int
-	Name                 string
-	Downloaded           bool
-	DownloadedPercentage int
-}
 
 func orchestrator(update tgbotapi.Update) {
 	if update.Message == nil {
@@ -53,6 +47,18 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 		default:
 			return unknownCommandHandler(update)
 		}
+	}
+	if update.Message.Document != nil {
+		fileID := update.Message.Document.FileID
+                log.Printf("Received file with ID: %s\n", fileID)
+
+                // Now you can download the file using the downloadFile function
+                err := downloadFile(fileID, update.Message.Document.FileName)
+                if err != nil {
+			log.Printf("Error: %v\n", err)
+                } else {
+			log.Println("File downloaded successfully")
+                }
 	}
 	return tgbotapi.MessageConfig{}
 }
