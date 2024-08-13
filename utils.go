@@ -64,9 +64,9 @@ func downloadTorrent(filePath string, movieID int) {
 			select {
 			case <-time.After(10 * time.Second):
 				percentage := int(t.BytesCompleted() * 100 / t.Info().TotalLength())
-				updateDownloadPercentage(movieID, percentage)
+				updateDownloadPercentage(movieName, percentage)
 				if percentage == 100 {
-					_, err := db.Exec("UPDATE Movie SET DOWNLOADED = 1 WHERE ID = ?", movieID)
+					setLoaded(movieName)
 					if err != nil {
 						log.Printf("failed to update download status: %v", err)
 					}
