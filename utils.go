@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"github.com/anacrolix/torrent"
+	"path/filepath"
 	"time"
+
+	"github.com/anacrolix/torrent"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -43,7 +46,7 @@ func downloadFile(fileID, fileName string) error {
 	return nil
 }
 
-func downloadTorrent(filePath string, movieID int) {
+func downloadTorrent(torrentFileName string, update tgbotapi.Update) {
 	clientConfig := torrent.NewDefaultClientConfig()
 	client, err := torrent.NewClient(clientConfig)
 	if err != nil {
@@ -51,25 +54,33 @@ func downloadTorrent(filePath string, movieID int) {
 	}
 	defer client.Close()
 
-	t, err := client.AddTorrentFromFile(filePath)
+	t, err := client.AddTorrentFromFile(filepath.Join(GlobalConfig.MoviePath, torrentFileName))
 	if err != nil {
 		log.Fatalf("failed to add torrent: %v", err)
 	}
 
 	<-t.GotInfo()
 	t.DownloadAll()
+	movieName := t.Name()
+	addMovie(movieName, movieName, torrentFileName)
 
 	go func() {
 		for {
 			select {
 			case <-time.After(10 * time.Second):
 				percentage := int(t.BytesCompleted() * 100 / t.Info().TotalLength())
-				updateDownloadPercentage(movieName, percentage)
-				if percentage == 100 {
+				updateDownloadedPercentage(movieName, percentage)
+				text := fmt.Sprintf("download percentage: %s", percentage)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+				GlobalBot.Send(msg)
+				if t.Complete.Bool() {
 					setLoaded(movieName)
 					if err != nil {
 						log.Printf("failed to update download status: %v", err)
 					}
+					text := fmt.Sprintf("download seccess")
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+					GlobalBot.Send(msg)
 					return
 				}
 			}

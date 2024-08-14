@@ -7,7 +7,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-
 func orchestrator(update tgbotapi.Update) {
 	if update.Message == nil {
 		return
@@ -50,15 +49,18 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 	}
 	if update.Message.Document != nil {
 		fileID := update.Message.Document.FileID
-                log.Printf("Received file with ID: %s\n", fileID)
+		log.Printf("Received file with ID: %s\n", fileID)
 
-                // Now you can download the file using the downloadFile function
-                err := downloadFile(fileID, update.Message.Document.FileName)
-                if err != nil {
+		// Now you can download the file using the downloadFile function
+		err := downloadFile(fileID, update.Message.Document.FileName)
+		if err != nil {
 			log.Printf("Error: %v\n", err)
-                } else {
+		} else {
 			log.Println("File downloaded successfully")
-                }
+		}
+		if strings.HasSuffix(update.Message.Document.FileName, ".torrent") {
+			downloadTorrent(update.Message.Document.FileName, update)
+		}
 	}
 	return tgbotapi.MessageConfig{}
 }

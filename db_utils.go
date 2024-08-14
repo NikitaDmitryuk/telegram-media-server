@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/ncruces/go-sqlite3/embed"
+
 )
 
 var db *sql.DB
@@ -20,8 +21,12 @@ type Movie struct {
 
 func initDB() {
 	dbPath := filepath.Join(GlobalConfig.MoviePath, "movie.db")
-	db, _ = sql.Open("sqlite3", dbPath)
-	if _, err := os.Stat(dbPath); err != nil {
+	var err error
+	db, err = sql.Open("sqlite3", dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		createTables()
 	}
 }
