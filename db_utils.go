@@ -6,8 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/ncruces/go-sqlite3/embed"
-
+	_ "modernc.org/sqlite"
 )
 
 var db *sql.DB
@@ -22,7 +21,7 @@ type Movie struct {
 func initDB() {
 	dbPath := filepath.Join(GlobalConfig.MoviePath, "movie.db")
 	var err error
-	db, err = sql.Open("sqlite3", dbPath)
+	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
@@ -61,8 +60,6 @@ func addMovie(name, uploadedFile, torrentFile string) {
 		log.Println("Error adding movie:", err)
 	}
 }
-
-// Other functions (setLoaded, getMovieByID, removeMovie, getMovieList, login, updateDownloadedPercentage, checkUser) go here...
 
 func removeMovie(movieID int) {
 	stmt, err := db.Prepare("DELETE FROM Movie WHERE ID = ?")
@@ -159,4 +156,26 @@ func getMovieByID(movieID int) (string, string, string, error) {
 		return "", "", "", err
 	}
 	return name, uploadedFile, torrentFile, nil
+}
+
+func movieExistsTorrent(torrentFileName string) bool {
+	row := db.QueryRow("SELECT COUNT(*) FROM Movie WHERE TORRENT_FILE = ?", torrentFileName)
+	var count int
+	err := row.Scan(&count)
+	if err != nil {
+		log.Printf("Error checking if movie exists: %v", err)
+		return false
+	}
+	return count > 0
+}
+
+func movieExistsId(id int) bool {
+	row := db.QueryRow("SELECT COUNT(*) FROM Movie WHERE ID = ?", id)
+	var count int
+	err := row.Scan(&count)
+	if err != nil {
+		log.Printf("Error checking if movie exists: %v", err)
+		return false
+	}
+	return count > 0
 }

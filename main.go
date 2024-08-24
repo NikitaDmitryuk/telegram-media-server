@@ -43,6 +43,6 @@ func main() {
 	updates := GlobalBot.GetUpdatesChan(u)
 
 	for update := range updates {
-		orchestrator(update)
+		go orchestrator(update)
 	}
 }
