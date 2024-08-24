@@ -2,14 +2,14 @@ pkgname=bbg_telegram_media_server
 pkgver=1.0.0
 pkgrel=1
 pkgdesc="BBG Telegram Media Server"
-arch=('armv7l' 'x86_64')
+arch=('armv7h' 'x86_64')
 url="https://github.com/NikitaDmitryuk/bbg-telegram-media-server-golang"
 license=('MIT')
-depends=('minidlna')
 makedepends=('go')
 source=()
 install="${pkgname}.install"
 sha256sums=()
+options=(!strip)
 
 build() {
     cd "${srcdir}/../"

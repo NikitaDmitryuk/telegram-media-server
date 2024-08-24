@@ -1,7 +1,6 @@
 [Unit]
 Description=BBG Telegram Media Server
-After=network.target minidlna.service
-Requires=minidlna.service
+After=network.target
 
 [Service]
 ExecStart=/usr/bin/bbg_telegram_media_server

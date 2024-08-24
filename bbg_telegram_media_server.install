@@ -4,8 +4,6 @@ post_install() {
     echo "Please edit /etc/bbg_telegram_media_server/.env with your configuration."
   fi
 
-  systemctl enable minidlna
-  systemctl start minidlna
 
   if [ -f "/usr/bin/bbg_telegram_media_server" ]; then
     systemctl enable bbg_telegram_media_server
@@ -14,8 +12,6 @@ post_install() {
 }
 
 post_upgrade() {
-  systemctl enable minidlna
-  systemctl start minidlna
 
   if [ -f "/usr/bin/bbg_telegram_media_server" ]; then
     systemctl enable bbg_telegram_media_server
@@ -25,5 +21,4 @@ post_upgrade() {
 
 pre_remove() {
   systemctl disable --now bbg_telegram_media_server || echo "Disable service bbg_telegram_media_server"
-  systemctl disable --now minidlna || echo "Disable service minidlna"
 }
