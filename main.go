@@ -2,47 +2,53 @@ package main
 
 import (
 	"log"
-
-	"fmt"
-
-	"github.com/joho/godotenv"
+	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/joho/godotenv"
 )
 
 var GlobalConfig *Config
 var GlobalBot *tgbotapi.BotAPI
 
 func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Panic(err)
-		fmt.Println("Error loading .env file")
-		return
-	}
+	loadEnv()
 	GlobalConfig = NewConfig()
 	initDB()
+	initBot()
+}
 
+func loadEnv() {
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+}
+
+func initBot() {
 	bot, err := tgbotapi.NewBotAPI(GlobalConfig.BotToken)
 	if err != nil {
-		log.Panic(err)
+		log.Fatalf("Error creating bot: %v", err)
 	}
-
 	bot.Debug = true
-
 	GlobalBot = bot
-
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 }
 
 func main() {
-
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
 	updates := GlobalBot.GetUpdatesChan(u)
 
+	var wg sync.WaitGroup
+
 	for update := range updates {
-		go orchestrator(update)
+		wg.Add(1)
+		go func(update tgbotapi.Update) {
+			defer wg.Done()
+			orchestrator(update)
+		}(update)
 	}
+
+	wg.Wait()
 }
