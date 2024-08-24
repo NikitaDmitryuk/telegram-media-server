@@ -2,49 +2,53 @@ package main
 
 import (
 	"log"
-
-	"fmt"
-
-	"bbg_telegram_media_server/config"
-
-	"github.com/joho/godotenv"
+	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/joho/godotenv"
 )
 
-func main() {
+var GlobalConfig *Config
+var GlobalBot *tgbotapi.BotAPI
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Panic(err)
-		fmt.Println("Error loading .env file")
-		return
+func init() {
+	loadEnv()
+	GlobalConfig = NewConfig()
+	initDB()
+	initBot()
+}
+
+func loadEnv() {
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
 	}
+}
 
-	cfg := config.NewConfig()
-
-	bot, err := tgbotapi.NewBotAPI(cfg.BotToken)
+func initBot() {
+	bot, err := tgbotapi.NewBotAPI(GlobalConfig.BotToken)
 	if err != nil {
-		log.Panic(err)
+		log.Fatalf("Error creating bot: %v", err)
 	}
-
 	bot.Debug = true
-
+	GlobalBot = bot
 	log.Printf("Authorized on account %s", bot.Self.UserName)
+}
 
+func main() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates := bot.GetUpdatesChan(u)
+	updates := GlobalBot.GetUpdatesChan(u)
+
+	var wg sync.WaitGroup
 
 	for update := range updates {
-		if update.Message != nil { // If we got a message
-			log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
-			msg.ReplyToMessageID = update.Message.MessageID
-
-			bot.Send(msg)
-		}
+		wg.Add(1)
+		go func(update tgbotapi.Update) {
+			defer wg.Done()
+			orchestrator(update)
+		}(update)
 	}
+
+	wg.Wait()
 }

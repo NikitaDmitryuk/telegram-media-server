@@ -26,3 +26,5 @@ go.work.sum
 
 bbg_telegram_media_server_amd64
 bbg_telegram_media_server_arm
+
+artifacts/
