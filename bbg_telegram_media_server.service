@@ -1,0 +1,14 @@
+[Unit]
+Description=BBG Telegram Media Server
+After=network.target minidlna.service
+Requires=minidlna.service
+
+[Service]
+ExecStart=/usr/bin/bbg_telegram_media_server
+EnvironmentFile=/etc/bbg_telegram_media_server/.env
+Restart=always
+User=nobody
+Group=nogroup
+
+[Install]
+WantedBy=multi-user.target
