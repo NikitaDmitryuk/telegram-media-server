@@ -19,7 +19,7 @@ jobs:
       - name: Build package
         run: |
           cd $GITHUB_WORKSPACE
-          makepkg -s
+          CARCH=armv7h makepkg -s
 
       - name: Create release
         id: create_release
