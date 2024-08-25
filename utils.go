@@ -109,9 +109,11 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 				return
 			}
 
+			updateDownloadedPercentage(movieName, percentage)
+
 			if percentage >= lastPercentage+GlobalConfig.UpdatePercentageStep {
 				lastPercentage = percentage
-				updateDownloadedPercentage(movieName, percentage)
+
 				text := fmt.Sprintf("Загрузка %s: %d%%", movieName, percentage)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				GlobalBot.Send(msg)
