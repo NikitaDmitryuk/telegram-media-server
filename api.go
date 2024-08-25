@@ -85,8 +85,12 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 					log.Printf("Ошибка при проверке существования фильма: %v", err)
 					msg = "Произошла ошибка при проверке существования файла. Пожалуйста, попробуйте снова."
 				} else if !exists {
-					downloadTorrent(fileName, update)
-					msg = "Загрузка началась!"
+					err := downloadTorrent(fileName, update)
+					if err == nil {
+						msg = "Загрузка началась!"
+					} else {
+						msg = "Ошибка при загрузки торрет файла (возможно не хватает места на диске)"
+					}
 				} else {
 					msg = "Файл уже существует"
 				}

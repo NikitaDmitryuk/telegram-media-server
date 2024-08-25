@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/anacrolix/torrent"
@@ -45,22 +46,31 @@ func downloadFile(fileID, fileName string) error {
 	return nil
 }
 
-func downloadTorrent(torrentFileName string, update tgbotapi.Update) {
+func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 	clientConfig := torrent.NewDefaultClientConfig()
 	clientConfig.DataDir = GlobalConfig.MoviePath
 	client, err := torrent.NewClient(clientConfig)
 	if err != nil {
 		log.Fatalf("Failed to create torrent client: %v", err)
-		return
+		return err
 	}
 
 	t, err := client.AddTorrentFromFile(filepath.Join(GlobalConfig.MoviePath, torrentFileName))
 	if err != nil {
 		log.Fatalf("Failed to add torrent: %v", err)
-		return
+		return err
 	}
 
 	<-t.GotInfo()
+
+	if !hasEnoughSpace(t.Info().TotalLength()) {
+		text := fmt.Sprintf("Ошибка: недостаточно места для загрузки фильма %s.", t.Name())
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+		GlobalBot.Send(msg)
+		client.Close()
+		return fmt.Errorf("недостаточно места для загрузки фильма %s", t.Name())
+	}
+
 	t.DownloadAll()
 	movieName := t.Name()
 	movieID := addMovie(movieName, movieName, torrentFileName)
@@ -68,6 +78,19 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) {
 	log.Printf("Start download - %s", movieName)
 
 	go monitorDownload(t, movieID, client, update)
+	return nil
+}
+
+func hasEnoughSpace(requiredSpace int64) bool {
+	var stat syscall.Statfs_t
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Printf("Error getting current directory: %v", err)
+		return false
+	}
+	syscall.Statfs(wd, &stat)
+	availableSpace := stat.Bavail * uint64(stat.Bsize)
+	return availableSpace >= uint64(requiredSpace)
 }
 
 func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, update tgbotapi.Update) {
