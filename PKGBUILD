@@ -1,8 +1,8 @@
 pkgname=bbg-telegram-media-server
-pkgver=1.0.0
+pkgver=1.0.2
 pkgrel=1
 pkgdesc="BBG Telegram Media Server"
-arch=('armv7h' 'x86_64')
+arch=('x86_64')
 url="https://github.com/NikitaDmitryuk/bbg-telegram-media-server-golang"
 license=('MIT')
 makedepends=('go')
