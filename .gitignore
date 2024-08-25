@@ -31,3 +31,4 @@ artifacts/
 *.pkg.tar.zst
 src/
 pkg/
+.vscode/

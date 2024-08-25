@@ -2,16 +2,18 @@ package main
 
 import (
 	"fmt"
+	"github.com/anacrolix/torrent"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/kkdai/youtube/v2"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
-
-	"github.com/anacrolix/torrent"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func downloadFile(fileID, fileName string) error {
@@ -112,7 +114,7 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 				return
 			}
 
-			updateDownloadedPercentage(movieName, percentage)
+			updateDownloadedPercentage(movieID, percentage)
 
 			if percentage >= lastPercentage+GlobalConfig.UpdatePercentageStep {
 				lastPercentage = percentage
@@ -123,7 +125,7 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 			}
 
 			if t.Complete.Bool() {
-				setLoaded(movieName)
+				setLoaded(movieID)
 				text := fmt.Sprintf("Загрузка фильма %s завершена!", movieName)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				GlobalBot.Send(msg)
@@ -155,4 +157,81 @@ func deleteMovie(id int) string {
 	}
 	removeMovie(id)
 	return "Фильм успешно удален"
+}
+
+func downloadYouTubeVideo(url string) error {
+	log.Println("Starting download for URL:", url)
+
+	videoID, err := extractVideoID(url)
+	if err != nil {
+		log.Printf("Error extracting video ID: %v\n", err)
+		return fmt.Errorf("error extracting video ID: %v", err)
+	}
+	log.Println("Extracted video ID:", videoID)
+
+	client := youtube.Client{}
+	video, err := client.GetVideo(videoID)
+	if err != nil {
+		log.Printf("Error getting video info: %v\n", err)
+		return fmt.Errorf("error getting video info: %v", err)
+	}
+	log.Println("Retrieved video info:", video.Title)
+
+	// Replace problematic characters and spaces
+	sanitizedTitle := strings.ReplaceAll(video.Title, "//", "")
+	sanitizedTitle = strings.ReplaceAll(sanitizedTitle, " ", "_")
+	videoFullName := sanitizedTitle + ".mp4"
+	filePath := filepath.Join(GlobalConfig.MoviePath, videoFullName)
+	log.Println("File will be saved to:", filePath)
+
+	var bestFormat *youtube.Format
+	for _, format := range video.Formats {
+		if format.AudioQuality != "" && (bestFormat == nil || format.QualityLabel > bestFormat.QualityLabel) {
+			bestFormat = &format
+		}
+	}
+	if bestFormat == nil {
+		bestFormat = &video.Formats[0]
+	}
+
+	stream, _, err := client.GetStream(video, bestFormat)
+	if err != nil {
+		log.Printf("Error getting video stream: %v\n", err)
+		return fmt.Errorf("error getting video stream: %v", err)
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		log.Printf("Error creating file: %v\n", err)
+		return fmt.Errorf("error creating file: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.ReadFrom(stream)
+	if err != nil {
+		log.Printf("Error writing to file: %v\n", err)
+		return fmt.Errorf("error writing to file: %v", err)
+	}
+
+	log.Println("Video downloaded successfully:", videoFullName)
+
+	id := addMovie(video.Title, videoFullName, "")
+	setLoaded(id)
+	updateDownloadedPercentage(id, 100)
+
+	return nil
+}
+
+func extractVideoID(url string) (string, error) {
+	re := regexp.MustCompile(`(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})`)
+	match := re.FindStringSubmatch(url)
+	if len(match) < 2 {
+		return "", fmt.Errorf("invalid YouTube URL")
+	}
+	return match[1], nil
+}
+
+func isYouTubeVideoLink(text string) bool {
+	re := regexp.MustCompile(`^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$`)
+	return re.MatchString(text)
 }
