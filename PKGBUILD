@@ -1,4 +1,4 @@
-pkgname=bbg_telegram_media_server
+pkgname=bbg-telegram-media-server
 pkgver=1.0.0
 pkgrel=1
 pkgdesc="BBG Telegram Media Server"
@@ -13,12 +13,12 @@ options=(!strip)
 
 build() {
     cd "${srcdir}/../"
-    env GOOS=linux GOARCH=arm go build -o "${srcdir}/bbg_telegram_media_server" .
+    env GOOS=linux GOARCH=arm go build -o "${srcdir}/bbg-telegram-media-server" .
 }
 
 package() {
     cd "${srcdir}/../"
-    install -Dm755 "${srcdir}/bbg_telegram_media_server" "${pkgdir}/usr/bin/bbg_telegram_media_server"
-    install -Dm644 .env.example "${pkgdir}/etc/bbg_telegram_media_server/.env.example"
-    install -Dm644 bbg_telegram_media_server.service "${pkgdir}/usr/lib/systemd/system/bbg_telegram_media_server.service"
+    install -Dm755 "${srcdir}/bbg-telegram-media-server" "${pkgdir}/usr/bin/bbg-telegram-media-server"
+    install -Dm644 .env.example "${pkgdir}/etc/bbg-telegram-media-server/.env.example"
+    install -Dm644 ${pkgname}.service "${pkgdir}/usr/lib/systemd/system/bbg-telegram-media-server.service"
 }

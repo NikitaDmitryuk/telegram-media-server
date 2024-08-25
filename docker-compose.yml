@@ -1,0 +1,8 @@
+services:
+  bbg-telegram-media-server:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    env_file: ".env"
+    volumes:
+      - .:/app

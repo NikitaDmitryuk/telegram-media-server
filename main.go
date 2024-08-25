@@ -5,23 +5,15 @@ import (
 	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/joho/godotenv"
 )
 
 var GlobalConfig *Config
 var GlobalBot *tgbotapi.BotAPI
 
 func init() {
-	loadEnv()
 	GlobalConfig = NewConfig()
 	initDB()
 	initBot()
-}
-
-func loadEnv() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
 }
 
 func initBot() {

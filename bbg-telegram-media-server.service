@@ -3,11 +3,10 @@ Description=BBG Telegram Media Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/bbg_telegram_media_server
-EnvironmentFile=/etc/bbg_telegram_media_server/.env
+ExecStart=/usr/bin/bbg-telegram-media-server
+EnvironmentFile=/etc/bbg-telegram-media-server/.env
 Restart=always
-User=nobody
-Group=nogroup
+
 
 [Install]
 WantedBy=multi-user.target
