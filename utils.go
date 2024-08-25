@@ -63,7 +63,8 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 
 	<-t.GotInfo()
 
-	if !hasEnoughSpace(t.Info().TotalLength()) {
+	requiredSpace := t.Info().TotalLength()
+	if !hasEnoughSpace(GlobalConfig.MoviePath, requiredSpace) {
 		text := fmt.Sprintf("Ошибка: недостаточно места для загрузки фильма %s.", t.Name())
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 		GlobalBot.Send(msg)
@@ -81,15 +82,17 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 	return nil
 }
 
-func hasEnoughSpace(requiredSpace int64) bool {
+func hasEnoughSpace(path string, requiredSpace int64) bool {
 	var stat syscall.Statfs_t
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Printf("Error getting current directory: %v", err)
+	if err := syscall.Statfs(path, &stat); err != nil {
+		log.Printf("Error getting filesystem stats: %v", err)
 		return false
 	}
-	syscall.Statfs(wd, &stat)
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
+
+	log.Printf("Required space: %d bytes", requiredSpace)
+	log.Printf("Available space: %d bytes", availableSpace)
+
 	return availableSpace >= uint64(requiredSpace)
 }
 
