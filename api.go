@@ -45,6 +45,14 @@ func handleUnknownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 
 func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 	var msg string
+	if isYouTubeVideoLink(update.Message.Text) {
+		err := downloadYouTubeVideo(update.Message.Text)
+		if err == nil {
+			msg = "Видео с youtube успешно скачано!"
+		} else {
+			msg = "Ошибка при скачивании видео"
+		}
+	}
 	if update.Message.IsCommand() {
 		switch update.Message.Command() {
 		case "start":
@@ -78,7 +86,7 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 			err := downloadFile(fileID, fileName)
 			if err != nil {
 				log.Printf("Ошибка: %v\n", err)
-				msg = "Произошла ошибка при загрузке файла. Пожалуйста, попробуйте снова."
+				msg = "Произошла ошибка при загрузке файла (загрузка файлов больше 50МБ недоступна)"
 			} else {
 				log.Println("Файл успешно загружен")
 				if exists, err := movieExistsTorrent(fileName); err != nil {
@@ -89,7 +97,7 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 					if err == nil {
 						msg = "Загрузка началась!"
 					} else {
-						msg = "Ошибка при загрузки торрет файла (возможно не хватает места на диске)"
+						msg = "Ошибка при загрузке торрет файла (возможно не хватает места на диске)"
 					}
 				} else {
 					msg = "Файл уже существует"
@@ -102,9 +110,9 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 				msg = "Произошла ошибка при загрузке файла. Пожалуйста, попробуйте снова."
 			} else {
 				log.Println("Файл успешно загружен")
-				addMovie(fileName, fileName, "")
-				setLoaded(fileName)
-				updateDownloadedPercentage(fileName, 100)
+				id := addMovie(fileName, fileName, "")
+				setLoaded(id)
+				updateDownloadedPercentage(id, 100)
 				msg = "Файл успешно добавлен"
 			}
 		}

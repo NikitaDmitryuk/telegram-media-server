@@ -130,25 +130,25 @@ func checkUser(chatID int64) (bool, error) {
 	return rows.Next(), nil
 }
 
-func updateDownloadedPercentage(name string, percentage int) error {
-	log.Printf("%s %d", name, percentage)
+func updateDownloadedPercentage(id int, percentage int) error {
+	log.Printf("%s %d", id, percentage)
 	_, err := db.Exec(`
         UPDATE Movie
         SET DOWNLOADED_PERCENTAGE = ?
-        WHERE NAME = ?
-    `, percentage, name)
+        WHERE ID = ?
+    `, percentage, id)
 	if err != nil {
 		log.Printf("Failed to update download percentage: %v", err)
 	}
 	return err
 }
 
-func setLoaded(name string) error {
+func setLoaded(id int) error {
 	_, err := db.Exec(`
         UPDATE Movie
         SET DOWNLOADED = 1
-        WHERE NAME = ?
-    `, name)
+        WHERE ID = ?
+    `, id)
 	if err != nil {
 		log.Printf("Failed to set movie as downloaded: %v", err)
 	}
