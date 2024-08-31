@@ -5,6 +5,7 @@ import (
 	"github.com/anacrolix/torrent"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
+	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/unicode/norm"
 	"io"
 	"log"
@@ -180,7 +181,13 @@ func downloadYouTubeVideo(url string) error {
 	log.Println("Retrieved video info:", video.Title)
 
 	// Normalize and sanitize the video title
-	sanitizedTitle := norm.NFC.String(video.Title)
+	decoder := charmap.Windows1251.NewDecoder()
+	decodedTitle, err := decoder.String(video.Title)
+	if err != nil {
+		log.Printf("Error decoding video title: %v\n", err)
+		return fmt.Errorf("error decoding video title: %v", err)
+	}
+	sanitizedTitle := norm.NFC.String(decodedTitle)
 	sanitizedTitle = strings.ReplaceAll(sanitizedTitle, "//", "")
 	sanitizedTitle = strings.ReplaceAll(sanitizedTitle, " ", "_")
 	videoFileName := sanitizedTitle + "_video.mp4"
