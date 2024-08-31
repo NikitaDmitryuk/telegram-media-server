@@ -133,7 +133,11 @@ func listHandler(update tgbotapi.Update) tgbotapi.MessageConfig {
 
 	var msg string
 	for _, movie := range movies {
-		msg += fmt.Sprintf("ID: %d\nНазвание: %s\nЗагружено: %t\nПроцент загрузки: %d%%\n\n", movie.ID, movie.Name, movie.Downloaded, movie.DownloadedPercentage)
+		if movie.Downloaded {
+			msg += fmt.Sprintf("ID: %d\nНазвание: %s\nЗагружено: Да\n\n", movie.ID, movie.Name)
+		} else {
+			msg += fmt.Sprintf("ID: %d\nНазвание: %s\nПроцент загрузки: %d%%\n\n", movie.ID, movie.Name, movie.DownloadedPercentage)
+		}
 	}
 	if len(msg) == 0 {
 		msg = "Список пуст"

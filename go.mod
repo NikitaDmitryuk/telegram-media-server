@@ -6,6 +6,7 @@ require (
 	github.com/anacrolix/torrent v1.56.1
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/kkdai/youtube/v2 v2.10.1
+	golang.org/x/text v0.17.0
 	modernc.org/sqlite v1.32.0
 )
 
@@ -89,7 +90,6 @@ require (
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
 	lukechampine.com/blake3 v1.1.6 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
