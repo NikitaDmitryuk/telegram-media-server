@@ -5,8 +5,6 @@ import (
 	"github.com/anacrolix/torrent"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
-	"unicode/utf8"
-	"golang.org/x/text/unicode/norm"
 	"io"
 	"log"
 	"net/http"
@@ -14,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -162,6 +159,11 @@ func deleteMovie(id int) string {
 	return "Фильм успешно удален"
 }
 
+func sanitizeFileName(name string) string {
+	re := regexp.MustCompile(`[^а-яА-Яa-zA-Z0-9]+`)
+	return re.ReplaceAllString(name, "_")
+}
+
 func downloadYouTubeVideo(url string) error {
 	log.Println("Starting download for URL:", url)
 
@@ -180,13 +182,7 @@ func downloadYouTubeVideo(url string) error {
 	}
 	log.Println("Retrieved video info:", video.Title)
 
-	// Normalize and sanitize the video title
-	sanitizedTitle := norm.NFC.String(video.Title)
-	if !utf8.ValidString(sanitizedTitle) {
-		sanitizedTitle = string([]rune(sanitizedTitle))
-	}
-	sanitizedTitle = strings.ReplaceAll(sanitizedTitle, "//", "")
-	sanitizedTitle = strings.ReplaceAll(sanitizedTitle, " ", "_")
+	sanitizedTitle := sanitizeFileName(video.Title)
 	videoFileName := sanitizedTitle + "_video.mp4"
 	audioFileName := sanitizedTitle + "_audio.mp4"
 	finalFileName := sanitizedTitle + ".mp4"
@@ -226,14 +222,24 @@ func downloadYouTubeVideo(url string) error {
 		log.Printf("Error creating video file: %v\n", err)
 		return fmt.Errorf("error creating video file: %v", err)
 	}
-	defer videoFile.Close()
+	defer func() {
+		if err != nil {
+			os.Remove(videoFilePath)
+		}
+		videoFile.Close()
+	}()
 
 	audioFile, err := os.Create(audioFilePath)
 	if err != nil {
 		log.Printf("Error creating audio file: %v\n", err)
 		return fmt.Errorf("error creating audio file: %v", err)
 	}
-	defer audioFile.Close()
+	defer func() {
+		if err != nil {
+			os.Remove(audioFilePath)
+		}
+		audioFile.Close()
+	}()
 
 	_, err = videoFile.ReadFrom(videoStream)
 	if err != nil {
