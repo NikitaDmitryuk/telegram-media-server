@@ -123,7 +123,7 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 }
 
 func startHandler(update tgbotapi.Update) tgbotapi.MessageConfig {
-	return tgbotapi.NewMessage(update.Message.Chat.ID, "/ls - получить список файлов\n/rm <ID> - удалить фильм\n/stop - остановить все загрузки торрентов/n")
+	return tgbotapi.NewMessage(update.Message.Chat.ID, "/ls - получить список файлов\n/rm <ID> - удалить фильм\n/stop - остановить все загрузки торрентов")
 }
 
 func stopHandler(update tgbotapi.Update) tgbotapi.MessageConfig {
