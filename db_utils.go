@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
+	"fmt"
 	_ "modernc.org/sqlite"
 )
 
@@ -16,6 +18,8 @@ type Movie struct {
 	Name                 string
 	Downloaded           bool
 	DownloadedPercentage int
+	UploadedFile         string
+	TorrentFile          string
 }
 
 func initDB() {
@@ -52,7 +56,7 @@ func createTables() {
 }
 
 func addMovie(name, uploadedFile, torrentFile string) int {
-	result, err := db.Exec(`
+	result, err := executeWithRetry(`
         INSERT INTO Movie (NAME, UPLOADED_FILE, TORRENT_FILE)
         VALUES (?, ?, ?)
     `, name, uploadedFile, torrentFile)
@@ -71,11 +75,7 @@ func addMovie(name, uploadedFile, torrentFile string) int {
 }
 
 func removeMovie(movieID int) error {
-	stmt, err := db.Prepare("DELETE FROM Movie WHERE ID = ?")
-	if err != nil {
-		return err
-	}
-	_, err = stmt.Exec(movieID)
+	_, err := executeWithRetry("DELETE FROM Movie WHERE ID = ?", movieID)
 	if err != nil {
 		log.Printf("Error removing movie: %v", err)
 	}
@@ -83,7 +83,7 @@ func removeMovie(movieID int) error {
 }
 
 func getMovieList() ([]Movie, error) {
-	rows, err := db.Query("SELECT ID, NAME, DOWNLOADED, DOWNLOADED_PERCENTAGE FROM Movie ORDER BY ID")
+	rows, err := db.Query("SELECT ID, NAME, DOWNLOADED, DOWNLOADED_PERCENTAGE, UPLOADED_FILE, TORRENT_FILE FROM Movie ORDER BY ID")
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func getMovieList() ([]Movie, error) {
 	var movies []Movie
 	for rows.Next() {
 		var movie Movie
-		err := rows.Scan(&movie.ID, &movie.Name, &movie.Downloaded, &movie.DownloadedPercentage)
+		err := rows.Scan(&movie.ID, &movie.Name, &movie.Downloaded, &movie.DownloadedPercentage, &movie.UploadedFile, &movie.TorrentFile)
 		if err != nil {
 			return nil, err
 		}
@@ -103,11 +103,7 @@ func getMovieList() ([]Movie, error) {
 
 func login(password string, chatID int64, userName string) (bool, error) {
 	if password == GlobalConfig.Password {
-		stmt, err := db.Prepare("INSERT INTO User (NAME, CHAT_ID) VALUES (?, ?)")
-		if err != nil {
-			return false, err
-		}
-		_, err = stmt.Exec(userName, chatID)
+		_, err := executeWithRetry("INSERT INTO User (NAME, CHAT_ID) VALUES (?, ?)", userName, chatID)
 		if err != nil {
 			return false, err
 		}
@@ -132,7 +128,7 @@ func checkUser(chatID int64) (bool, error) {
 
 func updateDownloadedPercentage(id int, percentage int) error {
 	log.Printf("%s %d", id, percentage)
-	_, err := db.Exec(`
+	_, err := executeWithRetry(`
         UPDATE Movie
         SET DOWNLOADED_PERCENTAGE = ?
         WHERE ID = ?
@@ -144,7 +140,7 @@ func updateDownloadedPercentage(id int, percentage int) error {
 }
 
 func setLoaded(id int) error {
-	_, err := db.Exec(`
+	_, err := executeWithRetry(`
         UPDATE Movie
         SET DOWNLOADED = 1
         WHERE ID = ?
@@ -155,19 +151,19 @@ func setLoaded(id int) error {
 	return err
 }
 
-func getMovieByID(movieID int) (string, string, string, error) {
+func getMovieByID(movieID int) (Movie, error) {
 	row := db.QueryRow(`
-        SELECT NAME, UPLOADED_FILE, TORRENT_FILE
+        SELECT ID, NAME, DOWNLOADED, DOWNLOADED_PERCENTAGE, UPLOADED_FILE, TORRENT_FILE
         FROM Movie
         WHERE ID = ?
     `, movieID)
 
-	var name, uploadedFile, torrentFile string
-	err := row.Scan(&name, &uploadedFile, &torrentFile)
+	var movie Movie
+	err := row.Scan(&movie.ID, &movie.Name, &movie.Downloaded, &movie.DownloadedPercentage, &movie.UploadedFile, &movie.TorrentFile)
 	if err != nil {
-		return "", "", "", err
+		return Movie{}, err
 	}
-	return name, uploadedFile, torrentFile, nil
+	return movie, nil
 }
 
 func movieExistsTorrent(torrentFileName string) (bool, error) {
@@ -190,4 +186,18 @@ func movieExistsId(id int) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func executeWithRetry(query string, args ...interface{}) (sql.Result, error) {
+	const maxRetries = 5
+	var result sql.Result
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		result, err = db.Exec(query, args...)
+		if err == nil {
+			return result, nil
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
+	return nil, fmt.Errorf("max retries reached: %v", err)
 }

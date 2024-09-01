@@ -57,10 +57,12 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 		switch update.Message.Command() {
 		case "start":
 			return startHandler(update)
-		case "list":
+		case "ls":
 			return listHandler(update)
 		case "rm":
 			return deleteHandler(update)
+		case "stop":
+			return stopHandler(update)
 		default:
 			return unknownCommandHandler(update)
 		}
@@ -121,7 +123,12 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 }
 
 func startHandler(update tgbotapi.Update) tgbotapi.MessageConfig {
-	return tgbotapi.NewMessage(update.Message.Chat.ID, "/list - получить список файлов\n/rm <ID> - удалить фильм\n")
+	return tgbotapi.NewMessage(update.Message.Chat.ID, "/ls - получить список файлов\n/rm <ID> - удалить фильм\n/stop - остановить все загрузки торрентов/n")
+}
+
+func stopHandler(update tgbotapi.Update) tgbotapi.MessageConfig {
+	go stopTorrentDownload()
+	return tgbotapi.NewMessage(update.Message.Chat.ID, "Все загрузки торрентов остановлены!")
 }
 
 func listHandler(update tgbotapi.Update) tgbotapi.MessageConfig {
