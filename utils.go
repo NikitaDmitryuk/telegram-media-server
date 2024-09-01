@@ -9,9 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -159,6 +159,11 @@ func deleteMovie(id int) string {
 	return "Фильм успешно удален"
 }
 
+func sanitizeFileName(name string) string {
+	re := regexp.MustCompile(`[^а-яА-Яa-zA-Z0-9]+`)
+	return re.ReplaceAllString(name, "_")
+}
+
 func downloadYouTubeVideo(url string) error {
 	log.Println("Starting download for URL:", url)
 
@@ -177,45 +182,101 @@ func downloadYouTubeVideo(url string) error {
 	}
 	log.Println("Retrieved video info:", video.Title)
 
-	// Replace problematic characters and spaces
-	sanitizedTitle := strings.ReplaceAll(video.Title, "//", "")
-	sanitizedTitle = strings.ReplaceAll(sanitizedTitle, " ", "_")
-	videoFullName := sanitizedTitle + ".mp4"
-	filePath := filepath.Join(GlobalConfig.MoviePath, videoFullName)
-	log.Println("File will be saved to:", filePath)
+	sanitizedTitle := sanitizeFileName(video.Title)
+	videoFileName := sanitizedTitle + "_video.mp4"
+	audioFileName := sanitizedTitle + "_audio.mp4"
+	finalFileName := sanitizedTitle + ".mp4"
+	videoFilePath := filepath.Join(GlobalConfig.MoviePath, videoFileName)
+	audioFilePath := filepath.Join(GlobalConfig.MoviePath, audioFileName)
+	finalFilePath := filepath.Join(GlobalConfig.MoviePath, finalFileName)
+	log.Println("Files will be saved to:", videoFilePath, "and", audioFilePath)
 
-	var bestFormat *youtube.Format
+	var bestVideoFormat, bestAudioFormat *youtube.Format
 	for _, format := range video.Formats {
-		if format.AudioQuality != "" && (bestFormat == nil || format.QualityLabel > bestFormat.QualityLabel) {
-			bestFormat = &format
+		if format.QualityLabel != "" && (bestVideoFormat == nil || format.QualityLabel > bestVideoFormat.QualityLabel) {
+			bestVideoFormat = &format
+		}
+		if format.AudioQuality != "" && (bestAudioFormat == nil || format.AudioQuality > bestAudioFormat.AudioQuality) {
+			bestAudioFormat = &format
 		}
 	}
-	if bestFormat == nil {
-		bestFormat = &video.Formats[0]
+
+	if bestVideoFormat == nil || bestAudioFormat == nil {
+		return fmt.Errorf("could not find suitable video or audio format")
 	}
 
-	stream, _, err := client.GetStream(video, bestFormat)
+	videoStream, _, err := client.GetStream(video, bestVideoFormat)
 	if err != nil {
 		log.Printf("Error getting video stream: %v\n", err)
 		return fmt.Errorf("error getting video stream: %v", err)
 	}
 
-	file, err := os.Create(filePath)
+	audioStream, _, err := client.GetStream(video, bestAudioFormat)
 	if err != nil {
-		log.Printf("Error creating file: %v\n", err)
-		return fmt.Errorf("error creating file: %v", err)
-	}
-	defer file.Close()
-
-	_, err = file.ReadFrom(stream)
-	if err != nil {
-		log.Printf("Error writing to file: %v\n", err)
-		return fmt.Errorf("error writing to file: %v", err)
+		log.Printf("Error getting audio stream: %v\n", err)
+		return fmt.Errorf("error getting audio stream: %v", err)
 	}
 
-	log.Println("Video downloaded successfully:", videoFullName)
+	videoFile, err := os.Create(videoFilePath)
+	if err != nil {
+		log.Printf("Error creating video file: %v\n", err)
+		return fmt.Errorf("error creating video file: %v", err)
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(videoFilePath)
+		}
+		videoFile.Close()
+	}()
 
-	id := addMovie(video.Title, videoFullName, "")
+	audioFile, err := os.Create(audioFilePath)
+	if err != nil {
+		log.Printf("Error creating audio file: %v\n", err)
+		return fmt.Errorf("error creating audio file: %v", err)
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(audioFilePath)
+		}
+		audioFile.Close()
+	}()
+
+	_, err = io.Copy(videoFile, videoStream)
+	if err != nil {
+		log.Printf("Error writing to video file: %v\n", err)
+		return fmt.Errorf("error writing to video file: %v", err)
+	}
+
+	_, err = io.Copy(audioFile, audioStream)
+	if err != nil {
+		log.Printf("Error writing to audio file: %v\n", err)
+		return fmt.Errorf("error writing to audio file: %v", err)
+	}
+
+	// Use ffmpeg to merge video and audio
+	cmd := exec.Command("ffmpeg", "-i", videoFilePath, "-i", audioFilePath, "-c:v", "copy", "-c:a", "aac", finalFilePath)
+	err = cmd.Run()
+	if err != nil {
+		log.Printf("Error merging video and audio: %v\n", err)
+		return fmt.Errorf("error merging video and audio: %v", err)
+	}
+
+	// Remove the source video and audio files
+	err = os.Remove(videoFilePath)
+	if err != nil {
+		log.Printf("Error removing video file: %v\n", err)
+		return fmt.Errorf("error removing video file: %v", err)
+	}
+
+	err = os.Remove(audioFilePath)
+	if err != nil {
+		log.Printf("Error removing audio file: %v\n", err)
+		return fmt.Errorf("error removing audio file: %v", err)
+	}
+
+	log.Println("Video downloaded, merged, and cleaned up successfully:", finalFileName)
+
+	id := addMovie(video.Title, finalFileName, "")
 	setLoaded(id)
 	updateDownloadedPercentage(id, 100)
 
@@ -223,7 +284,7 @@ func downloadYouTubeVideo(url string) error {
 }
 
 func extractVideoID(url string) (string, error) {
-	re := regexp.MustCompile(`(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})`)
+	re := regexp.MustCompile(`(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})`)
 	match := re.FindStringSubmatch(url)
 	if len(match) < 2 {
 		return "", fmt.Errorf("invalid YouTube URL")
@@ -232,6 +293,6 @@ func extractVideoID(url string) (string, error) {
 }
 
 func isYouTubeVideoLink(text string) bool {
-	re := regexp.MustCompile(`^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$`)
+	re := regexp.MustCompile(`^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/(watch\?v=|embed\/|v\/|.+\?v=)?([^&=%\?]{11})`)
 	return re.MatchString(text)
 }

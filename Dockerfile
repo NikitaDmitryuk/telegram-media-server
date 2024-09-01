@@ -1,21 +1,22 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.22
+FROM golang:1.22 AS builder
 
-# Set destination for COPY
 WORKDIR /app
 
-# Download Go modules
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the source code. Note the slash at the end, as explained in
-# https://docs.docker.com/reference/dockerfile/#copy
 COPY *.go ./
 
-# Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bbg-telegram-media-server
 
+FROM debian:bullseye-slim
 
-# Run
+RUN apt-get update && apt-get install -y ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /bbg-telegram-media-server /bbg-telegram-media-server
+
+WORKDIR /app
+
 CMD ["/bbg-telegram-media-server"]
