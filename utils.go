@@ -7,6 +7,7 @@ import (
 	"github.com/kkdai/youtube/v2"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,6 +16,20 @@ import (
 	"syscall"
 	"time"
 )
+
+var stopDownload = make(chan bool)
+
+func stopTorrentDownload() {
+	movies, err := getMovieList()
+	if err != nil {
+		log.Printf("failed get movie: %v", err)
+	}
+	for _, movie := range movies {
+		if !movie.Downloaded {
+			stopDownload <- true
+		}
+	}
+}
 
 func downloadFile(fileID, fileName string) error {
 	file, err := GlobalBot.GetFile(tgbotapi.FileConfig{FileID: fileID})
@@ -51,15 +66,18 @@ func downloadFile(fileID, fileName string) error {
 func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 	clientConfig := torrent.NewDefaultClientConfig()
 	clientConfig.DataDir = GlobalConfig.MoviePath
+
+	clientConfig.ListenPort = 42000 + rand.Intn(100)
+
 	client, err := torrent.NewClient(clientConfig)
 	if err != nil {
-		log.Fatalf("Failed to create torrent client: %v", err)
+		log.Printf("Failed to create torrent client: %v", err)
 		return err
 	}
 
 	t, err := client.AddTorrentFromFile(filepath.Join(GlobalConfig.MoviePath, torrentFileName))
 	if err != nil {
-		log.Fatalf("Failed to add torrent: %v", err)
+		log.Printf("Failed to add torrent: %v", err)
 		return err
 	}
 
@@ -108,7 +126,7 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 			percentage := int(t.BytesCompleted() * 100 / t.Info().TotalLength())
 			elapsedTime := time.Since(startTime).Minutes()
 
-			movieName, _, _, err := getMovieByID(movieID)
+			movie, err := getMovieByID(movieID)
 			if err != nil {
 				log.Printf("Error getting movie by ID: %v", err)
 				return
@@ -119,14 +137,14 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 			if percentage >= lastPercentage+GlobalConfig.UpdatePercentageStep {
 				lastPercentage = percentage
 
-				text := fmt.Sprintf("Загрузка %s: %d%%", movieName, percentage)
+				text := fmt.Sprintf("Загрузка %s: %d%%", movie.Name, percentage)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				GlobalBot.Send(msg)
 			}
 
 			if t.Complete.Bool() {
 				setLoaded(movieID)
-				text := fmt.Sprintf("Загрузка фильма %s завершена!", movieName)
+				text := fmt.Sprintf("Загрузка фильма %s завершена!", movie.Name)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				GlobalBot.Send(msg)
 				client.Close()
@@ -135,28 +153,40 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 
 			if elapsedTime >= float64(GlobalConfig.MaxWaitTimeMinutes) && percentage < GlobalConfig.MinDownloadPercentage {
 				os.Remove(filepath.Join(GlobalConfig.MoviePath, t.InfoHash().HexString()+".torrent"))
+				setLoaded(movieID)
 				deleteMovie(movieID)
-				text := fmt.Sprintf("Загрузка фильма %s остановлена из-за низкой скорости загрузки.", movieName)
+				text := fmt.Sprintf("Загрузка фильма %s остановлена из-за низкой скорости загрузки.", movie.Name)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				GlobalBot.Send(msg)
 				client.Close()
 				return
 			}
+		case <-stopDownload:
+			text := fmt.Sprintf("Загрузка фильма %s остановлена по запросу.", t.Name())
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+			GlobalBot.Send(msg)
+			client.Close()
+			setLoaded(movieID)
+			deleteMovie(movieID)
+			return
 		}
 	}
 }
 
 func deleteMovie(id int) string {
-	_, uploadedFile, torrentFile, err := getMovieByID(id)
+	movie, err := getMovieByID(id)
 	if err != nil {
 		return "Фильм не найден"
 	}
-	os.Remove(filepath.Join(GlobalConfig.MoviePath, uploadedFile))
-	if torrentFile != "" {
-		os.Remove(filepath.Join(GlobalConfig.MoviePath, torrentFile))
+	if movie.Downloaded {
+		os.Remove(filepath.Join(GlobalConfig.MoviePath, movie.UploadedFile))
+		if movie.TorrentFile != "" {
+			os.Remove(filepath.Join(GlobalConfig.MoviePath, movie.TorrentFile))
+		}
+		removeMovie(id)
+		return "Фильм успешно удален"
 	}
-	removeMovie(id)
-	return "Фильм успешно удален"
+	return "Фильм еще не загружен, поэтому не может быть удален"
 }
 
 func sanitizeFileName(name string) string {

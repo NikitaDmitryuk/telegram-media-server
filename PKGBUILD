@@ -1,5 +1,5 @@
 pkgname=bbg-telegram-media-server
-pkgver=1.0.16
+pkgver=1.0.17
 pkgrel=1
 pkgdesc="BBG Telegram Media Server"
 arch=('x86_64')
