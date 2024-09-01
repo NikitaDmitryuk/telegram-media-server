@@ -1,7 +1,7 @@
 
 .PHONY: build
 build:
-	CARCH=armv7h makepkg -f
+	makepkg -f
 
 .PHONY: run
 run:

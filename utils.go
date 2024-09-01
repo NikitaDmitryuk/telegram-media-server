@@ -241,13 +241,13 @@ func downloadYouTubeVideo(url string) error {
 		audioFile.Close()
 	}()
 
-	_, err = videoFile.ReadFrom(videoStream)
+	_, err = io.Copy(videoFile, videoStream)
 	if err != nil {
 		log.Printf("Error writing to video file: %v\n", err)
 		return fmt.Errorf("error writing to video file: %v", err)
 	}
 
-	_, err = audioFile.ReadFrom(audioStream)
+	_, err = io.Copy(audioFile, audioStream)
 	if err != nil {
 		log.Printf("Error writing to audio file: %v\n", err)
 		return fmt.Errorf("error writing to audio file: %v", err)
