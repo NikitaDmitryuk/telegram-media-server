@@ -46,12 +46,8 @@ func handleUnknownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 	var msg string
 	if isYouTubeVideoLink(update.Message.Text) {
-		err := downloadYouTubeVideo(update.Message.Text)
-		if err == nil {
-			msg = "Видео с youtube успешно скачано!"
-		} else {
-			msg = "Ошибка при скачивании видео"
-		}
+		go downloadYouTubeVideo(update)
+		msg = "Видео скачивается с youtube"
 	}
 	if update.Message.IsCommand() {
 		switch update.Message.Command() {
@@ -186,17 +182,47 @@ func deleteHandler(update tgbotapi.Update) tgbotapi.MessageConfig {
 	if len(commandID) != 2 {
 		return startHandler(update)
 	} else {
-		id, err := strconv.Atoi(commandID[1])
-		if err != nil {
-			msg = "Неверный ID"
-		} else if exists, err := movieExistsId(id); err != nil {
-			log.Printf("Ошибка при проверке существования фильма: %v", err)
-			msg = "Произошла ошибка при проверке существования файла. Пожалуйста, попробуйте снова."
-		} else if exists {
-			msg = deleteMovie(id)
+		if commandID[1] == "all" {
+			movies, _ := getMovieList()
+			msg = "Все видео удалены"
+			for _, movie := range movies {
+				err := deleteMovie(movie.ID)
+				if err != nil {
+					msg = err.Error()
+				}
+			}
 		} else {
-			msg = "Неверный ID файла"
+			id, err := strconv.Atoi(commandID[1])
+			if err != nil {
+				msg = "Неверный ID"
+			} else if exists, err := movieExistsId(id); err != nil {
+				log.Printf("Ошибка при проверке существования фильма: %v", err)
+				msg = "Произошла ошибка при проверке существования файла. Пожалуйста, попробуйте снова."
+			} else if exists {
+				err := deleteMovie(id)
+				if err != nil {
+					msg = err.Error()
+				} else {
+					msg = "Фильм успешно удален"
+				}
+
+			} else {
+				msg = "Неверный ID файла"
+			}
+
 		}
 	}
 	return tgbotapi.NewMessage(update.Message.Chat.ID, msg)
+}
+
+func sendErrorMessage(chatID int64, message string) {
+	text := "Ошибка: " + message
+	log.Printf(text)
+	msg := tgbotapi.NewMessage(chatID, text)
+	GlobalBot.Send(msg)
+}
+
+func sendSuccessMessage(chatID int64, message string) {
+	msg := tgbotapi.NewMessage(chatID, message)
+	GlobalBot.Send(msg)
 }
