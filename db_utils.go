@@ -177,6 +177,17 @@ func movieExistsTorrent(torrentFileName string) (bool, error) {
 	return count > 0, nil
 }
 
+func movieExistsUploadedFile(fileName string) (bool, error) {
+	row := db.QueryRow("SELECT COUNT(*) FROM Movie WHERE UPLOADED_FILE = ?", fileName)
+	var count int
+	err := row.Scan(&count)
+	if err != nil {
+		log.Printf("Error checking if movie exists: %v", err)
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func movieExistsId(id int) (bool, error) {
 	row := db.QueryRow("SELECT COUNT(*) FROM Movie WHERE ID = ?", id)
 	var count int
