@@ -45,9 +45,9 @@ func handleUnknownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 
 func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 	var msg string
-	if isYouTubeVideoLink(update.Message.Text) {
-		go downloadYouTubeVideo(update)
-		msg = "Видео скачивается с youtube"
+	if isValidLink(update.Message.Text) && !update.Message.IsCommand() {
+		go downloadVideo(update)
+		msg = "Видео скачивается!"
 	}
 	if update.Message.IsCommand() {
 		switch update.Message.Command() {

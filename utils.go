@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -93,4 +94,22 @@ func logAndReturnError(message string, err error) error {
 func isYouTubeVideoLink(text string) bool {
 	re := regexp.MustCompile(`^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/(watch\?v=|embed\/|v\/|.+\?v=)?([^&=%\?]{11})`)
 	return re.MatchString(text)
+}
+
+func isValidLink(text string) bool {
+	parsedURL, err := url.ParseRequestURI(text)
+	if err != nil {
+		return false
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return false
+	}
+
+	re := regexp.MustCompile(`^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if !re.MatchString(parsedURL.Host) {
+		return false
+	}
+
+	return true
 }
