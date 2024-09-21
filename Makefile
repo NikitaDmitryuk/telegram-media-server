@@ -9,3 +9,4 @@ run:
 .PHONY: format
 format:
 	go fmt .
+	go mod tidy

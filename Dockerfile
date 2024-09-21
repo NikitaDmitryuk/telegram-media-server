@@ -11,9 +11,11 @@ COPY *.go ./
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bbg-telegram-media-server
 
-FROM debian:bullseye-slim
+FROM archlinux:latest
 
-RUN apt-get update && apt-get install -y ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN pacman -Syu --noconfirm && \
+pacman -S --noconfirm yt-dlp ca-certificates && \
+pacman -Scc --noconfirm
 
 COPY --from=builder /bbg-telegram-media-server /bbg-telegram-media-server
 
