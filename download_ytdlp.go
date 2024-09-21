@@ -9,7 +9,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func downloadYouTubeVideo(update tgbotapi.Update) {
+func downloadVideo(update tgbotapi.Update) {
 	url := update.Message.Text
 	log.Println("Начало загрузки для URL:", url)
 
