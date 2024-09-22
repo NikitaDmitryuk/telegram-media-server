@@ -33,7 +33,9 @@ func downloadVideo(update tgbotapi.Update) {
 		return
 	}
 
-	videoId := addMovie(videoTitle, finalFileName, "")
+	var torrentFile *string = nil
+	filePaths := []string{finalFileName}
+	videoId := addMovie(videoTitle, torrentFile, filePaths)
 
 	err = downloadWithYTDLP(url, finalFileName)
 	if err != nil {

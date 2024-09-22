@@ -16,7 +16,7 @@ var stopDownload = make(chan bool)
 func stopTorrentDownload() {
 	movies, err := getMovieList()
 	if err != nil {
-		log.Printf("failed get movie: %v", err)
+		log.Printf("failed to get movie list: %v", err)
 	}
 	for _, movie := range movies {
 		if !movie.Downloaded {
@@ -54,8 +54,16 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 	}
 
 	t.DownloadAll()
+
 	movieName := t.Name()
-	movieID := addMovie(movieName, movieName, torrentFileName)
+	var filePaths []string
+
+	for _, file := range t.Files() {
+		fullFilePath := file.Path()
+		filePaths = append(filePaths, fullFilePath)
+	}
+
+	movieID := addMovie(movieName, &torrentFileName, filePaths)
 
 	log.Printf("Start download - %s", movieName)
 
@@ -90,8 +98,10 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 
 			if t.Complete.Bool() {
 				setLoaded(movieID)
+
 				text := fmt.Sprintf("Загрузка фильма %s завершена!", movie.Name)
 				sendSuccessMessage(update.Message.Chat.ID, text)
+
 				client.Close()
 				return
 			}

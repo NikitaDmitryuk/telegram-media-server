@@ -108,7 +108,7 @@ func handleKnownUser(update tgbotapi.Update) tgbotapi.MessageConfig {
 				msg = "Произошла ошибка при загрузке файла. Пожалуйста, попробуйте снова."
 			} else {
 				log.Println("Файл успешно загружен")
-				id := addMovie(fileName, fileName, "")
+				id := addMovie(fileName, nil, []string{fileName})
 				setLoaded(id)
 				updateDownloadedPercentage(id, 100)
 				msg = "Файл успешно добавлен"
