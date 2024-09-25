@@ -1,8 +1,8 @@
 pkgname=bbg-telegram-media-server
-pkgver=1.0.27
+pkgver=1.0.28
 pkgrel=1
 pkgdesc="Telegram Media Server"
-arch=('aarch64')
+arch=('aarch64' 'armv7h' 'x86_64')  # Добавляем поддержку armv7h (BeagleBone Green) и x86_64 (AMD64)
 url="https://github.com/NikitaDmitryuk/bbg-telegram-media-server-golang"
 license=('MIT')
 makedepends=('go')
@@ -14,7 +14,22 @@ options=(!strip)
 
 build() {
     cd "${srcdir}/../"
-    env GOOS=linux GOARCH=arm64 go build -o "${srcdir}/bbg-telegram-media-server" .
+
+    case "$CARCH" in
+        'aarch64')
+            env GOOS=linux GOARCH=arm64 go build -o "${srcdir}/bbg-telegram-media-server" .
+            ;;
+        'armv7h')
+            env GOOS=linux GOARCH=arm GOARM=7 go build -o "${srcdir}/bbg-telegram-media-server" .
+            ;;
+        'x86_64')
+            env GOOS=linux GOARCH=amd64 go build -o "${srcdir}/bbg-telegram-media-server" .
+            ;;
+        *)
+            echo "Unsupported architecture: $CARCH"
+            exit 1
+            ;;
+    esac
 }
 
 package() {
