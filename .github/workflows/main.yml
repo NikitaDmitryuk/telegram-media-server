@@ -9,6 +9,10 @@ jobs:
   build:
     runs-on: archlinux
 
+    strategy:
+      matrix:
+        arch: [armv7h, aarch64, x86_64]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -16,13 +20,14 @@ jobs:
       - name: Install dependencies
         run: sudo pacman -Syu --noconfirm base-devel go
 
-      - name: Build package
+      - name: Build package for ${{ matrix.arch }}
         run: |
           cd $GITHUB_WORKSPACE
-          CARCH=armv7h makepkg -s
+          CARCH=${{ matrix.arch }} makepkg -s
 
       - name: Create release
         id: create_release
+        if: matrix.arch == 'armv7h'
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -32,12 +37,12 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload release asset
+      - name: Upload release asset for ${{ matrix.arch }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./bbg-telegram-media-server-*.pkg.tar.zst
-          asset_name: bbg-telegram-media-server.pkg.tar.zst
+          asset_name: bbg-telegram-media-server-${{ matrix.arch }}.pkg.tar.zst
           asset_content_type: application/zstd
