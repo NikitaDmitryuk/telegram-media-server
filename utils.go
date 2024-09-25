@@ -70,8 +70,15 @@ func deleteMovie(id int) error {
 		return fmt.Errorf("Ошибка при получении файлов для фильма: %v", err)
 	}
 
+	var rootFolder string
+
 	for _, file := range files {
 		filePath := filepath.Join(GlobalConfig.MoviePath, file.FilePath)
+
+		if rootFolder == "" {
+			rootFolder = filepath.Dir(filePath)
+		}
+
 		err := os.Remove(filePath)
 		if err != nil {
 			log.Printf("Ошибка при удалении файла %s: %v", filePath, err)
@@ -102,8 +109,27 @@ func deleteMovie(id int) error {
 		return fmt.Errorf("Ошибка при удалении файлов фильма из базы данных: %v", err)
 	}
 
+	if rootFolder != "" && rootFolder != GlobalConfig.MoviePath && isEmptyDirectory(rootFolder) {
+		err = os.Remove(rootFolder)
+		if err != nil {
+			log.Printf("Ошибка при удалении корневой папки %s: %v", rootFolder, err)
+		} else {
+			log.Printf("Корневая папка %s успешно удалена", rootFolder)
+		}
+	}
+
 	log.Printf("Фильм с ID %d и все связанные файлы успешно удалены", id)
 	return nil
+}
+
+func isEmptyDirectory(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		log.Printf("Ошибка при проверке содержимого папки %s: %v", dir, err)
+		return false
+	}
+
+	return len(entries) == 0
 }
 
 func sanitizeFileName(name string) string {
