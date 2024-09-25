@@ -65,10 +65,29 @@ func deleteMovie(id int) error {
 		return fmt.Errorf("Фильм не найден: %v", err)
 	}
 
-	os.Remove(filepath.Join(GlobalConfig.MoviePath, movie.UploadedFile))
+	files, err := getFilesByMovieID(id)
+	if err != nil {
+		return fmt.Errorf("Ошибка при получении файлов для фильма: %v", err)
+	}
 
-	if movie.TorrentFile != "" {
-		os.Remove(filepath.Join(GlobalConfig.MoviePath, movie.TorrentFile))
+	for _, file := range files {
+		filePath := filepath.Join(GlobalConfig.MoviePath, file.FilePath)
+		err := os.Remove(filePath)
+		if err != nil {
+			log.Printf("Ошибка при удалении файла %s: %v", filePath, err)
+		} else {
+			log.Printf("Файл %s успешно удалён", filePath)
+		}
+	}
+
+	if movie.TorrentFile.Valid && movie.TorrentFile.String != "" {
+		torrentFilePath := filepath.Join(GlobalConfig.MoviePath, movie.TorrentFile.String)
+		err := os.Remove(torrentFilePath)
+		if err != nil {
+			log.Printf("Ошибка при удалении торрент-файла %s: %v", torrentFilePath, err)
+		} else {
+			log.Printf("Торрент-файл %s успешно удалён", torrentFilePath)
+		}
 	}
 
 	err = removeMovie(id)
@@ -77,7 +96,13 @@ func deleteMovie(id int) error {
 		return fmt.Errorf("Ошибка при удалении записи фильма из базы данных: %v", err)
 	}
 
-	log.Printf("Фильм с ID %d успешно удален", id)
+	err = removeFilesByMovieID(id)
+	if err != nil {
+		log.Printf("Ошибка при удалении файлов фильма из базы данных: %v", err)
+		return fmt.Errorf("Ошибка при удалении файлов фильма из базы данных: %v", err)
+	}
+
+	log.Printf("Фильм с ID %d и все связанные файлы успешно удалены", id)
 	return nil
 }
 
