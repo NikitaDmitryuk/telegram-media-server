@@ -1,5 +1,5 @@
 services:
-  bbg-telegram-media-server:
+  telegram-media-server:
     build:
       dockerfile: Dockerfile
       context: .

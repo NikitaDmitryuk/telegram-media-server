@@ -9,11 +9,13 @@ import (
 
 var GlobalConfig *Config
 var GlobalBot *tgbotapi.BotAPI
+var lang string
 
 func init() {
 	GlobalConfig = NewConfig()
-	initDB()
+	dbInit()
 	initBot()
+	lang = GlobalConfig.Lang
 }
 
 func initBot() {

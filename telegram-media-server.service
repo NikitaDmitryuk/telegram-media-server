@@ -1,0 +1,12 @@
+[Unit]
+Description=Telegram Media Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/telegram-media-server
+EnvironmentFile=/etc/telegram-media-server/.env
+Restart=always
+
+
+[Install]
+WantedBy=multi-user.target

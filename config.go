@@ -10,6 +10,7 @@ type Config struct {
 	BotToken              string
 	MoviePath             string
 	Password              string
+	Lang                  string
 	UpdateIntervalSeconds int
 	UpdatePercentageStep  int
 	MaxWaitTimeMinutes    int
@@ -41,6 +42,7 @@ func NewConfig() *Config {
 		BotToken:              os.Getenv("BOT_TOKEN"),
 		MoviePath:             os.Getenv("MOVIE_PATH"),
 		Password:              os.Getenv("PASSWORD"),
+		Lang:                  os.Getenv("LANG"),
 		UpdateIntervalSeconds: updateIntervalSeconds,
 		UpdatePercentageStep:  updatePercentageStep,
 		MaxWaitTimeMinutes:    maxWaitTimeMinutes,
