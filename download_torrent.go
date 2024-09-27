@@ -13,16 +13,18 @@ import (
 
 var stopDownload = make(chan bool)
 
-func stopTorrentDownload() {
-	movies, err := getMovieList()
+func stopTorrentDownload() error {
+	movies, err := dbGetMovieList()
 	if err != nil {
 		log.Printf("failed to get movie list: %v", err)
+		return logAndReturnError("failed to get movie list", err)
 	}
 	for _, movie := range movies {
 		if !movie.Downloaded {
 			stopDownload <- true
 		}
 	}
+	return nil
 }
 
 func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
@@ -33,13 +35,13 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 
 	client, err := torrent.NewClient(clientConfig)
 	if err != nil {
-		log.Printf("Failed to create torrent client: %v", err)
+		log.Printf(messages[lang].Error.TorrentClientError, err)
 		return err
 	}
 
 	t, err := client.AddTorrentFromFile(filepath.Join(GlobalConfig.MoviePath, torrentFileName))
 	if err != nil {
-		log.Printf("Failed to add torrent: %v", err)
+		log.Printf(messages[lang].Error.AddTorrentError, err)
 		return err
 	}
 
@@ -47,10 +49,10 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 
 	requiredSpace := t.Info().TotalLength()
 	if !hasEnoughSpace(GlobalConfig.MoviePath, requiredSpace) {
-		message := fmt.Sprintf("Недостаточно места для загрузки фильма %s.", t.Name())
+		message := fmt.Sprintf(messages[lang].Error.NotEnoughSpace, t.Name())
 		sendErrorMessage(update.Message.Chat.ID, message)
 		client.Close()
-		return fmt.Errorf("недостаточно места для загрузки фильма %s", t.Name())
+		return fmt.Errorf(messages[lang].Error.NotEnoughSpace, t.Name())
 	}
 
 	t.DownloadAll()
@@ -63,9 +65,9 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 		filePaths = append(filePaths, fullFilePath)
 	}
 
-	movieID := addMovie(movieName, &torrentFileName, filePaths)
+	movieID := dbAddMovie(movieName, &torrentFileName, filePaths)
 
-	log.Printf("Start download - %s", movieName)
+	log.Printf(messages[lang].Info.StartDownload, movieName)
 
 	go monitorDownload(t, movieID, client, update)
 	return nil
@@ -81,25 +83,25 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 			percentage := int(t.BytesCompleted() * 100 / t.Info().TotalLength())
 			elapsedTime := time.Since(startTime).Minutes()
 
-			movie, err := getMovieByID(movieID)
+			movie, err := dbGetMovieByID(movieID)
 			if err != nil {
-				log.Printf("Error getting movie by ID: %v", err)
+				log.Printf(messages[lang].Error.GetMovieError, err)
 				return
 			}
 
-			updateDownloadedPercentage(movieID, percentage)
+			dbUpdateDownloadedPercentage(movieID, percentage)
 
 			if percentage >= lastPercentage+GlobalConfig.UpdatePercentageStep {
 				lastPercentage = percentage
 
-				text := fmt.Sprintf("Загрузка %s: %d%%", movie.Name, percentage)
+				text := fmt.Sprintf(messages[lang].Info.DownloadProgress, movie.Name, percentage)
 				sendSuccessMessage(update.Message.Chat.ID, text)
 			}
 
 			if t.Complete.Bool() {
-				setLoaded(movieID)
+				dbSetLoaded(movieID)
 
-				text := fmt.Sprintf("Загрузка фильма %s завершена!", movie.Name)
+				text := fmt.Sprintf(messages[lang].Info.DownloadComplete, movie.Name)
 				sendSuccessMessage(update.Message.Chat.ID, text)
 
 				client.Close()
@@ -109,13 +111,13 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 			if elapsedTime >= float64(GlobalConfig.MaxWaitTimeMinutes) && percentage < GlobalConfig.MinDownloadPercentage {
 				os.Remove(filepath.Join(GlobalConfig.MoviePath, t.InfoHash().HexString()+".torrent"))
 				deleteMovie(movieID)
-				text := fmt.Sprintf("Загрузка фильма %s остановлена из-за низкой скорости загрузки.", movie.Name)
-				sendSuccessMessage(update.Message.Chat.ID, text)
+				text := fmt.Sprintf(messages[lang].Error.DownloadStoppedLowSpeed, movie.Name)
+				sendErrorMessage(update.Message.Chat.ID, text)
 				client.Close()
 				return
 			}
 		case <-stopDownload:
-			text := fmt.Sprintf("Загрузка фильма %s остановлена по запросу.", t.Name())
+			text := fmt.Sprintf(messages[lang].Info.DownloadStopped, t.Name())
 			sendSuccessMessage(update.Message.Chat.ID, text)
 			client.Close()
 			deleteMovie(movieID)

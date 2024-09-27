@@ -1,54 +1,54 @@
 package main
 
 import (
+	"fmt"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func downloadVideo(update tgbotapi.Update) {
 	url := update.Message.Text
-	log.Println("Начало загрузки для URL:", url)
+	log.Println(messages[lang].Info.StartVideoDownload, url)
 
 	videoTitle, err := getVideoTitle(url)
 	if err != nil {
-		sendErrorMessage(update.Message.Chat.ID, "Ошибка получения названия видео: "+err.Error())
+		sendErrorMessage(update.Message.Chat.ID, fmt.Sprintf(messages[lang].Error.VideoTitleError, err.Error()))
 		return
 	}
 
 	finalFileName := generateFileName(videoTitle)
-	log.Println("Файл будет сохранён как:", finalFileName)
+	log.Println(messages[lang].Info.FileSavedAs, finalFileName)
 
-	isExists, err := movieExistsUploadedFile(finalFileName)
+	isExists, err := dbMovieExistsUploadedFile(finalFileName)
 	if err != nil {
 		sendErrorMessage(update.Message.Chat.ID, err.Error())
 		return
 	}
 
 	if isExists {
-		sendErrorMessage(update.Message.Chat.ID, "Видео уже существует или в процессе загрузки")
+		sendErrorMessage(update.Message.Chat.ID, messages[lang].Error.VideoExists)
 		return
 	}
 
 	var torrentFile *string = nil
 	filePaths := []string{finalFileName}
-	videoId := addMovie(videoTitle, torrentFile, filePaths)
+	videoId := dbAddMovie(videoTitle, torrentFile, filePaths)
 
 	err = downloadWithYTDLP(url, finalFileName)
 	if err != nil {
-		sendErrorMessage(update.Message.Chat.ID, "Ошибка загрузки видео: "+err.Error())
+		sendErrorMessage(update.Message.Chat.ID, fmt.Sprintf(messages[lang].Error.VideoDownloadError, err.Error()))
 		deleteMovie(videoId)
 		return
 	}
 
-	setLoaded(videoId)
-	updateDownloadedPercentage(videoId, 100)
+	dbSetLoaded(videoId)
+	dbUpdateDownloadedPercentage(videoId, 100)
 
-	log.Println("Видео успешно загружено:", finalFileName)
-	sendSuccessMessage(update.Message.Chat.ID, "Видео успешно загружено: "+videoTitle)
+	log.Println(messages[lang].Info.VideoSuccessfullyDownloaded, finalFileName)
+	sendSuccessMessage(update.Message.Chat.ID, fmt.Sprintf(messages[lang].Info.VideoSuccessfullyDownloaded, videoTitle))
 }
 
 func generateFileName(title string) string {

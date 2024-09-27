@@ -24,9 +24,6 @@ go.work.sum
 # env file
 .env
 
-bbg_telegram_media_server_amd64
-bbg_telegram_media_server_arm
-
 artifacts/
 *.pkg.tar.zst
 src/

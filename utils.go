@@ -60,14 +60,14 @@ func hasEnoughSpace(path string, requiredSpace int64) bool {
 }
 
 func deleteMovie(id int) error {
-	movie, err := getMovieByID(id)
+	movie, err := dbGetMovieByID(id)
 	if err != nil {
-		return fmt.Errorf("Фильм не найден: %v", err)
+		return logAndReturnError(messages[lang].Error.MovieNotFound, err)
 	}
 
-	files, err := getFilesByMovieID(id)
+	files, err := dbGetFilesByMovieID(id)
 	if err != nil {
-		return fmt.Errorf("Ошибка при получении файлов для фильма: %v", err)
+		return logAndReturnError(messages[lang].Error.GetFilesError, err)
 	}
 
 	var rootFolder string
@@ -81,9 +81,9 @@ func deleteMovie(id int) error {
 
 		err := os.Remove(filePath)
 		if err != nil {
-			log.Printf("Ошибка при удалении файла %s: %v", filePath, err)
+			log.Printf("Failed to delete file %s: %v", filePath, err)
 		} else {
-			log.Printf("Файл %s успешно удалён", filePath)
+			log.Printf("File %s deleted successfully", filePath)
 		}
 	}
 
@@ -91,41 +91,39 @@ func deleteMovie(id int) error {
 		torrentFilePath := filepath.Join(GlobalConfig.MoviePath, movie.TorrentFile.String)
 		err := os.Remove(torrentFilePath)
 		if err != nil {
-			log.Printf("Ошибка при удалении торрент-файла %s: %v", torrentFilePath, err)
+			log.Printf("Failed to delete torrent file %s: %v", torrentFilePath, err)
 		} else {
-			log.Printf("Торрент-файл %s успешно удалён", torrentFilePath)
+			log.Printf("Torrent file %s deleted successfully", torrentFilePath)
 		}
 	}
 
-	err = removeMovie(id)
+	err = dbRemoveMovie(id)
 	if err != nil {
-		log.Printf("Ошибка при удалении записи фильма из базы данных: %v", err)
-		return fmt.Errorf("Ошибка при удалении записи фильма из базы данных: %v", err)
+		return logAndReturnError(messages[lang].Error.DeleteMovieDBError, err)
 	}
 
-	err = removeFilesByMovieID(id)
+	err = dbRemoveFilesByMovieID(id)
 	if err != nil {
-		log.Printf("Ошибка при удалении файлов фильма из базы данных: %v", err)
-		return fmt.Errorf("Ошибка при удалении файлов фильма из базы данных: %v", err)
+		return logAndReturnError(messages[lang].Error.DeleteFilesDBError, err)
 	}
 
 	if rootFolder != "" && rootFolder != GlobalConfig.MoviePath && isEmptyDirectory(rootFolder) {
 		err = os.Remove(rootFolder)
 		if err != nil {
-			log.Printf("Ошибка при удалении корневой папки %s: %v", rootFolder, err)
+			log.Printf("Failed to delete root folder %s: %v", rootFolder, err)
 		} else {
-			log.Printf("Корневая папка %s успешно удалена", rootFolder)
+			log.Printf("Root folder %s deleted successfully", rootFolder)
 		}
 	}
 
-	log.Printf("Фильм с ID %d и все связанные файлы успешно удалены", id)
+	log.Printf("Movie with ID %d and all associated files deleted successfully", id)
 	return nil
 }
 
 func isEmptyDirectory(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("Ошибка при проверке содержимого папки %s: %v", dir, err)
+		log.Printf("Failed to read directory %s: %v", dir, err)
 		return false
 	}
 
@@ -140,11 +138,6 @@ func sanitizeFileName(name string) string {
 func logAndReturnError(message string, err error) error {
 	log.Printf("%s: %v\n", message, err)
 	return fmt.Errorf("%s: %v", message, err)
-}
-
-func isYouTubeVideoLink(text string) bool {
-	re := regexp.MustCompile(`^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/(watch\?v=|embed\/|v\/|.+\?v=)?([^&=%\?]{11})`)
-	return re.MatchString(text)
 }
 
 func isValidLink(text string) bool {
