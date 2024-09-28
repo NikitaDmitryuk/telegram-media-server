@@ -3,11 +3,11 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - '*.*.*'
 
 jobs:
   build:
-    runs-on: archlinux
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
@@ -17,32 +17,49 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Install dependencies
-        run: sudo pacman -Syu --noconfirm base-devel go
-
-      - name: Build package for ${{ matrix.arch }}
+      - name: Remove conflicting containerd package
         run: |
-          cd $GITHUB_WORKSPACE
-          CARCH=${{ matrix.arch }} makepkg -s
+          sudo apt remove -y containerd
 
-      - name: Create release
-        id: create_release
-        if: matrix.arch == 'armv7h'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
+      - name: Install Docker
+        run: |
+          sudo apt update
+          sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt update
+          sudo apt install -y docker-ce
 
-      - name: Upload release asset for ${{ matrix.arch }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build package in Arch Linux container
+        run: |
+          docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -c "
+            pacman -Sy --noconfirm base-devel go git yt-dlp
+            useradd -m builder
+            chown -R builder /workspace
+            su builder -c '
+              cd /workspace &&
+              case \"${{ matrix.arch }}\" in
+                'aarch64')
+                  CARCH=aarch64 makepkg -Acsf
+                  ;;
+                'armv7h')
+                  CARCH=armv7h makepkg -Acsf
+                  ;;
+                'x86_64')
+                  CARCH=x86_64 makepkg -Acsf
+                  ;;
+                *)
+                  echo \"Unsupported architecture: ${{ matrix.arch }}\"
+                  exit 1
+                  ;;
+              esac
+            '
+          "
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./bbg-telegram-media-server-*.pkg.tar.zst
-          asset_name: bbg-telegram-media-server-${{ matrix.arch }}.pkg.tar.zst
-          asset_content_type: application/zstd
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: telegram-media-server-${{ github.ref_name }}-1-${{ matrix.arch }}.pkg.tar.zst
+          asset_name: telegram-media-server-${{ github.ref_name }}-1-${{ matrix.arch }}.pkg.tar.zst
+          tag: ${{ github.ref }}
