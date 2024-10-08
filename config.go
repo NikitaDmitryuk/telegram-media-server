@@ -15,6 +15,7 @@ type Config struct {
 	UpdatePercentageStep  int
 	MaxWaitTimeMinutes    int
 	MinDownloadPercentage int
+	MessageFilePath       string
 }
 
 func NewConfig() *Config {
@@ -43,6 +44,7 @@ func NewConfig() *Config {
 		MoviePath:             os.Getenv("MOVIE_PATH"),
 		Password:              os.Getenv("PASSWORD"),
 		Lang:                  os.Getenv("LANG"),
+		MessageFilePath:       os.Getenv("MESSAGE_FILE_PATH"),
 		UpdateIntervalSeconds: updateIntervalSeconds,
 		UpdatePercentageStep:  updatePercentageStep,
 		MaxWaitTimeMinutes:    maxWaitTimeMinutes,

@@ -1,0 +1,255 @@
+CheckUserError:
+  en: "An error occurred while checking the user. Please try again later"
+  ru: "Произошла ошибка при проверке пользователя. Пожалуйста, попробуйте снова позже"
+
+UnknownFileType:
+  en: "Unknown file type"
+  ru: "Неизвестный тип файла"
+
+FileDownloadError:
+  en: "An error occurred while downloading the file (files larger than 50MB cannot be uploaded)"
+  ru: "Произошла ошибка при загрузке файла (загрузка файлов больше 50МБ недоступна)"
+
+CheckFileExistenceError:
+  en: "An error occurred while checking file existence. Please try again"
+  ru: "Произошла ошибка при проверке существования файла. Пожалуйста, попробуйте снова"
+
+NotEnoughDiskSpace:
+  en: "Error downloading the torrent file (not enough disk space)"
+  ru: "Ошибка при загрузке торрента (возможно, не хватает места на диске)"
+
+InvalidLoginFormat:
+  en: "Invalid command format. Use: /login [PASSWORD]"
+  ru: "Неверный формат команды. Используйте: /login [PASSWORD]"
+
+LoginError:
+  en: "An error occurred during login. Please try again"
+  ru: "Произошла ошибка при входе. Пожалуйста, попробуйте снова"
+
+WrongPassword:
+  en: "Incorrect password"
+  ru: "Неверный пароль"
+
+UnknownCommand:
+  en: "Unknown command. Use /start to get the list of available commands"
+  ru: "Неизвестная команда. Используйте /start для получения списка доступных команд"
+
+GetMovieListError:
+  en: "An error occurred while fetching the movie list. Please try again later"
+  ru: "Произошла ошибка при получении списка фильмов. Пожалуйста, попробуйте позже"
+
+InvalidID:
+  en: "Invalid ID"
+  ru: "Неверный ID"
+
+InvalidFileID:
+  en: "Invalid file ID"
+  ru: "Неверный ID файла"
+
+MovieNotFound:
+  en: "Movie not found"
+  ru: "Фильм не найден"
+
+GetFilesError:
+  en: "Error retrieving files for the movie"
+  ru: "Ошибка при получении файлов для фильма"
+
+DeleteMovieDBError:
+  en: "Error deleting the movie record from the database"
+  ru: "Ошибка при удалении записи фильма из базы данных"
+
+DeleteFilesDBError:
+  en: "Error deleting the movie files from the database"
+  ru: "Ошибка при удалении файлов фильма из базы данных"
+
+InvalidCommandFormat:
+  en: "Invalid command format"
+  ru: "Неправильный формат команды"
+
+MovieListError:
+  en: "Error getting list of movies"
+  ru: "Ошибка при получении списка фильмов"
+
+MovieCheckError:
+  en: "Error checking existence of movie"
+  ru: "Ошибка при проверке существования фильма"
+
+TorrentClientError:
+  en: "Failed to create torrent client: %v"
+  ru: "Не удалось создать торрент-клиент: %v"
+
+AddTorrentError:
+  en: "Failed to add torrent: %v"
+  ru: "Не удалось добавить торрент: %v"
+
+NotEnoughSpace:
+  en: "Not enough space to download movie %s"
+  ru: "Недостаточно места для загрузки фильма %s"
+
+GetMovieError:
+  en: "Error getting movie: %v"
+  ru: "Ошибка при получении фильма: %v"
+
+DownloadStoppedLowSpeed:
+  en: "Download of movie %s stopped due to low download speed"
+  ru: "Загрузка фильма %s остановлена из-за низкой скорости загрузки"
+
+VideoTitleError:
+  en: "Error getting video title: %s"
+  ru: "Ошибка получения названия видео: %s"
+
+VideoDownloadError:
+  en: "Error downloading video: %s"
+  ru: "Ошибка загрузки видео: %s"
+
+VideoExists:
+  en: "Video already exists or is in the process of downloading"
+  ru: "Видео уже существует или в процессе загрузки"
+
+VideoDownloading:
+  en: "Video is downloading!"
+  ru: "Видео скачивается!"
+
+TorrentDownloadStarted:
+  en: "Torrent download has started!"
+  ru: "Загрузка торрента началась!"
+
+FileAlreadyExists:
+  en: "File already exists"
+  ru: "Файл уже существует"
+
+FileAddedSuccessfully:
+  en: "File successfully added"
+  ru: "Файл успешно добавлен"
+
+StartCommand:
+  en: "<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop - stop all torrent downloads"
+  ru: "<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop - остановить все загрузки торрентов"
+
+TorrentDownloadsStopped:
+  en: "All torrent downloads have been stopped!"
+  ru: "Все загрузки торрентов остановлены!"
+
+NoMovies:
+  en: "The list is empty"
+  ru: "Список пуст"
+
+LoginSuccess:
+  en: "Login successful"
+  ru: "Вход выполнен успешно"
+
+AllMoviesDeleted:
+  en: "All videos have been deleted"
+  ru: "Все видео удалены"
+
+MovieDeleted:
+  en: "Movie successfully deleted"
+  ru: "Фильм успешно удален"
+
+DownloadVideoSuccess:
+  en: "Video downloaded successfully"
+  ru: "Видео успешно скачано"
+
+MovieDownloaded:
+  en: "ID: %d\nTitle: %s\nDownloaded: Yes\n\n"
+  ru: "ID: %d\nНазвание: %s\nЗагружено: Да\n\n"
+
+MovieDownloading:
+  en: "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n\n"
+  ru: "ID: %d\nНазвание: %s\nПроцент загрузки: %d%%\n\n"
+
+StartDownload:
+  en: "Download started - %s"
+  ru: "Начата загрузка - %s"
+
+DownloadProgress:
+  en: "Downloading %s: %d%%"
+  ru: "Загрузка %s: %d%%"
+
+DownloadComplete:
+  en: "Download of movie %s completed!"
+  ru: "Загрузка фильма %s завершена!"
+
+DownloadStopped:
+  en: "Download of movie %s stopped by request"
+  ru: "Загрузка фильма %s остановлена по запросу"
+
+StartVideoDownload:
+  en: "Starting download for URL: %s"
+  ru: "Начало загрузки для URL: %s"
+
+FileSavedAs:
+  en: "File will be saved as: %s"
+  ru: "Файл будет сохранён как: %s"
+
+VideoSuccessfullyDownloaded:
+  en: "Video successfully downloaded: %s"
+  ru: "Видео успешно загружено: %s"
+
+UnknownUser:
+  en: "Please log in using the /login [PASSWORD] command"
+  ru: "Выполните вход с помощью команды /login [PASSWORD]"
+
+FailedToGetFile:
+  en: "Failed to get file: %v"
+  ru: "Не удалось получить файл: %v"
+
+FailedToDownloadFile:
+  en: "Failed to download file: %v"
+  ru: "Не удалось загрузить файл: %v"
+
+FailedToCreateFile:
+  en: "Failed to create file: %v"
+  ru: "Не удалось создать файл: %v"
+
+FailedToSaveFile:
+  en: "Failed to save file: %v"
+  ru: "Не удалось сохранить файл: %v"
+
+FileDownloadedSuccessfully:
+  en: "File downloaded successfully"
+  ru: "Файл успешно загружен"
+
+ErrorGettingFilesystemStats:
+  en: "Error getting filesystem stats: %v"
+  ru: "Ошибка получения статистики файловой системы: %v"
+
+RequiredSpace:
+  en: "Required space: %d bytes"
+  ru: "Требуемое пространство: %d байт"
+
+AvailableSpace:
+  en: "Available space: %d bytes"
+  ru: "Доступное пространство: %d байт"
+
+FailedToDeleteFile:
+  en: "Failed to delete file %s: %v"
+  ru: "Не удалось удалить файл %s: %v"
+
+FileDeletedSuccessfully:
+  en: "File %s deleted successfully"
+  ru: "Файл %s успешно удален"
+
+FailedToDeleteTorrentFile:
+  en: "Failed to delete torrent file %s: %v"
+  ru: "Не удалось удалить торрент-файл %s: %v"
+
+TorrentFileDeletedSuccessfully:
+  en: "Torrent file %s deleted successfully"
+  ru: "Торрент-файл %s успешно удален"
+
+FailedToDeleteRootFolder:
+  en: "Failed to delete root folder %s: %v"
+  ru: "Не удалось удалить корневую папку %s: %v"
+
+RootFolderDeletedSuccessfully:
+  en: "Root folder %s deleted successfully"
+  ru: "Корневая папка %s успешно удалена"
+
+MovieDeletedSuccessfully:
+  en: "Movie with ID %d and all associated files deleted successfully"
+  ru: "Фильм с ID %d и все связанные файлы успешно удалены"
+
+FailedToReadDirectory:
+  en: "Failed to read directory %s: %v"
+  ru: "Не удалось прочитать директорию %s: %v"

@@ -16,6 +16,9 @@ func init() {
 	dbInit()
 	initBot()
 	lang = GlobalConfig.Lang
+	if err := LoadMessagesFromFile(GlobalConfig.MessageFilePath); err != nil {
+		log.Fatalf("Не удалось загрузить сообщения: %v", err)
+	}
 }
 
 func initBot() {

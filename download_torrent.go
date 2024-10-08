@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/anacrolix/torrent"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/anacrolix/torrent"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 var stopDownload = make(chan bool)
@@ -16,8 +17,8 @@ var stopDownload = make(chan bool)
 func stopTorrentDownload() error {
 	movies, err := dbGetMovieList()
 	if err != nil {
-		log.Printf("failed to get movie list: %v", err)
-		return logAndReturnError("failed to get movie list", err)
+		log.Printf(GetMessage(GetMovieListErrorMsgID), err)
+		return fmt.Errorf(GetMessage(GetMovieListErrorMsgID), err)
 	}
 	for _, movie := range movies {
 		if !movie.Downloaded {
@@ -35,13 +36,13 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 
 	client, err := torrent.NewClient(clientConfig)
 	if err != nil {
-		log.Printf(messages[lang].Error.TorrentClientError, err)
+		log.Printf(GetMessage(TorrentClientErrorMsgID), err)
 		return err
 	}
 
 	t, err := client.AddTorrentFromFile(filepath.Join(GlobalConfig.MoviePath, torrentFileName))
 	if err != nil {
-		log.Printf(messages[lang].Error.AddTorrentError, err)
+		log.Printf(GetMessage(AddTorrentErrorMsgID), err)
 		return err
 	}
 
@@ -49,10 +50,10 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 
 	requiredSpace := t.Info().TotalLength()
 	if !hasEnoughSpace(GlobalConfig.MoviePath, requiredSpace) {
-		message := fmt.Sprintf(messages[lang].Error.NotEnoughSpace, t.Name())
+		message := GetMessage(NotEnoughSpaceMsgID, t.Name())
 		sendErrorMessage(update.Message.Chat.ID, message)
 		client.Close()
-		return fmt.Errorf(messages[lang].Error.NotEnoughSpace, t.Name())
+		return fmt.Errorf(message)
 	}
 
 	t.DownloadAll()
@@ -67,7 +68,7 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 
 	movieID := dbAddMovie(movieName, &torrentFileName, filePaths)
 
-	log.Printf(messages[lang].Info.StartDownload, movieName)
+	log.Printf(GetMessage(StartDownloadMsgID), movieName)
 
 	go monitorDownload(t, movieID, client, update)
 	return nil
@@ -85,7 +86,7 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 
 			movie, err := dbGetMovieByID(movieID)
 			if err != nil {
-				log.Printf(messages[lang].Error.GetMovieError, err)
+				log.Printf(GetMessage(GetMovieErrorMsgID), err)
 				return
 			}
 
@@ -94,14 +95,14 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 			if percentage >= lastPercentage+GlobalConfig.UpdatePercentageStep {
 				lastPercentage = percentage
 
-				text := fmt.Sprintf(messages[lang].Info.DownloadProgress, movie.Name, percentage)
+				text := GetMessage(DownloadProgressMsgID, movie.Name, percentage)
 				sendSuccessMessage(update.Message.Chat.ID, text)
 			}
 
 			if t.Complete.Bool() {
 				dbSetLoaded(movieID)
 
-				text := fmt.Sprintf(messages[lang].Info.DownloadComplete, movie.Name)
+				text := GetMessage(DownloadCompleteMsgID, movie.Name)
 				sendSuccessMessage(update.Message.Chat.ID, text)
 
 				client.Close()
@@ -111,13 +112,13 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 			if elapsedTime >= float64(GlobalConfig.MaxWaitTimeMinutes) && percentage < GlobalConfig.MinDownloadPercentage {
 				os.Remove(filepath.Join(GlobalConfig.MoviePath, t.InfoHash().HexString()+".torrent"))
 				deleteMovie(movieID)
-				text := fmt.Sprintf(messages[lang].Error.DownloadStoppedLowSpeed, movie.Name)
+				text := GetMessage(DownloadStoppedLowSpeedMsgID, movie.Name)
 				sendErrorMessage(update.Message.Chat.ID, text)
 				client.Close()
 				return
 			}
 		case <-stopDownload:
-			text := fmt.Sprintf(messages[lang].Info.DownloadStopped, t.Name())
+			text := GetMessage(DownloadStoppedMsgID, t.Name())
 			sendSuccessMessage(update.Message.Chat.ID, text)
 			client.Close()
 			deleteMovie(movieID)
