@@ -1,5 +1,161 @@
 # Telegram Media Server
 
+Telegram Media Server is a Telegram bot that accepts links to streaming videos or torrent files, downloads them and distributes them on the internal network via a DLNA server (for example, `minidlna`).
+
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Installing the bot](#installation-of-the-bot)
+- [Installing and setting up minidlna](#installation-and-setup-minidlna)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Available commands](#available-commands)
+
+## Features
+
+- **Receiving links**: Supports all video links supported by the `yt-dlp` utility.
+- **Content Download**: Downloads videos and torrent files, tracking download progress.
+- **Distribution in internal network**: Distributes downloaded content via DLNA server.
+- **Download Management**: Allows you to view and manage current downloads via bot commands.
+- **User Authorization**: Access to the bot is password protected.
+
+## Requirements
+
+- **Operating system**: Arch Linux
+- **Architectures**: `aarch64`, `armv7h`, `x86_64`
+- **Dependencies**:
+- **For building**: `go`
+- **For running**: `yt-dlp`, `minidlna` (recommended)
+- **Other**:
+- Installed and configured DLNA server (e.g. `minidlna`)
+
+## Installation
+
+### Installing the bot
+
+1. **Installing the package:**
+
+Install the `telegram-media-server` package using the `pacman` package manager:
+
+```bash
+sudo pacman -U telegram-media-server.pkg.tar.zst
+```
+
+2. **Configuration:**
+
+During installation, the sample configuration file will be copied to **/etc/telegram-media-server/.env**. If the configuration file is not created automatically, copy it manually:
+
+```bash
+sudo cp /etc/telegram-media-server/.env.example /etc/telegram-media-server/.env
+```
+
+3. **Editing the configuration:**
+
+Open the **/etc/telegram-media-server/.env** file and configure the parameters according to your requirements.
+
+4. **Starting the service:**
+
+The `telegram-media-server` service should automatically be enabled and started. If this does not happen, run:
+
+```bash
+sudo systemctl enable telegram-media-server
+sudo systemctl start telegram-media-server
+```
+
+### Installing and configuring minidlna
+
+1. **Installing minidlna:**
+
+```bash
+sudo pacman -Sy minidlna
+```
+
+2. **Configuring minidlna:**
+
+Edit the configuration file **/etc/minidlna.conf** and configure the following parameters:
+
+```conf
+media_dir=V,/path/to/dir
+friendly_name=My DLNA Server
+```
+
+Replace **/path/to/dir** with the same path specified in the **MOVIE_PATH** parameter of the bot's **.env** file.
+
+3. **Starting minidlna:**
+
+```bash
+sudo systemctl enable minidlna
+sudo systemctl start minidlna
+```
+
+## Configuration
+
+The bot configuration file is located at **/etc/telegram-media-server/.env**. Available parameters are described below:
+
+* `BOT_TOKEN (required)`: Your Telegram bot token received from BotFather.
+* `MOVIE_PATH`: Path to the directory where the database, downloaded files and movies will be stored.
+* `PASSWORD`: Password for authorizing users in the bot. Login is performed once for each chat.
+* `UPDATE_INTERVAL_SECONDS`: Interval in seconds for sending updates on download progress (default: `30`).
+
+* `UPDATE_PERCENTAGE_STEP`: Download progress step in percent for sending updates (default: `20`).
+* `MIN_DOWNLOAD_PERCENTAGE`: Minimum download percentage of a torrent to continue downloading (default: `10`).
+* `MAX_WAIT_TIME_MINUTES`: Maximum time in minutes to wait for the minimum download percentage of a torrent (default: `10`).
+* `LANG`: Bot message language. Supported values: ru, en.
+
+### Example of **.env** file:
+
+```env
+BOT_TOKEN=123456789:ABCDEFghIJKlmnoPQRStuvWXyz
+MOVIE_PATH=/media/videos
+PASSWORD=MySecretPassword
+UPDATE_INTERVAL_SECONDS=30
+UPDATE_PERCENTAGE_STEP=20
+MIN_DOWNLOAD_PERCENTAGE=10
+MAX_WAIT_TIME_MINUTES=10
+LANG=en
+```
+
+## Usage
+
+### Authorization
+
+Before using the bot, you must log in using the command:
+
+```plaintext
+/login <password>
+```
+
+Where **<password>** is the password specified in the **PASSWORD** parameter of the .env file.
+
+### Available commands
+
+* `/start` — Displays a welcome message.
+* `/login` <password> — User authorization in the bot.
+* `/ls` — Shows a list of current downloads and their status.
+* `/rm <id>` — Deletes a download by ID obtained from the /ls command. Example: `/rm 2`.
+* `/rm all` — Deletes all current downloads.
+* `/stop` — Stops all current torrent downloads.
+
+### Sending links
+
+After authorization, you can send the bot links to videos or torrent files.
+The bot supports all links that are processed by the `yt-dlp` utility.
+
+### Examples of supported links:
+
+* YouTube
+* VK
+* RuTube
+* and others
+
+### Slow downloads:
+
+If the torrent file does not download to the minimum percentage (`MIN_DOWNLOAD_PERCENTAGE`) within the maximum waiting time (`MAX_WAIT_TIME_MINUTES`), the download will be automatically stopped and deleted.
+
+# RU Documentation
+
 Telegram Media Server — это Telegram-бот, который принимает ссылки на стриминговое видео или торрент-файлы, загружает их и раздает во внутренней сети через DLNA-сервер (например, `minidlna`).
 
 ## Оглавление
@@ -12,9 +168,6 @@ Telegram Media Server — это Telegram-бот, который принима�
 - [Конфигурация](#конфигурация)
 - [Использование](#использование)
   - [Доступные команды](#доступные-команды)
-- [Сетевые настройки](#сетевые-настройки)
-- [Известные проблемы и ограничения](#известные-проблемы-и-ограничения)
-- [Лицензия](#лицензия)
 
 ## Особенности
 
