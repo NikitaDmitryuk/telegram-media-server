@@ -7,11 +7,11 @@ Telegram Media Server is a Telegram bot that accepts links to streaming videos o
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Installing the bot](#installation-of-the-bot)
-- [Installing and setting up minidlna](#installation-and-setup-minidlna)
+  - [Installing the bot](#installation-of-the-bot)
+  - [Installing and setting up minidlna](#installation-and-setup-minidlna)
 - [Configuration](#configuration)
 - [Usage](#usage)
-- [Available commands](#available-commands)
+  - [Available commands](#available-commands)
 
 ## Features
 
