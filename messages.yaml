@@ -123,8 +123,8 @@ FileAddedSuccessfully:
   ru: "Файл успешно добавлен"
 
 StartCommand:
-  en: "<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop - stop all torrent downloads"
-  ru: "<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop - остановить все загрузки торрентов"
+  en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop - stop all torrent downloads"
+  ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop - остановить все загрузки торрентов"
 
 TorrentDownloadsStopped:
   en: "All torrent downloads have been stopped!"
