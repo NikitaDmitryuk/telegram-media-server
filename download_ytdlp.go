@@ -1,26 +1,26 @@
 package main
 
 import (
-	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func downloadVideo(update tgbotapi.Update) {
 	url := update.Message.Text
-	log.Println(messages[lang].Info.StartVideoDownload, url)
+	log.Printf(GetMessage(StartVideoDownloadMsgID), url)
 
 	videoTitle, err := getVideoTitle(url)
 	if err != nil {
-		sendErrorMessage(update.Message.Chat.ID, fmt.Sprintf(messages[lang].Error.VideoTitleError, err.Error()))
+		sendErrorMessage(update.Message.Chat.ID, GetMessage(VideoTitleErrorMsgID, err.Error()))
 		return
 	}
 
 	finalFileName := generateFileName(videoTitle)
-	log.Println(messages[lang].Info.FileSavedAs, finalFileName)
+	log.Printf(GetMessage(FileSavedAsMsgID), finalFileName)
 
 	isExists, err := dbMovieExistsUploadedFile(finalFileName)
 	if err != nil {
@@ -29,7 +29,7 @@ func downloadVideo(update tgbotapi.Update) {
 	}
 
 	if isExists {
-		sendErrorMessage(update.Message.Chat.ID, messages[lang].Error.VideoExists)
+		sendErrorMessage(update.Message.Chat.ID, GetMessage(VideoExistsMsgID))
 		return
 	}
 
@@ -39,7 +39,7 @@ func downloadVideo(update tgbotapi.Update) {
 
 	err = downloadWithYTDLP(url, finalFileName)
 	if err != nil {
-		sendErrorMessage(update.Message.Chat.ID, fmt.Sprintf(messages[lang].Error.VideoDownloadError, err.Error()))
+		sendErrorMessage(update.Message.Chat.ID, GetMessage(VideoDownloadErrorMsgID, err.Error()))
 		deleteMovie(videoId)
 		return
 	}
@@ -47,8 +47,8 @@ func downloadVideo(update tgbotapi.Update) {
 	dbSetLoaded(videoId)
 	dbUpdateDownloadedPercentage(videoId, 100)
 
-	log.Println(messages[lang].Info.VideoSuccessfullyDownloaded, finalFileName)
-	sendSuccessMessage(update.Message.Chat.ID, fmt.Sprintf(messages[lang].Info.VideoSuccessfullyDownloaded, videoTitle))
+	log.Printf(GetMessage(VideoSuccessfullyDownloadedMsgID), finalFileName)
+	sendSuccessMessage(update.Message.Chat.ID, GetMessage(VideoSuccessfullyDownloadedMsgID, videoTitle))
 }
 
 func generateFileName(title string) string {

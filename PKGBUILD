@@ -1,5 +1,5 @@
 pkgname=telegram-media-server
-pkgver=1.0.29
+pkgver=1.0.30
 pkgrel=1
 pkgdesc="Telegram Media Server"
 arch=('aarch64' 'armv7h' 'x86_64')
@@ -36,5 +36,6 @@ package() {
     cd "${srcdir}/../"
     install -Dm755 "${srcdir}/telegram-media-server" "${pkgdir}/usr/bin/telegram-media-server"
     install -Dm644 .env.example "${pkgdir}/etc/telegram-media-server/.env.example"
+    install -Dm644 messages.yaml "${pkgdir}/etc/telegram-media-server/messages.yaml"
     install -Dm644 ${pkgname}.service "${pkgdir}/usr/lib/systemd/system/telegram-media-server.service"
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"io"
 	"log"
 	"net/http"
@@ -11,50 +10,52 @@ import (
 	"path/filepath"
 	"regexp"
 	"syscall"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func downloadFile(fileID, fileName string) error {
 	file, err := GlobalBot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
-		log.Printf("Failed to get file: %v", err)
+		log.Printf(GetMessage(FailedToGetFileMsgID), err)
 		return err
 	}
 
 	fileURL := file.Link(GlobalBot.Token)
 	resp, err := http.Get(fileURL)
 	if err != nil {
-		log.Printf("Failed to download file: %v", err)
+		log.Printf(GetMessage(FailedToDownloadFileMsgID), err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	out, err := os.Create(filepath.Join(GlobalConfig.MoviePath, fileName))
 	if err != nil {
-		log.Printf("Failed to create file: %v", err)
+		log.Printf(GetMessage(FailedToCreateFileMsgID), err)
 		return err
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		log.Printf("Failed to save file: %v", err)
+		log.Printf(GetMessage(FailedToSaveFileMsgID), err)
 		return err
 	}
 
-	log.Println("File downloaded successfully")
+	log.Println(GetMessage(FileDownloadedSuccessfullyMsgID))
 	return nil
 }
 
 func hasEnoughSpace(path string, requiredSpace int64) bool {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err != nil {
-		log.Printf("Error getting filesystem stats: %v", err)
+		log.Printf(GetMessage(ErrorGettingFilesystemStatsMsgID), err)
 		return false
 	}
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
 
-	log.Printf("Required space: %d bytes", requiredSpace)
-	log.Printf("Available space: %d bytes", availableSpace)
+	log.Printf(GetMessage(RequiredSpaceMsgID), requiredSpace)
+	log.Printf(GetMessage(AvailableSpaceMsgID), availableSpace)
 
 	return availableSpace >= uint64(requiredSpace)
 }
@@ -62,12 +63,12 @@ func hasEnoughSpace(path string, requiredSpace int64) bool {
 func deleteMovie(id int) error {
 	movie, err := dbGetMovieByID(id)
 	if err != nil {
-		return logAndReturnError(messages[lang].Error.MovieNotFound, err)
+		return logAndReturnError(GetMessage(MovieNotFoundMsgID), err)
 	}
 
 	files, err := dbGetFilesByMovieID(id)
 	if err != nil {
-		return logAndReturnError(messages[lang].Error.GetFilesError, err)
+		return logAndReturnError(GetMessage(GetFilesErrorMsgID), err)
 	}
 
 	var rootFolder string
@@ -81,9 +82,9 @@ func deleteMovie(id int) error {
 
 		err := os.Remove(filePath)
 		if err != nil {
-			log.Printf("Failed to delete file %s: %v", filePath, err)
+			log.Printf(GetMessage(FailedToDeleteFileMsgID), filePath, err)
 		} else {
-			log.Printf("File %s deleted successfully", filePath)
+			log.Printf(GetMessage(FileDeletedSuccessfullyMsgID), filePath)
 		}
 	}
 
@@ -91,39 +92,39 @@ func deleteMovie(id int) error {
 		torrentFilePath := filepath.Join(GlobalConfig.MoviePath, movie.TorrentFile.String)
 		err := os.Remove(torrentFilePath)
 		if err != nil {
-			log.Printf("Failed to delete torrent file %s: %v", torrentFilePath, err)
+			log.Printf(GetMessage(FailedToDeleteTorrentFileMsgID), torrentFilePath, err)
 		} else {
-			log.Printf("Torrent file %s deleted successfully", torrentFilePath)
+			log.Printf(GetMessage(TorrentFileDeletedSuccessfullyMsgID), torrentFilePath)
 		}
 	}
 
 	err = dbRemoveMovie(id)
 	if err != nil {
-		return logAndReturnError(messages[lang].Error.DeleteMovieDBError, err)
+		return logAndReturnError(GetMessage(DeleteMovieDBErrorMsgID), err)
 	}
 
 	err = dbRemoveFilesByMovieID(id)
 	if err != nil {
-		return logAndReturnError(messages[lang].Error.DeleteFilesDBError, err)
+		return logAndReturnError(GetMessage(DeleteFilesDBErrorMsgID), err)
 	}
 
 	if rootFolder != "" && rootFolder != GlobalConfig.MoviePath && isEmptyDirectory(rootFolder) {
 		err = os.Remove(rootFolder)
 		if err != nil {
-			log.Printf("Failed to delete root folder %s: %v", rootFolder, err)
+			log.Printf(GetMessage(FailedToDeleteRootFolderMsgID), rootFolder, err)
 		} else {
-			log.Printf("Root folder %s deleted successfully", rootFolder)
+			log.Printf(GetMessage(RootFolderDeletedSuccessfullyMsgID), rootFolder)
 		}
 	}
 
-	log.Printf("Movie with ID %d and all associated files deleted successfully", id)
+	log.Printf(GetMessage(MovieDeletedSuccessfullyMsgID), id)
 	return nil
 }
 
 func isEmptyDirectory(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("Failed to read directory %s: %v", dir, err)
+		log.Printf(GetMessage(FailedToReadDirectoryMsgID), dir, err)
 		return false
 	}
 
