@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"sync"
-
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 var GlobalConfig *Config
@@ -13,22 +13,30 @@ var lang string
 
 func init() {
 	GlobalConfig = NewConfig()
-	dbInit()
-	initBot()
+	if err := GlobalConfig.Validate(); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+	if err := dbInit(); err != nil {
+		log.Fatalf("Database initialization failed: %v", err)
+	}
+	if err := initBot(); err != nil {
+		log.Fatalf("Bot initialization failed: %v", err)
+	}
 	lang = GlobalConfig.Lang
 	if err := LoadMessagesFromFile(GlobalConfig.MessageFilePath); err != nil {
 		log.Fatalf("Не удалось загрузить сообщения: %v", err)
 	}
 }
 
-func initBot() {
+func initBot() error {
 	bot, err := tgbotapi.NewBotAPI(GlobalConfig.BotToken)
 	if err != nil {
-		log.Fatalf("Error creating bot: %v", err)
+		return fmt.Errorf("error creating bot: %v", err)
 	}
 	bot.Debug = true
 	GlobalBot = bot
 	log.Printf("Authorized on account %s", bot.Self.UserName)
+	return nil
 }
 
 func main() {
