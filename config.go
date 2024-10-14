@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -18,36 +19,52 @@ type Config struct {
 	MessageFilePath       string
 }
 
+func getEnv(key string, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if valueStr, exists := os.LookupEnv(key); exists {
+		if value, err := strconv.Atoi(valueStr); err == nil {
+			return value
+		} else {
+			log.Fatalf("Error converting %s to int: %v", key, err)
+		}
+	}
+	return defaultValue
+}
+
 func NewConfig() *Config {
-	updateIntervalSeconds, err := strconv.Atoi(os.Getenv("UPDATE_INTERVAL_SECONDS"))
-	if err != nil {
-		log.Fatalf("Error converting UPDATE_INTERVAL_SECONDS to int: %v", err)
+	config := &Config{
+		BotToken:              getEnv("BOT_TOKEN", ""),
+		MoviePath:             getEnv("MOVIE_PATH", ""),
+		Password:              getEnv("PASSWORD", ""),
+		Lang:                  getEnv("LANG", "en"),
+		MessageFilePath:       getEnv("MESSAGE_FILE_PATH", "/etc/telegram-media-server/messages.yaml"),
+		UpdateIntervalSeconds: getEnvInt("UPDATE_INTERVAL_SECONDS", 30),
+		UpdatePercentageStep:  getEnvInt("UPDATE_PERCENTAGE_STEP", 20),
+		MaxWaitTimeMinutes:    getEnvInt("MAX_WAIT_TIME_MINUTES", 10),
+		MinDownloadPercentage: getEnvInt("MIN_DOWNLOAD_PERCENTAGE", 10),
 	}
+	return config
+}
 
-	updatePercentageStep, err := strconv.Atoi(os.Getenv("UPDATE_PERCENTAGE_STEP"))
-	if err != nil {
-		log.Fatalf("Error converting UPDATE_PERCENTAGE_STEP to int: %v", err)
+func (c *Config) Validate() error {
+	missingFields := []string{}
+	if c.BotToken == "" {
+		missingFields = append(missingFields, "BOT_TOKEN")
 	}
-
-	maxWaitTimeMinutes, err := strconv.Atoi(os.Getenv("MAX_WAIT_TIME_MINUTES"))
-	if err != nil {
-		log.Fatalf("Error converting MAX_WAIT_TIME_MINUTES to int: %v", err)
+	if c.MoviePath == "" {
+		missingFields = append(missingFields, "MOVIE_PATH")
 	}
-
-	minDownloadPercentage, err := strconv.Atoi(os.Getenv("MIN_DOWNLOAD_PERCENTAGE"))
-	if err != nil {
-		log.Fatalf("Error converting MIN_DOWNLOAD_PERCENTAGE to int: %v", err)
+	if c.Password == "" {
+		missingFields = append(missingFields, "PASSWORD")
 	}
-
-	return &Config{
-		BotToken:              os.Getenv("BOT_TOKEN"),
-		MoviePath:             os.Getenv("MOVIE_PATH"),
-		Password:              os.Getenv("PASSWORD"),
-		Lang:                  os.Getenv("LANG"),
-		MessageFilePath:       os.Getenv("MESSAGE_FILE_PATH"),
-		UpdateIntervalSeconds: updateIntervalSeconds,
-		UpdatePercentageStep:  updatePercentageStep,
-		MaxWaitTimeMinutes:    maxWaitTimeMinutes,
-		MinDownloadPercentage: minDownloadPercentage,
+	if len(missingFields) > 0 {
+		return fmt.Errorf("Missing required environment variables: %v", missingFields)
 	}
+	return nil
 }

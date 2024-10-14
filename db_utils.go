@@ -27,19 +27,23 @@ type MovieFile struct {
 	FilePath string
 }
 
-func dbInit() {
+func dbInit() error {
 	dbPath := filepath.Join(GlobalConfig.MoviePath, "movie.db")
 	var err error
 	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		return fmt.Errorf("failed to open database: %v", err)
 	}
+
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		dbCreateTables()
+		if err := dbCreateTables(); err != nil {
+			return fmt.Errorf("failed to create tables: %v", err)
+		}
 	}
+	return nil
 }
 
-func dbCreateTables() {
+func dbCreateTables() error {
 	_, err := db.Exec(`
         CREATE TABLE IF NOT EXISTS Movie (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,8 +67,9 @@ func dbCreateTables() {
         );
     `)
 	if err != nil {
-		log.Fatalf("Error creating tables: %v", err)
+		return fmt.Errorf("error creating tables: %v", err)
 	}
+	return nil
 }
 
 func dbAddMovie(name string, torrentFile *string, filePaths []string) int {
