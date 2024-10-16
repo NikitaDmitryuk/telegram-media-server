@@ -54,8 +54,8 @@ func hasEnoughSpace(path string, requiredSpace int64) bool {
 	}
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
 
-	log.Printf(GetMessage(RequiredSpaceMsgID), requiredSpace)
-	log.Printf(GetMessage(AvailableSpaceMsgID), availableSpace)
+	log.Print(GetMessage(RequiredSpaceMsgID, requiredSpace))
+	log.Print(GetMessage(AvailableSpaceMsgID, availableSpace))
 
 	return availableSpace >= uint64(requiredSpace)
 }
@@ -82,9 +82,9 @@ func deleteMovie(id int) error {
 
 		err := os.Remove(filePath)
 		if err != nil {
-			log.Printf(GetMessage(FailedToDeleteFileMsgID), filePath, err)
+			log.Print(GetMessage(FailedToDeleteFileMsgID, filePath, err))
 		} else {
-			log.Printf(GetMessage(FileDeletedSuccessfullyMsgID), filePath)
+			log.Print(GetMessage(FileDeletedSuccessfullyMsgID, filePath))
 		}
 	}
 
@@ -92,9 +92,9 @@ func deleteMovie(id int) error {
 		torrentFilePath := filepath.Join(GlobalConfig.MoviePath, movie.TorrentFile.String)
 		err := os.Remove(torrentFilePath)
 		if err != nil {
-			log.Printf(GetMessage(FailedToDeleteTorrentFileMsgID), torrentFilePath, err)
+			log.Print(GetMessage(FailedToDeleteTorrentFileMsgID, torrentFilePath, err))
 		} else {
-			log.Printf(GetMessage(TorrentFileDeletedSuccessfullyMsgID), torrentFilePath)
+			log.Print(GetMessage(TorrentFileDeletedSuccessfullyMsgID, torrentFilePath))
 		}
 	}
 
@@ -111,20 +111,20 @@ func deleteMovie(id int) error {
 	if rootFolder != "" && rootFolder != GlobalConfig.MoviePath && isEmptyDirectory(rootFolder) {
 		err = os.Remove(rootFolder)
 		if err != nil {
-			log.Printf(GetMessage(FailedToDeleteRootFolderMsgID), rootFolder, err)
+			log.Print(GetMessage(FailedToDeleteRootFolderMsgID, rootFolder, err))
 		} else {
-			log.Printf(GetMessage(RootFolderDeletedSuccessfullyMsgID), rootFolder)
+			log.Print(GetMessage(RootFolderDeletedSuccessfullyMsgID, rootFolder))
 		}
 	}
 
-	log.Printf(GetMessage(MovieDeletedSuccessfullyMsgID), id)
+	log.Print(GetMessage(MovieDeletedSuccessfullyMsgID, id))
 	return nil
 }
 
 func isEmptyDirectory(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf(GetMessage(FailedToReadDirectoryMsgID), dir, err)
+		log.Print(GetMessage(FailedToReadDirectoryMsgID, dir, err))
 		return false
 	}
 
@@ -152,9 +152,5 @@ func isValidLink(text string) bool {
 	}
 
 	re := regexp.MustCompile(`^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	if !re.MatchString(parsedURL.Host) {
-		return false
-	}
-
-	return true
+	return re.MatchString(parsedURL.Host)
 }

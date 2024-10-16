@@ -151,12 +151,12 @@ DownloadVideoSuccess:
   ru: "Видео успешно скачано"
 
 MovieDownloaded:
-  en: "ID: %d\nTitle: %s\nDownloaded: Yes\n\n"
-  ru: "ID: %d\nНазвание: %s\nЗагружено: Да\n\n"
+  en: "ID: %d\nTitle: %s\nDownloaded: Yes\n"
+  ru: "ID: %d\nНазвание: %s\nЗагружено: Да\n"
 
 MovieDownloading:
-  en: "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n\n"
-  ru: "ID: %d\nНазвание: %s\nПроцент загрузки: %d%%\n\n"
+  en: "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n"
+  ru: "ID: %d\nНазвание: %s\nПроцент загрузки: %d%%\n"
 
 StartDownload:
   en: "Download started - %s"
@@ -253,3 +253,15 @@ MovieDeletedSuccessfully:
 FailedToReadDirectory:
   en: "Failed to read directory %s: %v"
   ru: "Не удалось прочитать директорию %s: %v"
+
+DownloadDocumentError:
+  en: "An error occurred while uploading the file (uploading files larger than 50MB is not available)"
+  ru: "Произошла ошибка при загрузке файла (загрузка файлов больше 50МБ недоступна)"
+
+TorrentFileExistsError:
+  en: "An error occurred while checking the existence of the file"
+  ru: "Произошла ошибка при проверке существования файла"
+
+TorrentFileDownloadError:
+  en: "Error downloading torrent file"
+  ru: "Ошибка при загрузке торрет файла"

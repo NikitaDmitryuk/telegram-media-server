@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"fmt"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -129,7 +130,6 @@ func dbGetMovieList() ([]Movie, error) {
 }
 
 func dbUpdateDownloadedPercentage(id int, percentage int) error {
-	log.Printf("%s %d", id, percentage)
 	_, err := dbExecuteWithRetry(`
         UPDATE Movie
         SET DOWNLOADED_PERCENTAGE = ?
