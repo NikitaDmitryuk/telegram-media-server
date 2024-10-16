@@ -10,3 +10,7 @@ run:
 format:
 	go fmt .
 	go mod tidy
+
+.PHONY: lint
+lint:
+	golangci-lint run

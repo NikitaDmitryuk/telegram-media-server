@@ -11,7 +11,7 @@ import (
 
 func downloadVideo(update tgbotapi.Update) {
 	url := update.Message.Text
-	log.Printf(GetMessage(StartVideoDownloadMsgID), url)
+	log.Print(GetMessage(StartVideoDownloadMsgID, url))
 
 	videoTitle, err := getVideoTitle(url)
 	if err != nil {
@@ -20,7 +20,7 @@ func downloadVideo(update tgbotapi.Update) {
 	}
 
 	finalFileName := generateFileName(videoTitle)
-	log.Printf(GetMessage(FileSavedAsMsgID), finalFileName)
+	log.Print(GetMessage(FileSavedAsMsgID, finalFileName))
 
 	isExists, err := dbMovieExistsUploadedFile(finalFileName)
 	if err != nil {
@@ -47,7 +47,7 @@ func downloadVideo(update tgbotapi.Update) {
 	dbSetLoaded(videoId)
 	dbUpdateDownloadedPercentage(videoId, 100)
 
-	log.Printf(GetMessage(VideoSuccessfullyDownloadedMsgID), finalFileName)
+	log.Print(GetMessage(VideoSuccessfullyDownloadedMsgID, finalFileName))
 	sendSuccessMessage(update.Message.Chat.ID, GetMessage(VideoSuccessfullyDownloadedMsgID, videoTitle))
 }
 

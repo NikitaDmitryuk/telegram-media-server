@@ -68,7 +68,7 @@ func downloadTorrent(torrentFileName string, update tgbotapi.Update) error {
 
 	movieID := dbAddMovie(movieName, &torrentFileName, filePaths)
 
-	log.Printf(GetMessage(StartDownloadMsgID), movieName)
+	log.Print(GetMessage(StartDownloadMsgID, movieName))
 
 	go monitorDownload(t, movieID, client, update)
 	return nil
@@ -86,7 +86,7 @@ func monitorDownload(t *torrent.Torrent, movieID int, client *torrent.Client, up
 
 			movie, err := dbGetMovieByID(movieID)
 			if err != nil {
-				log.Printf(GetMessage(GetMovieErrorMsgID), err)
+				log.Print(GetMessage(GetMovieErrorMsgID, err))
 				return
 			}
 

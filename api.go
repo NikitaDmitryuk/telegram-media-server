@@ -38,10 +38,13 @@ func handleUnknownUser(update tgbotapi.Update) {
 }
 
 func handleKnownUser(update tgbotapi.Update) {
-	if update.Message.IsCommand() {
-		switch update.Message.Command() {
+	message := update.Message
+	chatID := message.Chat.ID
+
+	if message.IsCommand() {
+		switch message.Command() {
 		case "start":
-			sendSuccessMessage(update.Message.Chat.ID, GetMessage(StartCommandMsgID))
+			sendSuccessMessage(chatID, GetMessage(StartCommandMsgID))
 		case "ls":
 			listHandler(update)
 		case "rm":
@@ -49,16 +52,45 @@ func handleKnownUser(update tgbotapi.Update) {
 		case "stop":
 			stopHandler(update)
 		default:
-			sendErrorMessage(update.Message.Chat.ID, GetMessage(UnknownCommandMsgID))
+			sendErrorMessage(chatID, GetMessage(UnknownCommandMsgID))
 		}
-	} else {
-		if isValidLink(update.Message.Text) {
-			go downloadVideo(update)
-			sendSuccessMessage(update.Message.Chat.ID, GetMessage(VideoDownloadingMsgID))
-		} else {
-			sendErrorMessage(update.Message.Chat.ID, GetMessage(UnknownCommandMsgID))
-		}
+		return
 	}
+
+	if isValidLink(message.Text) {
+		go downloadVideo(update)
+		sendSuccessMessage(chatID, GetMessage(VideoDownloadingMsgID))
+		return
+	}
+
+	if doc := message.Document; doc != nil && strings.HasSuffix(doc.FileName, ".torrent") {
+		fileName := doc.FileName
+
+		if err := downloadFile(doc.FileID, fileName); err != nil {
+			sendErrorMessage(chatID, GetMessage(DownloadDocumentErrorMsgID))
+			return
+		}
+
+		exists, err := dbMovieExistsTorrent(fileName)
+		if err != nil {
+			sendErrorMessage(chatID, GetMessage(TorrentFileExistsErrorMsgID))
+			return
+		}
+		if exists {
+			sendErrorMessage(chatID, GetMessage(FileAlreadyExistsMsgID))
+			return
+		}
+
+		if err := downloadTorrent(fileName, update); err != nil {
+			sendErrorMessage(chatID, GetMessage(TorrentFileDownloadErrorMsgID))
+			return
+		}
+
+		sendSuccessMessage(chatID, GetMessage(VideoDownloadingMsgID))
+		return
+	}
+
+	sendErrorMessage(chatID, GetMessage(UnknownCommandMsgID))
 }
 
 func loginHandler(update tgbotapi.Update) {
@@ -147,7 +179,7 @@ func stopHandler(update tgbotapi.Update) {
 }
 
 func sendErrorMessage(chatID int64, message string) {
-	log.Printf(message)
+	log.Print(message)
 	msg := tgbotapi.NewMessage(chatID, message)
 	GlobalBot.Send(msg)
 }

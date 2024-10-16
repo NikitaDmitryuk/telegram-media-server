@@ -1,5 +1,5 @@
 pkgname=telegram-media-server
-pkgver=1.0.31
+pkgver=1.0.32
 pkgrel=1
 pkgdesc="Telegram Media Server"
 arch=('aarch64' 'armv7h' 'x86_64')
@@ -8,7 +8,6 @@ license=('MIT')
 makedepends=('go')
 depends=('yt-dlp')
 source=()
-
 install="${pkgname}.install"
 options=(!strip)
 
