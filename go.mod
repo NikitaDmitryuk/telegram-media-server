@@ -1,4 +1,4 @@
-module main
+module github.com/NikitaDmitryuk/telegram-media-server
 
 go 1.22.6
 

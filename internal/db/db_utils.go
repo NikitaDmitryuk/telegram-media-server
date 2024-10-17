@@ -1,13 +1,14 @@
-package main
+package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
-	"fmt"
+	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 
 	_ "modernc.org/sqlite"
 )
@@ -28,7 +29,7 @@ type MovieFile struct {
 	FilePath string
 }
 
-func dbInit() error {
+func DBInit(config *tmsconfig.Config) error {
 	dbPath := filepath.Join(GlobalConfig.MoviePath, "movie.db")
 	var err error
 	db, err = sql.Open("sqlite", dbPath)

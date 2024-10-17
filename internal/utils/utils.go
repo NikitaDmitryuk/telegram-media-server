@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"fmt"
@@ -11,64 +11,65 @@ import (
 	"regexp"
 	"syscall"
 
+	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func downloadFile(fileID, fileName string) error {
+func DownloadFile(fileID, fileName string) error {
 	file, err := GlobalBot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
-		log.Printf(GetMessage(FailedToGetFileMsgID), err)
+		log.Printf(tmslang.GetMessage(tmslang.FailedToGetFileMsgID), err)
 		return err
 	}
 
 	fileURL := file.Link(GlobalBot.Token)
 	resp, err := http.Get(fileURL)
 	if err != nil {
-		log.Printf(GetMessage(FailedToDownloadFileMsgID), err)
+		log.Printf(tmslang.GetMessage(tmslang.FailedToDownloadFileMsgID), err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	out, err := os.Create(filepath.Join(GlobalConfig.MoviePath, fileName))
 	if err != nil {
-		log.Printf(GetMessage(FailedToCreateFileMsgID), err)
+		log.Printf(tmslang.GetMessage(tmslang.FailedToCreateFileMsgID), err)
 		return err
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		log.Printf(GetMessage(FailedToSaveFileMsgID), err)
+		log.Printf(tmslang.GetMessage(tmslang.FailedToSaveFileMsgID), err)
 		return err
 	}
 
-	log.Println(GetMessage(FileDownloadedSuccessfullyMsgID))
+	log.Println(tmslang.GetMessage(tmslang.FileDownloadedSuccessfullyMsgID))
 	return nil
 }
 
-func hasEnoughSpace(path string, requiredSpace int64) bool {
+func HasEnoughSpace(path string, requiredSpace int64) bool {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err != nil {
-		log.Printf(GetMessage(ErrorGettingFilesystemStatsMsgID), err)
+		log.Printf(tmslang.GetMessage(tmslang.ErrorGettingFilesystemStatsMsgID), err)
 		return false
 	}
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
 
-	log.Print(GetMessage(RequiredSpaceMsgID, requiredSpace))
-	log.Print(GetMessage(AvailableSpaceMsgID, availableSpace))
+	log.Print(tmslang.GetMessage(tmslang.RequiredSpaceMsgID, requiredSpace))
+	log.Print(tmslang.GetMessage(tmslang.AvailableSpaceMsgID, availableSpace))
 
 	return availableSpace >= uint64(requiredSpace)
 }
 
-func deleteMovie(id int) error {
+func DeleteMovie(id int) error {
 	movie, err := dbGetMovieByID(id)
 	if err != nil {
-		return logAndReturnError(GetMessage(MovieNotFoundMsgID), err)
+		return LogAndReturnError(tmslang.GetMessage(tmslang.MovieNotFoundMsgID), err)
 	}
 
 	files, err := dbGetFilesByMovieID(id)
 	if err != nil {
-		return logAndReturnError(GetMessage(GetFilesErrorMsgID), err)
+		return LogAndReturnError(tmslang.GetMessage(tmslang.GetFilesErrorMsgID), err)
 	}
 
 	var rootFolder string
@@ -82,9 +83,9 @@ func deleteMovie(id int) error {
 
 		err := os.Remove(filePath)
 		if err != nil {
-			log.Print(GetMessage(FailedToDeleteFileMsgID, filePath, err))
+			log.Print(tmslang.GetMessage(tmslang.FailedToDeleteFileMsgID, filePath, err))
 		} else {
-			log.Print(GetMessage(FileDeletedSuccessfullyMsgID, filePath))
+			log.Print(tmslang.GetMessage(tmslang.FileDeletedSuccessfullyMsgID, filePath))
 		}
 	}
 
@@ -92,56 +93,56 @@ func deleteMovie(id int) error {
 		torrentFilePath := filepath.Join(GlobalConfig.MoviePath, movie.TorrentFile.String)
 		err := os.Remove(torrentFilePath)
 		if err != nil {
-			log.Print(GetMessage(FailedToDeleteTorrentFileMsgID, torrentFilePath, err))
+			log.Print(tmslang.GetMessage(tmslang.FailedToDeleteTorrentFileMsgID, torrentFilePath, err))
 		} else {
-			log.Print(GetMessage(TorrentFileDeletedSuccessfullyMsgID, torrentFilePath))
+			log.Print(tmslang.GetMessage(tmslang.TorrentFileDeletedSuccessfullyMsgID, torrentFilePath))
 		}
 	}
 
 	err = dbRemoveMovie(id)
 	if err != nil {
-		return logAndReturnError(GetMessage(DeleteMovieDBErrorMsgID), err)
+		return LogAndReturnError(tmslang.GetMessage(tmslang.DeleteMovieDBErrorMsgID), err)
 	}
 
 	err = dbRemoveFilesByMovieID(id)
 	if err != nil {
-		return logAndReturnError(GetMessage(DeleteFilesDBErrorMsgID), err)
+		return LogAndReturnError(tmslang.GetMessage(tmslang.DeleteFilesDBErrorMsgID), err)
 	}
 
-	if rootFolder != "" && rootFolder != GlobalConfig.MoviePath && isEmptyDirectory(rootFolder) {
+	if rootFolder != "" && rootFolder != GlobalConfig.MoviePath && IsEmptyDirectory(rootFolder) {
 		err = os.Remove(rootFolder)
 		if err != nil {
-			log.Print(GetMessage(FailedToDeleteRootFolderMsgID, rootFolder, err))
+			log.Print(tmslang.GetMessage(tmslang.FailedToDeleteRootFolderMsgID, rootFolder, err))
 		} else {
-			log.Print(GetMessage(RootFolderDeletedSuccessfullyMsgID, rootFolder))
+			log.Print(tmslang.GetMessage(tmslang.RootFolderDeletedSuccessfullyMsgID, rootFolder))
 		}
 	}
 
-	log.Print(GetMessage(MovieDeletedSuccessfullyMsgID, id))
+	log.Print(tmslang.GetMessage(tmslang.MovieDeletedSuccessfullyMsgID, id))
 	return nil
 }
 
-func isEmptyDirectory(dir string) bool {
+func IsEmptyDirectory(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Print(GetMessage(FailedToReadDirectoryMsgID, dir, err))
+		log.Print(tmslang.GetMessage(tmslang.FailedToReadDirectoryMsgID, dir, err))
 		return false
 	}
 
 	return len(entries) == 0
 }
 
-func sanitizeFileName(name string) string {
+func SanitizeFileName(name string) string {
 	re := regexp.MustCompile(`[^а-яА-Яa-zA-Z0-9]+`)
 	return re.ReplaceAllString(name, "_")
 }
 
-func logAndReturnError(message string, err error) error {
+func LogAndReturnError(message string, err error) error {
 	log.Printf("%s: %v\n", message, err)
 	return fmt.Errorf("%s: %v", message, err)
 }
 
-func isValidLink(text string) bool {
+func IsValidLink(text string) bool {
 	parsedURL, err := url.ParseRequestURI(text)
 	if err != nil {
 		return false

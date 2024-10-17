@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -37,7 +37,7 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-func NewConfig() *Config {
+func NewConfig() (*Config, error) {
 	config := &Config{
 		BotToken:              getEnv("BOT_TOKEN", ""),
 		MoviePath:             getEnv("MOVIE_PATH", ""),
@@ -49,10 +49,16 @@ func NewConfig() *Config {
 		MaxWaitTimeMinutes:    getEnvInt("MAX_WAIT_TIME_MINUTES", 10),
 		MinDownloadPercentage: getEnvInt("MIN_DOWNLOAD_PERCENTAGE", 10),
 	}
-	return config
+
+	if err := config.validate(); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+		return nil, err
+	}
+
+	return config, nil
 }
 
-func (c *Config) Validate() error {
+func (c *Config) validate() error {
 	missingFields := []string{}
 	if c.BotToken == "" {
 		missingFields = append(missingFields, "BOT_TOKEN")
