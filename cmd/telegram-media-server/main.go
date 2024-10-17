@@ -34,6 +34,12 @@ func main() {
 		log.Fatalf("Bot initialization failed: %v", err)
 	}
 
+	bot.Debug = false
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+
+	updates := bot.GetUpdatesChan(u)
+
 	var wg sync.WaitGroup
 
 	for update := range updates {

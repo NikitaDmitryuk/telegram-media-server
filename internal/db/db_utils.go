@@ -30,7 +30,7 @@ type MovieFile struct {
 }
 
 func DBInit(config *tmsconfig.Config) error {
-	dbPath := filepath.Join(GlobalConfig.MoviePath, "movie.db")
+	dbPath := filepath.Join(config.MoviePath, "movie.db")
 	var err error
 	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
