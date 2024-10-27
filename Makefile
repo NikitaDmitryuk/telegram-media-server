@@ -1,6 +1,6 @@
 .PHONY: build
 build:
-	cd build && makepkg -Acsf --config makepkg.conf
+	makepkg -Acsf --config build/makepkg.conf
 
 .PHONY: run
 run:
