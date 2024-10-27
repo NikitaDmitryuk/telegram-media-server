@@ -2,14 +2,12 @@ package main
 
 import (
 	"log"
-	"sync"
 
-	tmsapi "github.com/NikitaDmitryuk/telegram-media-server/internal/api"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/db"
+	tmsapi "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers"
 	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func main() {
@@ -24,31 +22,18 @@ func main() {
 		log.Fatalf("Failed to load messages: %v", err)
 	}
 
-	if err := tmsdb.DBInit(config); err != nil {
+	db, err := tmsdb.DBInit(config)
+
+	if err != nil {
 		log.Fatalf("Database initialization failed: %v", err)
 	}
 
-	updates, err := tmsbot.InitBot(config)
+	bot, err := tmsbot.InitBot(config, db)
 
 	if err != nil {
 		log.Fatalf("Bot initialization failed: %v", err)
 	}
 
-	bot.Debug = false
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
+	tmsapi.HandleUpdates(bot)
 
-	updates := bot.GetUpdatesChan(u)
-
-	var wg sync.WaitGroup
-
-	for update := range updates {
-		wg.Add(1)
-		go func(update tgbotapi.Update) {
-			defer wg.Done()
-			tmsapi.HandleUpdates(update)
-		}(update)
-	}
-
-	wg.Wait()
 }

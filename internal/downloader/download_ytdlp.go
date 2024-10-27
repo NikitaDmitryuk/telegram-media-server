@@ -6,53 +6,57 @@ import (
 	"path/filepath"
 	"strings"
 
+	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
+	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/db"
+	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
+	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func downloadVideo(update tgbotapi.Update) {
+func DownloadVideo(bot *tmsbot.Bot, update tgbotapi.Update) {
 	url := update.Message.Text
-	log.Print(GetMessage(StartVideoDownloadMsgID, url))
+	log.Print(tmslang.GetMessage(tmslang.StartVideoDownloadMsgID, url))
 
 	videoTitle, err := getVideoTitle(url)
 	if err != nil {
-		sendErrorMessage(update.Message.Chat.ID, GetMessage(VideoTitleErrorMsgID, err.Error()))
+		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.VideoTitleErrorMsgID, err.Error()))
 		return
 	}
 
 	finalFileName := generateFileName(videoTitle)
-	log.Print(GetMessage(FileSavedAsMsgID, finalFileName))
+	log.Print(tmslang.GetMessage(tmslang.FileSavedAsMsgID, finalFileName))
 
-	isExists, err := dbMovieExistsUploadedFile(finalFileName)
+	isExists, err := tmsdb.DbMovieExistsUploadedFile(bot, finalFileName)
 	if err != nil {
-		sendErrorMessage(update.Message.Chat.ID, err.Error())
+		bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
 		return
 	}
 
 	if isExists {
-		sendErrorMessage(update.Message.Chat.ID, GetMessage(VideoExistsMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.VideoExistsMsgID))
 		return
 	}
 
 	var torrentFile *string = nil
 	filePaths := []string{finalFileName}
-	videoId := dbAddMovie(videoTitle, torrentFile, filePaths)
+	videoId := tmsdb.DbAddMovie(bot, videoTitle, torrentFile, filePaths)
 
-	err = downloadWithYTDLP(url, finalFileName)
+	err = downloadWithYTDLP(bot, url, finalFileName)
 	if err != nil {
-		sendErrorMessage(update.Message.Chat.ID, GetMessage(VideoDownloadErrorMsgID, err.Error()))
-		deleteMovie(videoId)
+		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.VideoDownloadErrorMsgID, err.Error()))
+		tmsutils.DeleteMovie(bot, videoId)
 		return
 	}
 
-	dbSetLoaded(videoId)
-	dbUpdateDownloadedPercentage(videoId, 100)
+	tmsdb.DbSetLoaded(bot, videoId)
+	tmsdb.DbUpdateDownloadedPercentage(bot, videoId, 100)
 
-	log.Print(GetMessage(VideoSuccessfullyDownloadedMsgID, finalFileName))
-	sendSuccessMessage(update.Message.Chat.ID, GetMessage(VideoSuccessfullyDownloadedMsgID, videoTitle))
+	log.Print(tmslang.GetMessage(tmslang.VideoSuccessfullyDownloadedMsgID, finalFileName))
+	bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.VideoSuccessfullyDownloadedMsgID, videoTitle))
 }
 
 func generateFileName(title string) string {
-	return sanitizeFileName(title) + ".mp4"
+	return tmsutils.SanitizeFileName(title) + ".mp4"
 }
 
 func getVideoTitle(url string) (string, error) {
@@ -66,8 +70,8 @@ func getVideoTitle(url string) (string, error) {
 	return videoTitle, nil
 }
 
-func downloadWithYTDLP(url string, outputFileName string) error {
-	cmd := exec.Command("yt-dlp", "-f", "bestvideo[vcodec=h264]+bestaudio[acodec=aac]/best", "-o", filepath.Join(GlobalConfig.MoviePath, outputFileName), url)
+func downloadWithYTDLP(bot *tmsbot.Bot, url string, outputFileName string) error {
+	cmd := exec.Command("yt-dlp", "-f", "bestvideo[vcodec=h264]+bestaudio[acodec=aac]/best", "-o", filepath.Join(bot.GetConfig().MoviePath, outputFileName), url)
 
 	err := cmd.Run()
 	if err != nil {

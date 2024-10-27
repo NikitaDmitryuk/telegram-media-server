@@ -8,12 +8,11 @@ import (
 	"path/filepath"
 	"time"
 
+	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 
 	_ "modernc.org/sqlite"
 )
-
-var db *sql.DB
 
 type Movie struct {
 	ID                   int
@@ -29,23 +28,23 @@ type MovieFile struct {
 	FilePath string
 }
 
-func DBInit(config *tmsconfig.Config) error {
+func DBInit(config *tmsconfig.Config) (*sql.DB, error) {
 	dbPath := filepath.Join(config.MoviePath, "movie.db")
 	var err error
-	db, err = sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return nil, fmt.Errorf("failed to open database: %v", err)
 	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		if err := dbCreateTables(); err != nil {
-			return fmt.Errorf("failed to create tables: %v", err)
+		if err := dbCreateTables(db); err != nil {
+			return nil, fmt.Errorf("failed to create tables: %v", err)
 		}
 	}
-	return nil
+	return db, nil
 }
 
-func dbCreateTables() error {
+func dbCreateTables(db *sql.DB) error {
 	_, err := db.Exec(`
         CREATE TABLE IF NOT EXISTS Movie (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,8 +73,8 @@ func dbCreateTables() error {
 	return nil
 }
 
-func dbAddMovie(name string, torrentFile *string, filePaths []string) int {
-	result, err := dbExecuteWithRetry(`
+func DbAddMovie(bot *tmsbot.Bot, name string, torrentFile *string, filePaths []string) int {
+	result, err := dbExecuteWithRetry(bot, `
         INSERT INTO Movie (NAME, TORRENT_FILE)
         VALUES (?, ?)
     `, name, torrentFile)
@@ -91,7 +90,7 @@ func dbAddMovie(name string, torrentFile *string, filePaths []string) int {
 	}
 
 	for _, filePath := range filePaths {
-		_, err := dbExecuteWithRetry(`
+		_, err := dbExecuteWithRetry(bot, `
             INSERT INTO MovieFiles (MOVIE_ID, FILE_PATH)
             VALUES (?, ?)
         `, movieID, filePath)
@@ -103,16 +102,16 @@ func dbAddMovie(name string, torrentFile *string, filePaths []string) int {
 	return int(movieID)
 }
 
-func dbRemoveMovie(movieID int) error {
-	_, err := dbExecuteWithRetry("DELETE FROM Movie WHERE ID = ?", movieID)
+func DbRemoveMovie(bot *tmsbot.Bot, movieID int) error {
+	_, err := dbExecuteWithRetry(bot, "DELETE FROM Movie WHERE ID = ?", movieID)
 	if err != nil {
 		log.Printf("Error removing movie: %v", err)
 	}
 	return err
 }
 
-func dbGetMovieList() ([]Movie, error) {
-	rows, err := db.Query("SELECT ID, NAME, DOWNLOADED, DOWNLOADED_PERCENTAGE, TORRENT_FILE FROM Movie ORDER BY ID")
+func DbGetMovieList(bot *tmsbot.Bot) ([]Movie, error) {
+	rows, err := bot.GetDB().Query("SELECT ID, NAME, DOWNLOADED, DOWNLOADED_PERCENTAGE, TORRENT_FILE FROM Movie ORDER BY ID")
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +129,8 @@ func dbGetMovieList() ([]Movie, error) {
 	return movies, nil
 }
 
-func dbUpdateDownloadedPercentage(id int, percentage int) error {
-	_, err := dbExecuteWithRetry(`
+func DbUpdateDownloadedPercentage(bot *tmsbot.Bot, id int, percentage int) error {
+	_, err := dbExecuteWithRetry(bot, `
         UPDATE Movie
         SET DOWNLOADED_PERCENTAGE = ?
         WHERE ID = ?
@@ -142,8 +141,8 @@ func dbUpdateDownloadedPercentage(id int, percentage int) error {
 	return err
 }
 
-func dbSetLoaded(id int) error {
-	_, err := dbExecuteWithRetry(`
+func DbSetLoaded(bot *tmsbot.Bot, id int) error {
+	_, err := dbExecuteWithRetry(bot, `
         UPDATE Movie
         SET DOWNLOADED = 1
         WHERE ID = ?
@@ -154,8 +153,8 @@ func dbSetLoaded(id int) error {
 	return err
 }
 
-func dbGetMovieByID(movieID int) (Movie, error) {
-	row := db.QueryRow(`
+func DbGetMovieByID(bot *tmsbot.Bot, movieID int) (Movie, error) {
+	row := bot.GetDB().QueryRow(`
         SELECT ID, NAME, DOWNLOADED, DOWNLOADED_PERCENTAGE, TORRENT_FILE
         FROM Movie
         WHERE ID = ?
@@ -169,8 +168,8 @@ func dbGetMovieByID(movieID int) (Movie, error) {
 	return movie, nil
 }
 
-func dbMovieExistsTorrent(torrentFileName string) (bool, error) {
-	row := db.QueryRow("SELECT COUNT(*) FROM Movie WHERE TORRENT_FILE = ?", torrentFileName)
+func DbMovieExistsTorrent(bot *tmsbot.Bot, torrentFileName string) (bool, error) {
+	row := bot.GetDB().QueryRow("SELECT COUNT(*) FROM Movie WHERE TORRENT_FILE = ?", torrentFileName)
 	var count int
 	err := row.Scan(&count)
 	if err != nil {
@@ -180,8 +179,8 @@ func dbMovieExistsTorrent(torrentFileName string) (bool, error) {
 	return count > 0, nil
 }
 
-func dbMovieExistsId(id int) (bool, error) {
-	row := db.QueryRow("SELECT COUNT(*) FROM Movie WHERE ID = ?", id)
+func DbMovieExistsId(bot *tmsbot.Bot, id int) (bool, error) {
+	row := bot.GetDB().QueryRow("SELECT COUNT(*) FROM Movie WHERE ID = ?", id)
 	var count int
 	err := row.Scan(&count)
 	if err != nil {
@@ -191,12 +190,12 @@ func dbMovieExistsId(id int) (bool, error) {
 	return count > 0, nil
 }
 
-func dbExecuteWithRetry(query string, args ...interface{}) (sql.Result, error) {
+func dbExecuteWithRetry(bot *tmsbot.Bot, query string, args ...interface{}) (sql.Result, error) {
 	const maxRetries = 5
 	var result sql.Result
 	var err error
 	for i := 0; i < maxRetries; i++ {
-		result, err = db.Exec(query, args...)
+		result, err = bot.GetDB().Exec(query, args...)
 		if err == nil {
 			return result, nil
 		}
@@ -205,8 +204,8 @@ func dbExecuteWithRetry(query string, args ...interface{}) (sql.Result, error) {
 	return nil, fmt.Errorf("max retries reached: %v", err)
 }
 
-func dbGetFilesByMovieID(movieID int) ([]MovieFile, error) {
-	rows, err := db.Query("SELECT FILE_PATH FROM MovieFiles WHERE MOVIE_ID = ?", movieID)
+func DbGetFilesByMovieID(bot *tmsbot.Bot, movieID int) ([]MovieFile, error) {
+	rows, err := bot.GetDB().Query("SELECT FILE_PATH FROM MovieFiles WHERE MOVIE_ID = ?", movieID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,13 +223,13 @@ func dbGetFilesByMovieID(movieID int) ([]MovieFile, error) {
 	return files, nil
 }
 
-func dbRemoveFilesByMovieID(movieID int) error {
-	_, err := db.Exec("DELETE FROM MovieFiles WHERE MOVIE_ID = ?", movieID)
+func DbRemoveFilesByMovieID(bot *tmsbot.Bot, movieID int) error {
+	_, err := bot.GetDB().Exec("DELETE FROM MovieFiles WHERE MOVIE_ID = ?", movieID)
 	return err
 }
 
-func dbMovieExistsUploadedFile(fileName string) (bool, error) {
-	row := db.QueryRow(`
+func DbMovieExistsUploadedFile(bot *tmsbot.Bot, fileName string) (bool, error) {
+	row := bot.GetDB().QueryRow(`
         SELECT COUNT(*)
         FROM MovieFiles
         WHERE FILE_PATH = ?
@@ -246,9 +245,9 @@ func dbMovieExistsUploadedFile(fileName string) (bool, error) {
 	return count > 0, nil
 }
 
-func dbLogin(password string, chatID int64, userName string) (bool, error) {
-	if password == GlobalConfig.Password {
-		_, err := dbExecuteWithRetry("INSERT INTO User (NAME, CHAT_ID) VALUES (?, ?)", userName, chatID)
+func DbLogin(bot *tmsbot.Bot, password string, chatID int64, userName string) (bool, error) {
+	if password == bot.GetConfig().Password {
+		_, err := dbExecuteWithRetry(bot, "INSERT INTO User (NAME, CHAT_ID) VALUES (?, ?)", userName, chatID)
 		if err != nil {
 			return false, err
 		}
@@ -257,8 +256,8 @@ func dbLogin(password string, chatID int64, userName string) (bool, error) {
 	return false, nil
 }
 
-func dbCheckUser(chatID int64) (bool, error) {
-	stmt, err := db.Prepare("SELECT * FROM User WHERE CHAT_ID = ?")
+func DbCheckUser(bot *tmsbot.Bot, chatID int64) (bool, error) {
+	stmt, err := bot.GetDB().Prepare("SELECT * FROM User WHERE CHAT_ID = ?")
 	if err != nil {
 		return false, err
 	}

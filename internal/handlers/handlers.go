@@ -1,4 +1,4 @@
-package api
+package handlers
 
 import (
 	"log"
@@ -6,116 +6,128 @@ import (
 	"strings"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
+	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/db"
+	tmsdownloader "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
+	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func HandleUpdates(update tgbotapi.Update) {
-	if update.Message == nil {
-		return
-	}
+func HandleUpdates(bot *tmsbot.Bot) {
 
-	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
 
-	if userExists, err := dbCheckUser(update.Message.From.ID); err != nil {
-		tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.CheckUserErrorMsgID))
-	} else if !userExists {
-		handleUnknownUser(update)
-	} else {
-		handleKnownUser(update)
+	updates := bot.GetAPI().GetUpdatesChan(u)
+
+	for update := range updates {
+
+		if update.Message == nil {
+			return
+		}
+
+		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
+
+		if userExists, err := tmsdb.DbCheckUser(bot, update.Message.From.ID); err != nil {
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.CheckUserErrorMsgID))
+		} else if !userExists {
+			handleUnknownUser(bot, update)
+		} else {
+			handleKnownUser(bot, update)
+		}
 	}
 }
 
-func handleUnknownUser(update tgbotapi.Update) {
+func handleUnknownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 	if update.Message.IsCommand() {
 		switch update.Message.Command() {
 		case "login":
-			loginHandler(update)
+			loginHandler(bot, update)
 		default:
-			tmsbot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.UnknownUserMsgID))
+			bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.UnknownUserMsgID))
 		}
 	} else {
-		tmsbot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.UnknownUserMsgID))
+		bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.UnknownUserMsgID))
 	}
 }
 
-func handleKnownUser(update tgbotapi.Update) {
+func handleKnownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 	message := update.Message
 	chatID := message.Chat.ID
 
 	if message.IsCommand() {
 		switch message.Command() {
 		case "start":
-			tmsbot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.StartCommandMsgID))
+			bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.StartCommandMsgID))
 		case "ls":
-			listHandler(update)
+			listHandler(bot, update)
 		case "rm":
-			deleteHandler(update)
+			deleteHandler(bot, update)
 		case "stop":
-			stopHandler(update)
+			stopHandler(bot, update)
 		default:
-			tmsbot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.UnknownCommandMsgID))
+			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.UnknownCommandMsgID))
 		}
 		return
 	}
 
-	if isValidLink(message.Text) {
-		go downloadVideo(update)
-		tmsbot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
+	if tmsutils.IsValidLink(message.Text) {
+		go tmsdownloader.DownloadVideo(bot, update)
+		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
 		return
 	}
 
 	if doc := message.Document; doc != nil && strings.HasSuffix(doc.FileName, ".torrent") {
 		fileName := doc.FileName
 
-		if err := downloadFile(doc.FileID, fileName); err != nil {
-			tmsbot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.DownloadDocumentErrorMsgID))
+		if err := tmsutils.DownloadFile(bot, doc.FileID, fileName); err != nil {
+			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.DownloadDocumentErrorMsgID))
 			return
 		}
 
-		exists, err := dbMovieExistsTorrent(fileName)
+		exists, err := tmsdb.DbMovieExistsTorrent(bot, fileName)
 		if err != nil {
-			tmsbot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.TorrentFileExistsErrorMsgID))
+			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.TorrentFileExistsErrorMsgID))
 			return
 		}
 		if exists {
-			tmsbot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.FileAlreadyExistsMsgID))
+			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.FileAlreadyExistsMsgID))
 			return
 		}
 
-		if err := downloadTorrent(fileName, update); err != nil {
-			tmsbot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.TorrentFileDownloadErrorMsgID))
+		if err := tmsdownloader.DownloadTorrent(bot, fileName, update); err != nil {
+			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.TorrentFileDownloadErrorMsgID))
 			return
 		}
 
-		tmsbot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
+		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
 		return
 	}
 
-	tmsbot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.UnknownCommandMsgID))
+	bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.UnknownCommandMsgID))
 }
 
-func loginHandler(update tgbotapi.Update) {
+func loginHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	textFields := strings.Fields(update.Message.Text)
 
 	if len(textFields) != 2 {
-		tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidCommandFormatMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidCommandFormatMsgID))
 	} else {
-		success, err := dbLogin(textFields[1], update.Message.Chat.ID, update.Message.From.UserName)
+		success, err := tmsdb.DbLogin(bot, textFields[1], update.Message.Chat.ID, update.Message.From.UserName)
 		if err != nil {
-			tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.LoginErrorMsgID))
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.LoginErrorMsgID))
 		} else if success {
-			tmsbot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.LoginSuccessMsgID))
+			bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.LoginSuccessMsgID))
 		} else {
-			tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.WrongPasswordMsgID))
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.WrongPasswordMsgID))
 		}
 	}
 }
 
-func listHandler(update tgbotapi.Update) {
-	movies, err := dbGetMovieList()
+func listHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
+	movies, err := tmsdb.DbGetMovieList(bot)
 	if err != nil {
-		tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.GetMovieListErrorMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.GetMovieListErrorMsgID))
 		return
 	}
 
@@ -132,50 +144,50 @@ func listHandler(update tgbotapi.Update) {
 		msg = tmslang.GetMessage(tmslang.NoMoviesMsgID)
 	}
 
-	tmsbot.SendSuccessMessage(update.Message.Chat.ID, msg)
+	bot.SendSuccessMessage(update.Message.Chat.ID, msg)
 }
 
-func deleteHandler(update tgbotapi.Update) {
+func deleteHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	commandID := strings.Fields(update.Message.Text)
 
 	if len(commandID) != 2 {
-		tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidCommandFormatMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidCommandFormatMsgID))
 		return
 	}
 
 	if commandID[1] == "all" {
-		movies, _ := dbGetMovieList()
+		movies, _ := tmsdb.DbGetMovieList(bot)
 		for _, movie := range movies {
-			err := deleteMovie(movie.ID)
+			err := tmsutils.DeleteMovie(bot, movie.ID)
 			if err != nil {
-				sendErrorMessage(update.Message.Chat.ID, err.Error())
+				bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
 				return
 			}
 		}
-		tmsbot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.AllMoviesDeletedMsgID))
+		bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.AllMoviesDeletedMsgID))
 	} else {
 		id, err := strconv.Atoi(commandID[1])
 		if err != nil {
-			tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidIDMsgID))
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidIDMsgID))
 			return
 		}
 
-		if exists, err := dbMovieExistsId(id); err != nil {
-			tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.MovieCheckErrorMsgID))
+		if exists, err := tmsdb.DbMovieExistsId(bot, id); err != nil {
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.MovieCheckErrorMsgID))
 		} else if exists {
-			err := deleteMovie(id)
+			err := tmsutils.DeleteMovie(bot, id)
 			if err != nil {
-				tmsbot.SendErrorMessage(update.Message.Chat.ID, err.Error())
+				bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
 			} else {
-				tmsbot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.MovieDeletedMsgID))
+				bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.MovieDeletedMsgID))
 			}
 		} else {
-			tmsbot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidIDMsgID))
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidIDMsgID))
 		}
 	}
 }
 
-func stopHandler(update tgbotapi.Update) {
-	go stopTorrentDownload()
-	tmsbot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.TorrentDownloadsStoppedMsgID))
+func stopHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
+	go tmsdownloader.StopTorrentDownload(bot)
+	bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.TorrentDownloadsStoppedMsgID))
 }
