@@ -21,20 +21,22 @@ func HandleUpdates(bot *tmsbot.Bot) {
 	updates := bot.GetAPI().GetUpdatesChan(u)
 
 	for update := range updates {
+		updateCopy := update
+		go func(u tgbotapi.Update) {
+			if u.Message == nil {
+				return
+			}
 
-		if update.Message == nil {
-			return
-		}
+			log.Printf("[%s] %s", u.Message.From.UserName, u.Message.Text)
 
-		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-		if userExists, err := tmsdb.DbCheckUser(bot, update.Message.From.ID); err != nil {
-			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.CheckUserErrorMsgID))
-		} else if !userExists {
-			handleUnknownUser(bot, update)
-		} else {
-			handleKnownUser(bot, update)
-		}
+			if userExists, err := tmsdb.DbCheckUser(bot, u.Message.From.ID); err != nil {
+				bot.SendErrorMessage(u.Message.Chat.ID, tmslang.GetMessage(tmslang.CheckUserErrorMsgID))
+			} else if !userExists {
+				handleUnknownUser(bot, u)
+			} else {
+				handleKnownUser(bot, u)
+			}
+		}(updateCopy)
 	}
 }
 
