@@ -1,5 +1,5 @@
 pkgname=telegram-media-server
-pkgver=1.0.32
+pkgver=1.0.33
 pkgrel=1
 pkgdesc="Telegram Media Server"
 arch=('aarch64' 'armv7h' 'x86_64')
@@ -8,21 +8,32 @@ license=('MIT')
 makedepends=('go')
 depends=('yt-dlp')
 source=()
-install="${pkgname}.install"
+install="build/${pkgname}.install"
 options=(!strip)
 
+prepare() {
+    cd "$srcdir"
+
+    cp -r "$startdir/cmd" .
+    cp -r "$startdir/internal" .
+    cp "$startdir/go.mod" .
+    cp "$startdir/go.sum" .
+    cp "$startdir/LICENSE" .
+    cp "$startdir/.env.example" .
+}
+
 build() {
-    cd "${srcdir}/../"
+    cd "$srcdir"
 
     case "$CARCH" in
         'aarch64')
-            env GOOS=linux GOARCH=arm64 go build -o "${srcdir}/telegram-media-server" .
+            env GOOS=linux GOARCH=arm64 go build -o "${srcdir}/telegram-media-server" ./cmd/telegram-media-server
             ;;
         'armv7h')
-            env GOOS=linux GOARCH=arm GOARM=7 go build -o "${srcdir}/telegram-media-server" .
+            env GOOS=linux GOARCH=arm GOARM=7 go build -o "${srcdir}/telegram-media-server" ./cmd/telegram-media-server
             ;;
         'x86_64')
-            env GOOS=linux GOARCH=amd64 go build -o "${srcdir}/telegram-media-server" .
+            env GOOS=linux GOARCH=amd64 go build -o "${srcdir}/telegram-media-server" ./cmd/telegram-media-server
             ;;
         *)
             echo "Unsupported architecture: $CARCH"
@@ -32,9 +43,14 @@ build() {
 }
 
 package() {
-    cd "${srcdir}/../"
+    cd "$srcdir"
+
+    # Install the binary
     install -Dm755 "${srcdir}/telegram-media-server" "${pkgdir}/usr/bin/telegram-media-server"
+
+    # Install configuration files
     install -Dm644 .env.example "${pkgdir}/etc/telegram-media-server/.env.example"
-    install -Dm644 messages.yaml "${pkgdir}/etc/telegram-media-server/messages.yaml"
-    install -Dm644 ${pkgname}.service "${pkgdir}/usr/lib/systemd/system/telegram-media-server.service"
+
+    # Install the systemd service file from the build directory
+    install -Dm644 "$startdir/build/telegram-media-server.service" "${pkgdir}/usr/lib/systemd/system/telegram-media-server.service"
 }

@@ -1,21 +1,17 @@
-package main
+package lang
 
 import (
 	"fmt"
 	"log"
-	"os"
 
-	"gopkg.in/yaml.v2"
+	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 )
 
-var messages map[MessageID]map[string]string
+var lang string
 
-func LoadMessagesFromFile(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return yaml.Unmarshal(data, &messages)
+func SetupLang(config *tmsconfig.Config) error {
+	lang = config.Lang
+	return nil
 }
 
 func GetMessage(id MessageID, args ...interface{}) string {
@@ -27,6 +23,6 @@ func GetMessage(id MessageID, args ...interface{}) string {
 			return fmt.Sprintf(msg, args...)
 		}
 	}
-	log.Printf("Message not found")
+	log.Printf("Message not found for ID: %s", id)
 	return "Message not found"
 }

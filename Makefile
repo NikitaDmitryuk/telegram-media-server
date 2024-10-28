@@ -1,6 +1,6 @@
 .PHONY: build
 build:
-	makepkg -Acsf --config makepkg.conf
+	makepkg -Acsf --config build/makepkg.conf
 
 .PHONY: run
 run:
@@ -8,9 +8,13 @@ run:
 
 .PHONY: format
 format:
-	go fmt .
+	go fmt ./...
 	go mod tidy
 
 .PHONY: lint
 lint:
-	golangci-lint run
+	golangci-lint run ./...
+
+.PHONY: generate-messages
+generate-messages:
+	./scripts/generate_messages.sh

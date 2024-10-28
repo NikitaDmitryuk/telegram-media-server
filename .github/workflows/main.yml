@@ -40,13 +40,13 @@ jobs:
               cd /workspace &&
               case \"${{ matrix.arch }}\" in
                 'aarch64')
-                  CARCH=aarch64 makepkg -Acsf
+                  CARCH=aarch64 makepkg -Acsf --config build/makepkg.conf
                   ;;
                 'armv7h')
-                  CARCH=armv7h makepkg -Acsf
+                  CARCH=armv7h makepkg -Acsf --config build/makepkg.conf
                   ;;
                 'x86_64')
-                  CARCH=x86_64 makepkg -Acsf
+                  CARCH=x86_64 makepkg -Acsf --config build/makepkg.conf
                   ;;
                 *)
                   echo \"Unsupported architecture: ${{ matrix.arch }}\"

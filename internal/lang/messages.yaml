@@ -151,12 +151,12 @@ DownloadVideoSuccess:
   ru: "Видео успешно скачано"
 
 MovieDownloaded:
-  en: "ID: %d\nTitle: %s\nDownloaded: Yes\n"
-  ru: "ID: %d\nНазвание: %s\nЗагружено: Да\n"
+  en: "ID: %d\nTitle: %s\nDownloaded: Yes\n\n"
+  ru: "ID: %d\nНазвание: %s\nЗагружено: Да\n\n"
 
 MovieDownloading:
-  en: "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n"
-  ru: "ID: %d\nНазвание: %s\nПроцент загрузки: %d%%\n"
+  en: "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n\n"
+  ru: "ID: %d\nНазвание: %s\nПроцент загрузки: %d%%\n\n"
 
 StartDownload:
   en: "Download started - %s"
