@@ -16,7 +16,6 @@ prepare() {
 
     cp -r "$startdir/cmd" .
     cp -r "$startdir/internal" .
-    cp -r "$startdir/configs" .
     cp "$startdir/go.mod" .
     cp "$startdir/go.sum" .
     cp "$startdir/LICENSE" .
@@ -50,7 +49,6 @@ package() {
     install -Dm755 "${srcdir}/telegram-media-server" "${pkgdir}/usr/bin/telegram-media-server"
 
     # Install configuration files
-    install -Dm644 configs/messages.yaml "${pkgdir}/etc/telegram-media-server/messages.yaml"
     install -Dm644 .env.example "${pkgdir}/etc/telegram-media-server/.env.example"
 
     # Install the systemd service file from the build directory

@@ -5,7 +5,6 @@ go 1.22.6
 require (
 	github.com/anacrolix/torrent v1.56.1
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
-	gopkg.in/yaml.v2 v2.4.0
 	modernc.org/sqlite v1.32.0
 )
 

@@ -43,7 +43,6 @@ func NewConfig() (*Config, error) {
 		MoviePath:             getEnv("MOVIE_PATH", ""),
 		Password:              getEnv("PASSWORD", ""),
 		Lang:                  getEnv("LANG", "en"),
-		MessageFilePath:       getEnv("MESSAGE_FILE_PATH", "/etc/telegram-media-server/messages.yaml"),
 		UpdateIntervalSeconds: getEnvInt("UPDATE_INTERVAL_SECONDS", 30),
 		UpdatePercentageStep:  getEnvInt("UPDATE_PERCENTAGE_STEP", 20),
 		MaxWaitTimeMinutes:    getEnvInt("MAX_WAIT_TIME_MINUTES", 10),
