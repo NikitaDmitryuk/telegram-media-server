@@ -19,7 +19,7 @@ type Bot struct {
 func InitBot(config *tmsconfig.Config, db *sql.DB) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(config.BotToken)
 	if err != nil {
-		return nil, fmt.Errorf("Error creating bot: %v", err)
+		return nil, fmt.Errorf("error creating bot: %v", err)
 	}
 
 	log.Printf("Authorized on account %s", api.Self.UserName)
@@ -29,12 +29,16 @@ func InitBot(config *tmsconfig.Config, db *sql.DB) (*Bot, error) {
 func (b *Bot) SendErrorMessage(chatID int64, message string) {
 	log.Print(message)
 	msg := tgbotapi.NewMessage(chatID, message)
-	b.api.Send(msg)
+	if smsg, err := b.api.Send(msg); err != nil {
+		log.Printf("Message (%s) not send: %v", smsg.Text, err)
+	}
 }
 
 func (b *Bot) SendSuccessMessage(chatID int64, message string) {
 	msg := tgbotapi.NewMessage(chatID, message)
-	b.api.Send(msg)
+	if smsg, err := b.api.Send(msg); err != nil {
+		log.Printf("Message (%s) not send: %v", smsg.Text, err)
+	}
 }
 
 func (b *Bot) GetAPI() *tgbotapi.BotAPI {
