@@ -44,7 +44,9 @@ func DownloadVideo(bot *tmsbot.Bot, update tgbotapi.Update) {
 	err = downloadWithYTDLP(bot, url, finalFileName)
 	if err != nil {
 		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.VideoDownloadErrorMsgID, err.Error()))
-		tmsutils.DeleteMovie(bot, videoId)
+		if err := tmsutils.DeleteMovie(bot, videoId); err != nil {
+			log.Printf("Delete error: %v", err)
+		}
 		return
 	}
 

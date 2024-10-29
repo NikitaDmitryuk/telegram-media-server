@@ -129,7 +129,7 @@ func DbGetMovieList(bot *tmsbot.Bot) ([]Movie, error) {
 	return movies, nil
 }
 
-func DbUpdateDownloadedPercentage(bot *tmsbot.Bot, id int, percentage int) error {
+func DbUpdateDownloadedPercentage(bot *tmsbot.Bot, id int, percentage int) {
 	_, err := dbExecuteWithRetry(bot, `
         UPDATE Movie
         SET DOWNLOADED_PERCENTAGE = ?
@@ -138,10 +138,9 @@ func DbUpdateDownloadedPercentage(bot *tmsbot.Bot, id int, percentage int) error
 	if err != nil {
 		log.Printf("Failed to update download percentage: %v", err)
 	}
-	return err
 }
 
-func DbSetLoaded(bot *tmsbot.Bot, id int) error {
+func DbSetLoaded(bot *tmsbot.Bot, id int) {
 	_, err := dbExecuteWithRetry(bot, `
         UPDATE Movie
         SET DOWNLOADED = 1
@@ -150,7 +149,6 @@ func DbSetLoaded(bot *tmsbot.Bot, id int) error {
 	if err != nil {
 		log.Printf("Failed to set movie as downloaded: %v", err)
 	}
-	return err
 }
 
 func DbGetMovieByID(bot *tmsbot.Bot, movieID int) (Movie, error) {

@@ -13,7 +13,7 @@ format:
 
 .PHONY: lint
 lint:
-	golangci-lint run ./...
+	golangci-lint run
 
 .PHONY: generate-messages
 generate-messages:

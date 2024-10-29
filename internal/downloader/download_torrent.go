@@ -18,18 +18,16 @@ import (
 
 var stopDownload = make(chan bool)
 
-func StopTorrentDownload(bot *tmsbot.Bot) error {
+func StopTorrentDownload(bot *tmsbot.Bot) {
 	movies, err := tmsdb.DbGetMovieList(bot)
 	if err != nil {
 		log.Printf(tmslang.GetMessage(tmslang.GetMovieListErrorMsgID), err)
-		return fmt.Errorf(tmslang.GetMessage(tmslang.GetMovieListErrorMsgID), err)
 	}
 	for _, movie := range movies {
 		if !movie.Downloaded {
 			stopDownload <- true
 		}
 	}
-	return nil
 }
 
 func DownloadTorrent(bot *tmsbot.Bot, torrentFileName string, update tgbotapi.Update) error {
@@ -57,7 +55,7 @@ func DownloadTorrent(bot *tmsbot.Bot, torrentFileName string, update tgbotapi.Up
 		message := tmslang.GetMessage(tmslang.NotEnoughSpaceMsgID, t.Name())
 		bot.SendErrorMessage(update.Message.Chat.ID, message)
 		client.Close()
-		return fmt.Errorf(message)
+		return fmt.Errorf("%s", message)
 	}
 
 	t.DownloadAll()
@@ -115,7 +113,9 @@ func monitorDownload(bot *tmsbot.Bot, t *torrent.Torrent, movieID int, client *t
 
 			if elapsedTime >= float64(bot.GetConfig().MaxWaitTimeMinutes) && percentage < bot.GetConfig().MinDownloadPercentage {
 				os.Remove(filepath.Join(bot.GetConfig().MoviePath, t.InfoHash().HexString()+".torrent"))
-				tmsutils.DeleteMovie(bot, movieID)
+				if err := tmsutils.DeleteMovie(bot, movieID); err != nil {
+					log.Printf("Delete error: %v", err)
+				}
 				text := tmslang.GetMessage(tmslang.DownloadStoppedLowSpeedMsgID, movie.Name)
 				bot.SendErrorMessage(update.Message.Chat.ID, text)
 				client.Close()
@@ -125,7 +125,9 @@ func monitorDownload(bot *tmsbot.Bot, t *torrent.Torrent, movieID int, client *t
 			text := tmslang.GetMessage(tmslang.DownloadStoppedMsgID, t.Name())
 			bot.SendSuccessMessage(update.Message.Chat.ID, text)
 			client.Close()
-			tmsutils.DeleteMovie(bot, movieID)
+			if err := tmsutils.DeleteMovie(bot, movieID); err != nil {
+				log.Printf("Delete error: %v", err)
+			}
 			return
 		}
 	}
