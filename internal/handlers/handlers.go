@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"strconv"
 	"strings"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/db"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	tmsdownloader "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
@@ -67,6 +69,8 @@ func handleKnownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 			deleteHandler(bot, update)
 		case "stop":
 			stopHandler(bot, update)
+		case "vpn":
+			vpnHandler(bot, update)
 		default:
 			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.UnknownCommandMsgID))
 		}
@@ -74,7 +78,7 @@ func handleKnownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 	}
 
 	if tmsutils.IsValidLink(message.Text) {
-		go tmsdownloader.DownloadVideo(bot, update)
+		tmsdownloader.DownloadVideo(context.Background(), bot, update)
 		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
 		return
 	}
@@ -82,7 +86,7 @@ func handleKnownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 	if doc := message.Document; doc != nil && strings.HasSuffix(doc.FileName, ".torrent") {
 		fileName := doc.FileName
 
-		if err := tmsutils.DownloadFile(bot, doc.FileID, fileName); err != nil {
+		if err := downloader.DownloadFile(bot, doc.FileID, fileName); err != nil {
 			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.DownloadDocumentErrorMsgID))
 			return
 		}
@@ -97,7 +101,7 @@ func handleKnownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 			return
 		}
 
-		if err := tmsdownloader.DownloadTorrent(bot, fileName, update); err != nil {
+		if err := tmsdownloader.DownloadTorrent(context.Background(), bot, fileName, update); err != nil {
 			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.TorrentFileDownloadErrorMsgID))
 			return
 		}
@@ -150,17 +154,20 @@ func listHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 }
 
 func deleteHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
-	commandID := strings.Fields(update.Message.Text)
-
-	if len(commandID) != 2 {
+	args := strings.Fields(update.Message.Text)
+	if len(args) < 2 {
 		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidCommandFormatMsgID))
 		return
 	}
 
-	if commandID[1] == "all" {
-		movies, _ := tmsdb.DbGetMovieList(bot)
+	if args[1] == "all" {
+		movies, err := tmsdb.DbGetMovieList(bot)
+		if err != nil {
+			bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
+			return
+		}
 		for _, movie := range movies {
-			err := tmsutils.DeleteMovie(bot, movie.ID)
+			err := downloader.DeleteMovie(bot, movie.ID)
 			if err != nil {
 				bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
 				return
@@ -168,28 +175,149 @@ func deleteHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 		}
 		bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.AllMoviesDeletedMsgID))
 	} else {
-		id, err := strconv.Atoi(commandID[1])
-		if err != nil {
-			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidIDMsgID))
-			return
+		var invalidIDs []string
+		var deletedIDs []string
+
+		for _, arg := range args[1:] {
+			id, err := strconv.Atoi(arg)
+			if err != nil {
+				invalidIDs = append(invalidIDs, arg)
+				continue
+			}
+			exists, err := tmsdb.DbMovieExistsId(bot, id)
+			if err != nil {
+				bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.MovieCheckErrorMsgID, err))
+				return
+			}
+			if exists {
+				err := downloader.DeleteMovie(bot, id)
+				if err != nil {
+					bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
+					return
+				}
+				deletedIDs = append(deletedIDs, strconv.Itoa(id))
+			} else {
+				invalidIDs = append(invalidIDs, arg)
+			}
 		}
 
-		if exists, err := tmsdb.DbMovieExistsId(bot, id); err != nil {
-			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.MovieCheckErrorMsgID))
-		} else if exists {
-			err := tmsutils.DeleteMovie(bot, id)
-			if err != nil {
-				bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
-			} else {
-				bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.MovieDeletedMsgID))
-			}
-		} else {
-			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.InvalidIDMsgID))
+		if len(invalidIDs) > 0 {
+			invalidMsg := tmslang.GetMessage(tmslang.InvalidIDsMsgID, strings.Join(invalidIDs, ", "))
+			bot.SendErrorMessage(update.Message.Chat.ID, invalidMsg)
+		}
+		if len(deletedIDs) > 0 {
+			deletedMsg := tmslang.GetMessage(tmslang.DeletedMoviesMsgID, strings.Join(deletedIDs, ", "))
+			bot.SendSuccessMessage(update.Message.Chat.ID, deletedMsg)
+		} else if len(invalidIDs) == 0 {
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.NoValidIDsMsgID))
 		}
 	}
 }
 
 func stopHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
-	go tmsdownloader.StopTorrentDownload(bot)
-	bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.TorrentDownloadsStoppedMsgID))
+	args := strings.Fields(update.Message.Text)
+	if len(args) < 2 {
+		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.StopNoArgumentMsgID))
+		return
+	}
+
+	if args[1] == "all" {
+		bot.DownloadManager.StopAllDownloads()
+		bot.SendSuccessMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.TorrentDownloadsStoppedMsgID))
+	} else {
+		var invalidIDs []string
+		var stoppedIDs []string
+
+		for _, arg := range args[1:] {
+			movieID, err := strconv.ParseInt(arg, 10, 64)
+			if err != nil {
+				invalidIDs = append(invalidIDs, arg)
+				continue
+			}
+			bot.DownloadManager.StopDownload(int(movieID))
+			stoppedIDs = append(stoppedIDs, strconv.FormatInt(movieID, 10))
+		}
+
+		if len(invalidIDs) > 0 {
+			invalidMsg := tmslang.GetMessage(tmslang.InvalidIDsMsgID, strings.Join(invalidIDs, ", "))
+			bot.SendErrorMessage(update.Message.Chat.ID, invalidMsg)
+		}
+		if len(stoppedIDs) > 0 {
+			stoppedMsg := tmslang.GetMessage(tmslang.StoppedDownloadsMsgID, strings.Join(stoppedIDs, ", "))
+			bot.SendSuccessMessage(update.Message.Chat.ID, stoppedMsg)
+		} else if len(invalidIDs) == 0 {
+			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.NoValidIDsMsgID))
+		}
+	}
+}
+
+func vpnHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
+	args := strings.Fields(update.Message.Text)
+	chatID := update.Message.Chat.ID
+
+	if len(args) < 2 {
+		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNUsageMsgID))
+		return
+	}
+
+	action := strings.ToLower(args[1])
+	switch action {
+	case "on":
+		setVPNOn(bot, chatID)
+	case "off":
+		setVPNOff(bot, chatID)
+	case "status":
+		sendVPNStatus(bot, chatID)
+	default:
+		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNInvalidActionMsgID))
+	}
+}
+
+func setVPNOn(bot *tmsbot.Bot, chatID int64) {
+	isActive, err := tmsutils.GetVPNState()
+	if err != nil {
+		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNCheckErrorMsgID, err))
+		return
+	}
+	if isActive {
+		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNAlreadyEnabledMsgID))
+		return
+	}
+
+	if err := tmsutils.ManageVPN(true); err != nil {
+		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNChangeErrorMsgID, err))
+		return
+	}
+	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNEnabledMsgID))
+}
+
+func setVPNOff(bot *tmsbot.Bot, chatID int64) {
+	isActive, err := tmsutils.GetVPNState()
+	if err != nil {
+		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNCheckErrorMsgID, err))
+		return
+	}
+	if !isActive {
+		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNAlreadyDisabledMsgID))
+		return
+	}
+
+	if err := tmsutils.ManageVPN(false); err != nil {
+		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNChangeErrorMsgID, err))
+		return
+	}
+	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNDisabledMsgID))
+}
+
+func sendVPNStatus(bot *tmsbot.Bot, chatID int64) {
+	state, err := tmsutils.GetVPNState()
+	if err != nil {
+		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNCheckErrorMsgID, err))
+		return
+	}
+	status := "off"
+	if state {
+		status = "on"
+	}
+	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNStatusMsgID, status))
 }

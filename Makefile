@@ -15,6 +15,6 @@ format:
 lint:
 	golangci-lint run
 
-.PHONY: generate-messages
-generate-messages:
+.PHONY: gm
+gm:
 	./scripts/generate_messages.sh

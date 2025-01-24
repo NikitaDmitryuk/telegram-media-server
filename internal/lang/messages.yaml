@@ -71,8 +71,8 @@ MovieListError:
   ru: "Ошибка при получении списка фильмов"
 
 MovieCheckError:
-  en: "Error checking existence of movie"
-  ru: "Ошибка при проверке существования фильма"
+  en: "Error checking existence of movie: %v"
+  ru: "Ошибка при проверке существования фильма: %v"
 
 TorrentClientError:
   en: "Failed to create torrent client: %v"
@@ -123,8 +123,8 @@ FileAddedSuccessfully:
   ru: "Файл успешно добавлен"
 
 StartCommand:
-  en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop - stop all torrent downloads"
-  ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop - остановить все загрузки торрентов"
+  en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all\n/vpnon - enable VPN\n/vpnoff - disable VPN"
+  ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop <ID> - остановить загрузку, all - для остановки всех\n/vpnon - включить VPN\n/vpnoff - выключить VPN"
 
 TorrentDownloadsStopped:
   en: "All torrent downloads have been stopped!"
@@ -265,3 +265,79 @@ TorrentFileExistsError:
 TorrentFileDownloadError:
   en: "Error downloading torrent file"
   ru: "Ошибка при загрузке торрет файла"
+
+FailedToReadDirectory:
+  en: "Failed to read directory %s: %v"
+  ru: "Не удалось прочитать директорию %s: %v"
+
+StopNoArgument:
+  en: "Please specify the movie ID or 'all' to stop all downloads."
+  ru: "Пожалуйста, укажите ID фильма или 'all' для остановки всех загрузок."
+
+StopInvalidID:
+  en: "Invalid movie ID. Please specify a valid ID or 'all'."
+  ru: "Неверный ID фильма. Пожалуйста, укажите корректный ID или 'all'."
+
+StopMovieStopped:
+  en: "Download of movie with ID %d has been stopped."
+  ru: "Загрузка фильма с ID %d остановлена."
+
+VPNError:
+  en: "Error managing VPN: %v"
+  ru: "Ошибка при управлении VPN: %v"
+
+VPNAlreadyEnabled:
+  en: "VPN is already enabled"
+  ru: "VPN уже включен"
+
+VPNAlreadyDisabled:
+  en: "VPN is already disabled"
+  ru: "VPN уже выключен"
+
+VPNEnabled:
+  en: "VPN has been successfully enabled"
+  ru: "VPN успешно включен"
+
+VPNDisabled:
+  en: "VPN has been successfully disabled"
+  ru: "VPN успешно выключен"
+
+VPNCheckError:
+  en: "Error checking VPN status: %v"
+  ru: "Ошибка при проверке состояния VPN: %v"
+
+VPNChangeError:
+  en: "Error changing VPN state: %v"
+  ru: "Ошибка при изменении состояния VPN: %v"
+
+VPNStatus:
+  en: "VPN status: %s"
+  ru: "Статус VPN: %s"
+
+DownloadCancelled:
+  en: "Download canceled: %s"
+  ru: "Загрузка отменена: %s"
+
+InvalidIDs:
+  en: "Invalid IDs: %s"
+  ru: "Невалидные ID: %s"
+
+DeletedMovies:
+  en: "Deleted movies with IDs: %s"
+  ru: "Удалены фильмы с ID: %s"
+
+StoppedDownloads:
+  en: "Stopped downloads for movie IDs: %s"
+  ru: "Остановлены загрузки для фильмов с ID: %s"
+
+NoValidIDs:
+  en: "No valid movie IDs provided"
+  ru: "Не предоставлено валидных ID фильмов"
+
+VPNUsage:
+  en: "Usage: /vpn [on|off|status]"
+  ru: "Использование: /vpn [on|off|status]"
+
+VPNInvalidAction:
+  en: "Invalid action. Use 'on', 'off', or 'status'."
+  ru: "Неверное действие. Используйте 'on', 'off' или 'status'."

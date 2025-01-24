@@ -2,132 +2,33 @@ package utils
 
 import (
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"regexp"
+	"strings"
 	"syscall"
-
-	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
-	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/db"
-	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
-
-func DownloadFile(bot *tmsbot.Bot, fileID, fileName string) error {
-	file, err := bot.GetAPI().GetFile(tgbotapi.FileConfig{FileID: fileID})
-	if err != nil {
-		log.Printf(tmslang.GetMessage(tmslang.FailedToGetFileMsgID), err)
-		return err
-	}
-
-	fileURL := file.Link(bot.GetAPI().Token)
-	resp, err := http.Get(fileURL)
-	if err != nil {
-		log.Printf(tmslang.GetMessage(tmslang.FailedToDownloadFileMsgID), err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	out, err := os.Create(filepath.Join(bot.GetConfig().MoviePath, fileName))
-	if err != nil {
-		log.Printf(tmslang.GetMessage(tmslang.FailedToCreateFileMsgID), err)
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		log.Printf(tmslang.GetMessage(tmslang.FailedToSaveFileMsgID), err)
-		return err
-	}
-
-	log.Println(tmslang.GetMessage(tmslang.FileDownloadedSuccessfullyMsgID))
-	return nil
-}
 
 func HasEnoughSpace(path string, requiredSpace int64) bool {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err != nil {
-		log.Printf(tmslang.GetMessage(tmslang.ErrorGettingFilesystemStatsMsgID), err)
+		log.Printf("Error getting filesystem stats: %v\n", err)
 		return false
 	}
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
 
-	log.Print(tmslang.GetMessage(tmslang.RequiredSpaceMsgID, requiredSpace))
-	log.Print(tmslang.GetMessage(tmslang.AvailableSpaceMsgID, availableSpace))
+	log.Printf("Required space: %d bytes\n", requiredSpace)
+	log.Printf("Available space: %d bytes\n", availableSpace)
 
 	return availableSpace >= uint64(requiredSpace)
-}
-
-func DeleteMovie(bot *tmsbot.Bot, id int) error {
-	movie, err := tmsdb.DbGetMovieByID(bot, id)
-	if err != nil {
-		return LogAndReturnError(tmslang.GetMessage(tmslang.MovieNotFoundMsgID), err)
-	}
-
-	files, err := tmsdb.DbGetFilesByMovieID(bot, id)
-	if err != nil {
-		return LogAndReturnError(tmslang.GetMessage(tmslang.GetFilesErrorMsgID), err)
-	}
-
-	var rootFolder string
-
-	for _, file := range files {
-		filePath := filepath.Join(bot.GetConfig().MoviePath, file.FilePath)
-
-		if rootFolder == "" {
-			rootFolder = filepath.Dir(filePath)
-		}
-
-		err := os.Remove(filePath)
-		if err != nil {
-			log.Print(tmslang.GetMessage(tmslang.FailedToDeleteFileMsgID, filePath, err))
-		} else {
-			log.Print(tmslang.GetMessage(tmslang.FileDeletedSuccessfullyMsgID, filePath))
-		}
-	}
-
-	if movie.TorrentFile.Valid && movie.TorrentFile.String != "" {
-		torrentFilePath := filepath.Join(bot.GetConfig().MoviePath, movie.TorrentFile.String)
-		err := os.Remove(torrentFilePath)
-		if err != nil {
-			log.Print(tmslang.GetMessage(tmslang.FailedToDeleteTorrentFileMsgID, torrentFilePath, err))
-		} else {
-			log.Print(tmslang.GetMessage(tmslang.TorrentFileDeletedSuccessfullyMsgID, torrentFilePath))
-		}
-	}
-
-	err = tmsdb.DbRemoveMovie(bot, id)
-	if err != nil {
-		return LogAndReturnError(tmslang.GetMessage(tmslang.DeleteMovieDBErrorMsgID), err)
-	}
-
-	err = tmsdb.DbRemoveFilesByMovieID(bot, id)
-	if err != nil {
-		return LogAndReturnError(tmslang.GetMessage(tmslang.DeleteFilesDBErrorMsgID), err)
-	}
-
-	if rootFolder != "" && rootFolder != bot.GetConfig().MoviePath && IsEmptyDirectory(rootFolder) {
-		err = os.Remove(rootFolder)
-		if err != nil {
-			log.Print(tmslang.GetMessage(tmslang.FailedToDeleteRootFolderMsgID, rootFolder, err))
-		} else {
-			log.Print(tmslang.GetMessage(tmslang.RootFolderDeletedSuccessfullyMsgID, rootFolder))
-		}
-	}
-
-	log.Print(tmslang.GetMessage(tmslang.MovieDeletedSuccessfullyMsgID, id))
-	return nil
 }
 
 func IsEmptyDirectory(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Print(tmslang.GetMessage(tmslang.FailedToReadDirectoryMsgID, dir, err))
+		log.Printf("Failed to read directory %s: %v", dir, err)
 		return false
 	}
 
@@ -156,4 +57,39 @@ func IsValidLink(text string) bool {
 
 	re := regexp.MustCompile(`^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	return re.MatchString(parsedURL.Host)
+}
+
+func ManageVPN(state bool) error {
+	var cmd *exec.Cmd
+	if state {
+		cmd = exec.Command("wg-quick", "up", "wg0")
+	} else {
+		cmd = exec.Command("wg-quick", "down", "wg0")
+	}
+
+	go func() {
+		if err := cmd.Run(); err != nil {
+			LogAndReturnError("VPN state change error: "+err.Error(), err)
+			return
+		}
+		restartService()
+	}()
+
+	return nil
+}
+
+func GetVPNState() (bool, error) {
+	cmd := exec.Command("wg", "show")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, err
+	}
+	return strings.Contains(string(output), "wg0"), nil
+}
+
+func restartService() {
+	cmd := exec.Command("sudo", "systemctl", "restart", "telegram-media-server")
+	if err := cmd.Run(); err != nil {
+		LogAndReturnError("Error restarting telegram-media-server service: "+err.Error(), err)
+	}
 }
