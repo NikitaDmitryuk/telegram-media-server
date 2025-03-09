@@ -103,6 +103,8 @@ The bot configuration file is located at **/etc/telegram-media-server/.env**. Av
 * `MIN_DOWNLOAD_PERCENTAGE`: Minimum download percentage of a torrent to continue downloading (default: `10`).
 * `MAX_WAIT_TIME_MINUTES`: Maximum time in minutes to wait for the minimum download percentage of a torrent (default: `10`).
 * `LANG`: Bot message language. Supported values: ru, en.
+* `PROXY`: Use proxy for yt-dlp. Proxy address.
+* `PROXY_HOST`: Use proxy only for listed domains. If empty, use proxy always
 
 ### Example of **.env** file:
 
@@ -115,6 +117,8 @@ UPDATE_PERCENTAGE_STEP=20
 MIN_DOWNLOAD_PERCENTAGE=10
 MAX_WAIT_TIME_MINUTES=10
 LANG=en
+PROXY=socks5://127.0.0.1:2080 # optional
+PROXY_HOST=youtube.com,youtu.be # optional
 ```
 
 ## Usage
@@ -258,6 +262,8 @@ sudo systemctl start minidlna
 * `MIN_DOWNLOAD_PERCENTAGE`: Минимальный процент загрузки торрента для продолжения загрузки (по умолчанию: `10`).
 * `MAX_WAIT_TIME_MINUTES`: Максимальное время в минутах ожидания загрузки минимального процента торрента (по умолчанию: `10`).
 * `LANG`: Язык сообщений бота. Поддерживаемые значения: ru, en.
+* `PROXY`: Использовать прокси для yt-dlp. Адрес прокси.
+* `PROXY_HOST`: Использовать прокси только для перечисленных доменов. Если пустое, то использовать прокси всегда
 
 ### Пример файла **.env**:
 
@@ -270,6 +276,8 @@ UPDATE_PERCENTAGE_STEP=20
 MIN_DOWNLOAD_PERCENTAGE=10
 MAX_WAIT_TIME_MINUTES=10
 LANG=en
+PROXY=socks5://127.0.0.1:2080 # опционально
+PROXY_HOST=youtube.com,youtu.be # опционально
 ```
 
 ## Использование
@@ -293,7 +301,6 @@ LANG=en
 * `/rm all` — Удаляет все текущие загрузки.
 * `/stop <ID>` — Останавливает загрузку
 * `/stop all` — Останавливает все текущие загрузки.
-* `/vpn on|off|status` — управление vpn.
 
 ### Отправка ссылок
 
