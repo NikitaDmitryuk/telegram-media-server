@@ -69,8 +69,6 @@ func handleKnownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 			deleteHandler(bot, update)
 		case "stop":
 			stopHandler(bot, update)
-		case "vpn":
-			vpnHandler(bot, update)
 		default:
 			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.UnknownCommandMsgID))
 		}
@@ -249,75 +247,4 @@ func stopHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 			bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.NoValidIDsMsgID))
 		}
 	}
-}
-
-func vpnHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
-	args := strings.Fields(update.Message.Text)
-	chatID := update.Message.Chat.ID
-
-	if len(args) < 2 {
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNUsageMsgID))
-		return
-	}
-
-	action := strings.ToLower(args[1])
-	switch action {
-	case "on":
-		setVPNOn(bot, chatID)
-	case "off":
-		setVPNOff(bot, chatID)
-	case "status":
-		sendVPNStatus(bot, chatID)
-	default:
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNInvalidActionMsgID))
-	}
-}
-
-func setVPNOn(bot *tmsbot.Bot, chatID int64) {
-	isActive, err := tmsutils.GetVPNState()
-	if err != nil {
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNCheckErrorMsgID, err))
-		return
-	}
-	if isActive {
-		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNAlreadyEnabledMsgID))
-		return
-	}
-
-	if err := tmsutils.ManageVPN(true); err != nil {
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNChangeErrorMsgID, err))
-		return
-	}
-	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNEnabledMsgID))
-}
-
-func setVPNOff(bot *tmsbot.Bot, chatID int64) {
-	isActive, err := tmsutils.GetVPNState()
-	if err != nil {
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNCheckErrorMsgID, err))
-		return
-	}
-	if !isActive {
-		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNAlreadyDisabledMsgID))
-		return
-	}
-
-	if err := tmsutils.ManageVPN(false); err != nil {
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNChangeErrorMsgID, err))
-		return
-	}
-	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNDisabledMsgID))
-}
-
-func sendVPNStatus(bot *tmsbot.Bot, chatID int64) {
-	state, err := tmsutils.GetVPNState()
-	if err != nil {
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VPNCheckErrorMsgID, err))
-		return
-	}
-	status := "off"
-	if state {
-		status = "on"
-	}
-	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VPNStatusMsgID, status))
 }

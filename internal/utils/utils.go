@@ -5,9 +5,7 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"os/exec"
 	"regexp"
-	"strings"
 	"syscall"
 )
 
@@ -57,39 +55,4 @@ func IsValidLink(text string) bool {
 
 	re := regexp.MustCompile(`^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	return re.MatchString(parsedURL.Host)
-}
-
-func ManageVPN(state bool) error {
-	var cmd *exec.Cmd
-	if state {
-		cmd = exec.Command("wg-quick", "up", "wg0")
-	} else {
-		cmd = exec.Command("wg-quick", "down", "wg0")
-	}
-
-	go func() {
-		if err := cmd.Run(); err != nil {
-			LogAndReturnError("VPN state change error: "+err.Error(), err)
-			return
-		}
-		restartService()
-	}()
-
-	return nil
-}
-
-func GetVPNState() (bool, error) {
-	cmd := exec.Command("wg", "show")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return false, err
-	}
-	return strings.Contains(string(output), "wg0"), nil
-}
-
-func restartService() {
-	cmd := exec.Command("sudo", "systemctl", "restart", "telegram-media-server")
-	if err := cmd.Run(); err != nil {
-		LogAndReturnError("Error restarting telegram-media-server service: "+err.Error(), err)
-	}
 }

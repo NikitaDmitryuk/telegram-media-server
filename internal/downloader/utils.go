@@ -1,11 +1,14 @@
 package downloader
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/db"
@@ -107,4 +110,32 @@ func DeleteMovie(bot *tmsbot.Bot, id int) error {
 
 	log.Printf("Movie with ID %d and all associated files deleted successfully", id)
 	return nil
+}
+
+func shouldUseProxy(bot *tmsbot.Bot, rawURL string) (bool, error) {
+
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+
+		return false, errors.New("invalid URL")
+	}
+
+	proxy := bot.GetConfig().Proxy
+	if proxy == "" {
+		return false, nil
+	}
+
+	targetHosts := bot.GetConfig().ProxyHost
+
+	if targetHosts == "" {
+		return true, nil
+	}
+
+	for _, host := range strings.Split(targetHosts, ",") {
+		if parsedURL.Host == strings.TrimSpace(host) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

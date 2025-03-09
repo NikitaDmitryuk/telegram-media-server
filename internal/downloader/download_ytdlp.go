@@ -19,7 +19,7 @@ func DownloadVideo(ctx context.Context, bot *tmsbot.Bot, update tgbotapi.Update)
 	url := update.Message.Text
 	log.Printf("Starting download for URL: %s", url)
 
-	videoTitle, err := getVideoTitle(url)
+	videoTitle, err := getVideoTitle(bot, url)
 	if err != nil {
 		bot.SendErrorMessage(update.Message.Chat.ID, tmslang.GetMessage(tmslang.VideoTitleErrorMsgID, err.Error()))
 		return err
@@ -79,8 +79,20 @@ func generateFileName(title string) string {
 	return tmsutils.SanitizeFileName(title) + ".mp4"
 }
 
-func getVideoTitle(url string) (string, error) {
-	cmd := exec.Command("yt-dlp", "--get-title", url)
+func getVideoTitle(bot *tmsbot.Bot, url string) (string, error) {
+	useProxy, err := shouldUseProxy(bot, url)
+	if err != nil {
+		return "", fmt.Errorf("error checking proxy requirement: %v", err)
+	}
+
+	var cmd *exec.Cmd
+	if useProxy {
+		proxy := bot.GetConfig().Proxy
+		cmd = exec.Command("yt-dlp", "--proxy", proxy, "--get-title", url)
+	} else {
+		cmd = exec.Command("yt-dlp", "--get-title", url)
+	}
+
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -91,8 +103,22 @@ func getVideoTitle(url string) (string, error) {
 }
 
 func downloadWithYTDLP(ctx context.Context, bot *tmsbot.Bot, url string, outputFileName string) error {
+	useProxy, err := shouldUseProxy(bot, url)
+	if err != nil {
+		return fmt.Errorf("error checking proxy requirement: %v", err)
+	}
+
 	outputPath := filepath.Join(bot.GetConfig().MoviePath, outputFileName)
-	cmd := exec.CommandContext(ctx, "yt-dlp", "-f", "bestvideo[vcodec=h264]+bestaudio[acodec=aac]/best", "-o", outputPath, url)
+
+	var cmd *exec.Cmd
+	if useProxy {
+		proxy := bot.GetConfig().Proxy
+		log.Printf("Use proxy %s for URL %s", proxy, url)
+		cmd = exec.CommandContext(ctx, "yt-dlp", "--proxy", proxy, "-f", "bestvideo[vcodec=h264]+bestaudio[acodec=aac]/best", "-o", outputPath, url)
+	} else {
+		log.Printf("Not use proxy for URL %s", url)
+		cmd = exec.CommandContext(ctx, "yt-dlp", "-f", "bestvideo[vcodec=h264]+bestaudio[acodec=aac]/best", "-o", outputPath, url)
+	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

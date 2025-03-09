@@ -12,6 +12,8 @@ type Config struct {
 	MoviePath             string
 	Password              string
 	Lang                  string
+	Proxy                 string
+	ProxyHost             string
 	UpdateIntervalSeconds int
 	UpdatePercentageStep  int
 	MaxWaitTimeMinutes    int
@@ -43,6 +45,8 @@ func NewConfig() (*Config, error) {
 		MoviePath:             getEnv("MOVIE_PATH", ""),
 		Password:              getEnv("PASSWORD", ""),
 		Lang:                  getEnv("LANG", "en"),
+		Proxy:                 getEnv("PROXY", ""),
+		ProxyHost:             getEnv("PROXY_HOST", ""),
 		UpdateIntervalSeconds: getEnvInt("UPDATE_INTERVAL_SECONDS", 30),
 		UpdatePercentageStep:  getEnvInt("UPDATE_PERCENTAGE_STEP", 20),
 		MaxWaitTimeMinutes:    getEnvInt("MAX_WAIT_TIME_MINUTES", 10),
@@ -69,7 +73,7 @@ func (c *Config) validate() error {
 		missingFields = append(missingFields, "PASSWORD")
 	}
 	if len(missingFields) > 0 {
-		return fmt.Errorf("Missing required environment variables: %v", missingFields)
+		return fmt.Errorf("missing required environment variables: %v", missingFields)
 	}
 	return nil
 }
