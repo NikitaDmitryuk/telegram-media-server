@@ -72,6 +72,14 @@ const (
 	DownloadDocumentErrorMsgID          MessageID = "DownloadDocumentError"
 	TorrentFileExistsErrorMsgID         MessageID = "TorrentFileExistsError"
 	TorrentFileDownloadErrorMsgID       MessageID = "TorrentFileDownloadError"
+	StopNoArgumentMsgID                 MessageID = "StopNoArgument"
+	StopInvalidIDMsgID                  MessageID = "StopInvalidID"
+	StopMovieStoppedMsgID               MessageID = "StopMovieStopped"
+	DownloadCancelledMsgID              MessageID = "DownloadCancelled"
+	InvalidIDsMsgID                     MessageID = "InvalidIDs"
+	DeletedMoviesMsgID                  MessageID = "DeletedMovies"
+	StoppedDownloadsMsgID               MessageID = "StoppedDownloads"
+	NoValidIDsMsgID                     MessageID = "NoValidIDs"
 )
 
 var messages = map[MessageID]map[string]string{
@@ -148,8 +156,8 @@ var messages = map[MessageID]map[string]string{
 		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u0438 \u0441\u043f\u0438\u0441\u043a\u0430 \u0444\u0438\u043b\u044c\u043c\u043e\u0432",
 	},
 	"MovieCheckError": {
-		"en": "Error checking existence of movie",
-		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u0438\u044f \u0444\u0438\u043b\u044c\u043c\u0430",
+		"en": "Error checking existence of movie: %v",
+		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u0438\u044f \u0444\u0438\u043b\u044c\u043c\u0430: %v",
 	},
 	"TorrentClientError": {
 		"en": "Failed to create torrent client: %v",
@@ -200,8 +208,8 @@ var messages = map[MessageID]map[string]string{
 		"ru": "\u0424\u0430\u0439\u043b \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d",
 	},
 	"StartCommand": {
-		"en": "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop - stop all torrent downloads",
-		"ru": "<file.torrent> - \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c torrent\n<URL> - \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0442\u043e\u043a\u043e\u0432\u043e\u0435 \u0432\u0438\u0434\u0435\u043e\n/ls - \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0444\u0430\u0439\u043b\u043e\u0432\n/rm <ID> - \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c, all - \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0432\u0441\u0435\u0445\n/stop - \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0432\u0441\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0442\u043e\u0440\u0440\u0435\u043d\u0442\u043e\u0432",
+		"en": "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all",
+		"ru": "<file.torrent> - \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c torrent\n<URL> - \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0442\u043e\u043a\u043e\u0432\u043e\u0435 \u0432\u0438\u0434\u0435\u043e\n/ls - \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0444\u0430\u0439\u043b\u043e\u0432\n/rm <ID> - \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c, all - \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0432\u0441\u0435\u0445\n/stop <ID> - \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443, all - \u0434\u043b\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438 \u0432\u0441\u0435\u0445",
 	},
 	"TorrentDownloadsStopped": {
 		"en": "All torrent downloads have been stopped!",
@@ -342,5 +350,37 @@ var messages = map[MessageID]map[string]string{
 	"TorrentFileDownloadError": {
 		"en": "Error downloading torrent file",
 		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0435 \u0442\u043e\u0440\u0440\u0435\u0442 \u0444\u0430\u0439\u043b\u0430",
+	},
+	"StopNoArgument": {
+		"en": "Please specify the movie ID or 'all' to stop all downloads.",
+		"ru": "\u041f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u0443\u043a\u0430\u0436\u0438\u0442\u0435 ID \u0444\u0438\u043b\u044c\u043c\u0430 \u0438\u043b\u0438 'all' \u0434\u043b\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438 \u0432\u0441\u0435\u0445 \u0437\u0430\u0433\u0440\u0443\u0437\u043e\u043a.",
+	},
+	"StopInvalidID": {
+		"en": "Invalid movie ID. Please specify a valid ID or 'all'.",
+		"ru": "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 ID \u0444\u0438\u043b\u044c\u043c\u0430. \u041f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u044b\u0439 ID \u0438\u043b\u0438 'all'.",
+	},
+	"StopMovieStopped": {
+		"en": "Download of movie with ID %d has been stopped.",
+		"ru": "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0444\u0438\u043b\u044c\u043c\u0430 \u0441 ID %d \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0430.",
+	},
+	"DownloadCancelled": {
+		"en": "Download canceled: %s",
+		"ru": "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430: %s",
+	},
+	"InvalidIDs": {
+		"en": "Invalid IDs: %s",
+		"ru": "\u041d\u0435\u0432\u0430\u043b\u0438\u0434\u043d\u044b\u0435 ID: %s",
+	},
+	"DeletedMovies": {
+		"en": "Deleted movies with IDs: %s",
+		"ru": "\u0423\u0434\u0430\u043b\u0435\u043d\u044b \u0444\u0438\u043b\u044c\u043c\u044b \u0441 ID: %s",
+	},
+	"StoppedDownloads": {
+		"en": "Stopped downloads for movie IDs: %s",
+		"ru": "\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u044b \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0434\u043b\u044f \u0444\u0438\u043b\u044c\u043c\u043e\u0432 \u0441 ID: %s",
+	},
+	"NoValidIDs": {
+		"en": "No valid movie IDs provided",
+		"ru": "\u041d\u0435 \u043f\u0440\u0435\u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u0432\u0430\u043b\u0438\u0434\u043d\u044b\u0445 ID \u0444\u0438\u043b\u044c\u043c\u043e\u0432",
 	},
 }
