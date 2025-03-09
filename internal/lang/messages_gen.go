@@ -75,21 +75,11 @@ const (
 	StopNoArgumentMsgID                 MessageID = "StopNoArgument"
 	StopInvalidIDMsgID                  MessageID = "StopInvalidID"
 	StopMovieStoppedMsgID               MessageID = "StopMovieStopped"
-	VPNErrorMsgID                       MessageID = "VPNError"
-	VPNAlreadyEnabledMsgID              MessageID = "VPNAlreadyEnabled"
-	VPNAlreadyDisabledMsgID             MessageID = "VPNAlreadyDisabled"
-	VPNEnabledMsgID                     MessageID = "VPNEnabled"
-	VPNDisabledMsgID                    MessageID = "VPNDisabled"
-	VPNCheckErrorMsgID                  MessageID = "VPNCheckError"
-	VPNChangeErrorMsgID                 MessageID = "VPNChangeError"
-	VPNStatusMsgID                      MessageID = "VPNStatus"
 	DownloadCancelledMsgID              MessageID = "DownloadCancelled"
 	InvalidIDsMsgID                     MessageID = "InvalidIDs"
 	DeletedMoviesMsgID                  MessageID = "DeletedMovies"
 	StoppedDownloadsMsgID               MessageID = "StoppedDownloads"
 	NoValidIDsMsgID                     MessageID = "NoValidIDs"
-	VPNUsageMsgID                       MessageID = "VPNUsage"
-	VPNInvalidActionMsgID               MessageID = "VPNInvalidAction"
 )
 
 var messages = map[MessageID]map[string]string{
@@ -166,8 +156,8 @@ var messages = map[MessageID]map[string]string{
 		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u0438 \u0441\u043f\u0438\u0441\u043a\u0430 \u0444\u0438\u043b\u044c\u043c\u043e\u0432",
 	},
 	"MovieCheckError": {
-		"en": "Error checking existence of movie",
-		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u0438\u044f \u0444\u0438\u043b\u044c\u043c\u0430",
+		"en": "Error checking existence of movie: %v",
+		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u0438\u044f \u0444\u0438\u043b\u044c\u043c\u0430: %v",
 	},
 	"TorrentClientError": {
 		"en": "Failed to create torrent client: %v",
@@ -218,8 +208,8 @@ var messages = map[MessageID]map[string]string{
 		"ru": "\u0424\u0430\u0439\u043b \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d",
 	},
 	"StartCommand": {
-		"en": "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all\n/vpnon - enable VPN\n/vpnoff - disable VPN",
-		"ru": "<file.torrent> - \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c torrent\n<URL> - \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0442\u043e\u043a\u043e\u0432\u043e\u0435 \u0432\u0438\u0434\u0435\u043e\n/ls - \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0444\u0430\u0439\u043b\u043e\u0432\n/rm <ID> - \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c, all - \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0432\u0441\u0435\u0445\n/stop <ID> - \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443, all - \u0434\u043b\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438 \u0432\u0441\u0435\u0445\n/vpnon - \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u044c VPN\n/vpnoff - \u0432\u044b\u043a\u043b\u044e\u0447\u0438\u0442\u044c VPN",
+		"en": "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all",
+		"ru": "<file.torrent> - \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c torrent\n<URL> - \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0442\u043e\u043a\u043e\u0432\u043e\u0435 \u0432\u0438\u0434\u0435\u043e\n/ls - \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0444\u0430\u0439\u043b\u043e\u0432\n/rm <ID> - \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c, all - \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0432\u0441\u0435\u0445\n/stop <ID> - \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443, all - \u0434\u043b\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438 \u0432\u0441\u0435\u0445",
 	},
 	"TorrentDownloadsStopped": {
 		"en": "All torrent downloads have been stopped!",
@@ -373,38 +363,6 @@ var messages = map[MessageID]map[string]string{
 		"en": "Download of movie with ID %d has been stopped.",
 		"ru": "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0444\u0438\u043b\u044c\u043c\u0430 \u0441 ID %d \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0430.",
 	},
-	"VPNError": {
-		"en": "Error managing VPN: %v",
-		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0438 VPN: %v",
-	},
-	"VPNAlreadyEnabled": {
-		"en": "VPN is already enabled",
-		"ru": "VPN \u0443\u0436\u0435 \u0432\u043a\u043b\u044e\u0447\u0435\u043d",
-	},
-	"VPNAlreadyDisabled": {
-		"en": "VPN is already disabled",
-		"ru": "VPN \u0443\u0436\u0435 \u0432\u044b\u043a\u043b\u044e\u0447\u0435\u043d",
-	},
-	"VPNEnabled": {
-		"en": "VPN has been successfully enabled",
-		"ru": "VPN \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u0432\u043a\u043b\u044e\u0447\u0435\u043d",
-	},
-	"VPNDisabled": {
-		"en": "VPN has been successfully disabled",
-		"ru": "VPN \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u0432\u044b\u043a\u043b\u044e\u0447\u0435\u043d",
-	},
-	"VPNCheckError": {
-		"en": "Error checking VPN status: %v",
-		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u044f VPN: %v",
-	},
-	"VPNChangeError": {
-		"en": "Error changing VPN state: %v",
-		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0438 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u044f VPN: %v",
-	},
-	"VPNStatus": {
-		"en": "VPN status: %s",
-		"ru": "\u0421\u0442\u0430\u0442\u0443\u0441 VPN: %s",
-	},
 	"DownloadCancelled": {
 		"en": "Download canceled: %s",
 		"ru": "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430: %s",
@@ -414,23 +372,15 @@ var messages = map[MessageID]map[string]string{
 		"ru": "\u041d\u0435\u0432\u0430\u043b\u0438\u0434\u043d\u044b\u0435 ID: %s",
 	},
 	"DeletedMovies": {
-		"en": "Deleted movies with IDs: %v",
-		"ru": "\u0423\u0434\u0430\u043b\u0435\u043d\u044b \u0444\u0438\u043b\u044c\u043c\u044b \u0441 ID: %v",
+		"en": "Deleted movies with IDs: %s",
+		"ru": "\u0423\u0434\u0430\u043b\u0435\u043d\u044b \u0444\u0438\u043b\u044c\u043c\u044b \u0441 ID: %s",
 	},
 	"StoppedDownloads": {
-		"en": "Stopped downloads for movie IDs: %v",
-		"ru": "\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u044b \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0434\u043b\u044f \u0444\u0438\u043b\u044c\u043c\u043e\u0432 \u0441 ID: %v",
+		"en": "Stopped downloads for movie IDs: %s",
+		"ru": "\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u044b \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0434\u043b\u044f \u0444\u0438\u043b\u044c\u043c\u043e\u0432 \u0441 ID: %s",
 	},
 	"NoValidIDs": {
 		"en": "No valid movie IDs provided",
 		"ru": "\u041d\u0435 \u043f\u0440\u0435\u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u0432\u0430\u043b\u0438\u0434\u043d\u044b\u0445 ID \u0444\u0438\u043b\u044c\u043c\u043e\u0432",
-	},
-	"VPNUsage": {
-		"en": "Usage: /vpn [on|off|status]",
-		"ru": "\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u0435: /vpn [on|off|status]",
-	},
-	"VPNInvalidAction": {
-		"en": "Invalid action. Use 'on', 'off', or 'status'.",
-		"ru": "\u041d\u0435\u0432\u0435\u0440\u043d\u043e\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435. \u0418\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 'on', 'off' \u0438\u043b\u0438 'status'.",
 	},
 }

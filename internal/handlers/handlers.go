@@ -76,7 +76,11 @@ func handleKnownUser(bot *tmsbot.Bot, update tgbotapi.Update) {
 	}
 
 	if tmsutils.IsValidLink(message.Text) {
-		tmsdownloader.DownloadVideo(context.Background(), bot, update)
+		err := tmsdownloader.DownloadVideo(context.Background(), bot, update)
+		if err != nil {
+			bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadErrorMsgID, err.Error()))
+			return
+		}
 		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
 		return
 	}

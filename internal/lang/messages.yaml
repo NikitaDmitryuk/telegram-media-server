@@ -123,8 +123,8 @@ FileAddedSuccessfully:
   ru: "Файл успешно добавлен"
 
 StartCommand:
-  en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all\n/vpnon - enable VPN\n/vpnoff - disable VPN"
-  ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop <ID> - остановить загрузку, all - для остановки всех\n/vpnon - включить VPN\n/vpnoff - выключить VPN"
+  en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all"
+  ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop <ID> - остановить загрузку, all - для остановки всех"
 
 TorrentDownloadsStopped:
   en: "All torrent downloads have been stopped!"
@@ -282,38 +282,6 @@ StopMovieStopped:
   en: "Download of movie with ID %d has been stopped."
   ru: "Загрузка фильма с ID %d остановлена."
 
-VPNError:
-  en: "Error managing VPN: %v"
-  ru: "Ошибка при управлении VPN: %v"
-
-VPNAlreadyEnabled:
-  en: "VPN is already enabled"
-  ru: "VPN уже включен"
-
-VPNAlreadyDisabled:
-  en: "VPN is already disabled"
-  ru: "VPN уже выключен"
-
-VPNEnabled:
-  en: "VPN has been successfully enabled"
-  ru: "VPN успешно включен"
-
-VPNDisabled:
-  en: "VPN has been successfully disabled"
-  ru: "VPN успешно выключен"
-
-VPNCheckError:
-  en: "Error checking VPN status: %v"
-  ru: "Ошибка при проверке состояния VPN: %v"
-
-VPNChangeError:
-  en: "Error changing VPN state: %v"
-  ru: "Ошибка при изменении состояния VPN: %v"
-
-VPNStatus:
-  en: "VPN status: %s"
-  ru: "Статус VPN: %s"
-
 DownloadCancelled:
   en: "Download canceled: %s"
   ru: "Загрузка отменена: %s"
@@ -333,11 +301,3 @@ StoppedDownloads:
 NoValidIDs:
   en: "No valid movie IDs provided"
   ru: "Не предоставлено валидных ID фильмов"
-
-VPNUsage:
-  en: "Usage: /vpn [on|off|status]"
-  ru: "Использование: /vpn [on|off|status]"
-
-VPNInvalidAction:
-  en: "Invalid action. Use 'on', 'off', or 'status'."
-  ru: "Неверное действие. Используйте 'on', 'off' или 'status'."
