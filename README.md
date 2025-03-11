@@ -1,3 +1,7 @@
+![build](https://img.shields.io/github/actions/workflow/status/NikitaDmitryuk/telegram-media-server/main.yml)
+![downloads](https://img.shields.io/github/downloads/NikitaDmitryuk/telegram-media-server/total)
+![release](https://img.shields.io/github/v/release/NikitaDmitryuk/telegram-media-server?display_name=tag)
+
 # Telegram Media Server
 
 Telegram Media Server is a Telegram bot that accepts links to streaming videos or torrent files, downloads them and distributes them on the internal network via a DLNA server (for example, `minidlna`).
@@ -7,8 +11,8 @@ Telegram Media Server is a Telegram bot that accepts links to streaming videos o
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
-  - [Installing the bot](#installation-of-the-bot)
-  - [Installing and setting up minidlna](#installation-and-setup-minidlna)
+  - [Installing the bot](#installing-the-bot)
+  - [Installing and configuring up minidlna](#installing-and-configuring-minidlna)
 - [Configuration](#configuration)
 - [Usage](#usage)
   - [Available commands](#available-commands)
@@ -98,7 +102,6 @@ The bot configuration file is located at **/etc/telegram-media-server/.env**. Av
 * `MOVIE_PATH`: Path to the directory where the database, downloaded files and movies will be stored.
 * `PASSWORD`: Password for authorizing users in the bot. Login is performed once for each chat.
 * `UPDATE_INTERVAL_SECONDS`: Interval in seconds for sending updates on download progress (default: `30`).
-
 * `UPDATE_PERCENTAGE_STEP`: Download progress step in percent for sending updates (default: `20`).
 * `MIN_DOWNLOAD_PERCENTAGE`: Minimum download percentage of a torrent to continue downloading (default: `10`).
 * `MAX_WAIT_TIME_MINUTES`: Maximum time in minutes to wait for the minimum download percentage of a torrent (default: `10`).
@@ -136,11 +139,12 @@ Where **<password>** is the password specified in the **PASSWORD** parameter of 
 ### Available commands
 
 * `/start` — Displays a welcome message.
-* `/login` <password> — User authorization in the bot.
+* `/login <password>` — User authorization in the bot.
 * `/ls` — Shows a list of current downloads and their status.
-* `/rm <id>` — Deletes a download by ID obtained from the /ls command. Example: `/rm 2`.
+* `/rm <id>` — Deletes a download by ID obtained from the /ls command.
 * `/rm all` — Deletes all current downloads.
-* `/stop` — Stops all current torrent downloads.
+* `/stop <ID>` — Stops the download
+* `/stop all` — Stops all current downloads.
 
 ### Sending links
 
@@ -297,7 +301,7 @@ PROXY_HOST=youtube.com,youtu.be # опционально
 * `/start` — Отображает приветственное сообщение.
 * `/login <password>` — Авторизация пользователя в боте.
 * `/ls` — Показывает список текущих загрузок и их статус.
-* `/rm <id>` — Удаляет загрузку по ID, полученному из команды /ls. Пример: `/rm 2`.
+* `/rm <id>` — Удаляет загрузку по ID, полученному из команды /ls.
 * `/rm all` — Удаляет все текущие загрузки.
 * `/stop <ID>` — Останавливает загрузку
 * `/stop all` — Останавливает все текущие загрузки.
