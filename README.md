@@ -37,8 +37,10 @@ Telegram Media Server is a Telegram bot that accepts links to streaming videos o
 
 The bot host can be the cheapest single-board computer, such as [Beaglebone](https://www.beagleboard.org/boards/beaglebone-black) or [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), or any other single-board computer that can run an operating system.
 
-![Beaglebone](https://github.com/telegram-media-server/images/beaglebone.webp)
-![Orenge Pi zero 3](https://github.com/telegram-media-server/images/orangepizero3.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="./images/beaglebone.webp" alt="Beaglebone" style="width: 45%;">
+  <img src="./images/orangepizero3.png" alt="Orenge Pi zero 3" style="width: 45%;">
+</div>
 
 ## Installation
 
@@ -103,18 +105,18 @@ sudo systemctl start minidlna
 
 The bot configuration file is located at **/etc/telegram-media-server/.env**. Available parameters are described below:
 
-* `BOT_TOKEN (required)`: Your Telegram bot token received from BotFather.
-* `MOVIE_PATH`: Path to the directory where the database, downloaded files and movies will be stored.
-* `PASSWORD`: Password for authorizing users in the bot. Login is performed once for each chat.
-* `UPDATE_INTERVAL_SECONDS`: Interval in seconds for sending updates on download progress (default: `30`).
-* `UPDATE_PERCENTAGE_STEP`: Download progress step in percent for sending updates (default: `20`).
-* `MIN_DOWNLOAD_PERCENTAGE`: Minimum download percentage of a torrent to continue downloading (default: `10`).
-* `MAX_WAIT_TIME_MINUTES`: Maximum time in minutes to wait for the minimum download percentage of a torrent (default: `10`).
-* `LANG`: Bot message language. Supported values: ru, en.
-* `PROXY`: Use proxy for yt-dlp. Proxy address.
-* `PROXY_HOST`: Use proxy only for listed domains. If empty, use proxy always
+- `BOT_TOKEN (required)`: Your Telegram bot token received from BotFather.
+- `MOVIE_PATH`: Path to the directory where the database, downloaded files and movies will be stored.
+- `PASSWORD`: Password for authorizing users in the bot. Login is performed once for each chat.
+- `UPDATE_INTERVAL_SECONDS`: Interval in seconds for sending updates on download progress (default: `30`).
+- `UPDATE_PERCENTAGE_STEP`: Download progress step in percent for sending updates (default: `20`).
+- `MIN_DOWNLOAD_PERCENTAGE`: Minimum download percentage of a torrent to continue downloading (default: `10`).
+- `MAX_WAIT_TIME_MINUTES`: Maximum time in minutes to wait for the minimum download percentage of a torrent (default: `10`).
+- `LANG`: Bot message language. Supported values: ru, en.
+- `PROXY`: Use proxy for yt-dlp. Proxy address.
+- `PROXY_HOST`: Use proxy only for listed domains. If empty, use proxy always
 
-### Example of **.env** file:
+### Example of **.env** file
 
 ```env
 BOT_TOKEN=123456789:ABCDEFghIJKlmnoPQRStuvWXyz
@@ -143,30 +145,32 @@ Where **<password>** is the password specified in the **PASSWORD** parameter of 
 
 ### Available commands
 
-* `/start` — Displays a welcome message.
-* `/login <password>` — User authorization in the bot.
-* `/ls` — Shows a list of current downloads and their status.
-* `/rm <id>` — Deletes a download by ID obtained from the /ls command.
-* `/rm all` — Deletes all current downloads.
-* `/stop <ID>` — Stops the download
-* `/stop all` — Stops all current downloads.
+- `/start` — Displays a welcome message.
+- `/login <password>` — User authorization in the bot.
+- `/ls` — Shows a list of current downloads and their status.
+- `/rm <id>` — Deletes a download by ID obtained from the /ls command.
+- `/rm all` — Deletes all current downloads.
+- `/stop <ID>` — Stops the download
+- `/stop all` — Stops all current downloads.
 
 ### Managing downloads
 
 After authorization, you can send the bot links to streaming videos or torrent files.
 The bot supports all links that are processed by the `yt-dlp` utility.
 
-![Managing streaming videos](https://github.com/telegram-media-server/images/manage_video.png)
-![Managing torrent files](https://github.com/telegram-media-server/images/manage_torrent.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="./images/manage_video.png" alt="Managing streaming videos" style="width: 45%;">
+  <img src="./images/manage_torrent.png" alt="Managing torrent files" style="width: 45%;">
+</div>
 
-### Examples of supported links:
+### Examples of supported links
 
-* YouTube
-* VK
-* RuTube
-* and others
+- YouTube
+- VK
+- RuTube
+- and others
 
-### Slow downloads:
+### Slow downloads
 
 If the torrent file does not download to the minimum percentage (`MIN_DOWNLOAD_PERCENTAGE`) within the maximum waiting time (`MAX_WAIT_TIME_MINUTES`), the download will be automatically stopped and deleted.
 
@@ -205,8 +209,10 @@ Telegram Media Server — это Telegram-бот, который принима�
 
 В качестве хоста бота можно использовать самые дешевые одноплатные компьютеры, такие как [Beaglebone](https://www.beagleboard.org/boards/beaglebone-black) или [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), а также любые другие одноплатные компьютеры на которые можно поставить операционную систему.
 
-![Beaglebone](https://github.com/telegram-media-server/images/beaglebone.webp)
-![Orenge Pi zero 3](https://github.com/telegram-media-server/images/orangepizero3.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="./images/beaglebone.webp" alt="Beaglebone" style="width: 45%;">
+  <img src="./images/orangepizero3.png" alt="Orenge Pi zero 3" style="width: 45%;">
+</div>
 
 ## Установка
 
@@ -271,18 +277,18 @@ sudo systemctl start minidlna
 
 Файл конфигурации бота находится по пути **/etc/telegram-media-server/.env**. Ниже описаны доступные параметры:
 
-* `BOT_TOKEN (обязательно)`: Токен вашего Telegram-бота, полученный от BotFather.
-* `MOVIE_PATH`: Путь к директории, где будут храниться база данных, загружаемые файлы и фильмы.
-* `PASSWORD`: Пароль для авторизации пользователей в боте. Вход выполняется один раз для каждого чата.
-* `UPDATE_INTERVAL_SECONDS`: Интервал в секундах для отправки обновлений о прогрессе загрузки (по умолчанию: `30`).
-* `UPDATE_PERCENTAGE_STEP`: Шаг прогресса загрузки в процентах для отправки обновлений (по умолчанию: `20`).
-* `MIN_DOWNLOAD_PERCENTAGE`: Минимальный процент загрузки торрента для продолжения загрузки (по умолчанию: `10`).
-* `MAX_WAIT_TIME_MINUTES`: Максимальное время в минутах ожидания загрузки минимального процента торрента (по умолчанию: `10`).
-* `LANG`: Язык сообщений бота. Поддерживаемые значения: ru, en.
-* `PROXY`: Использовать прокси для yt-dlp. Адрес прокси.
-* `PROXY_HOST`: Использовать прокси только для перечисленных доменов. Если пустое, то использовать прокси всегда
+- `BOT_TOKEN (обязательно)`: Токен вашего Telegram-бота, полученный от BotFather.
+- `MOVIE_PATH`: Путь к директории, где будут храниться база данных, загружаемые файлы и фильмы.
+- `PASSWORD`: Пароль для авторизации пользователей в боте. Вход выполняется один раз для каждого чата.
+- `UPDATE_INTERVAL_SECONDS`: Интервал в секундах для отправки обновлений о прогрессе загрузки (по умолчанию: `30`).
+- `UPDATE_PERCENTAGE_STEP`: Шаг прогресса загрузки в процентах для отправки обновлений (по умолчанию: `20`).
+- `MIN_DOWNLOAD_PERCENTAGE`: Минимальный процент загрузки торрента для продолжения загрузки (по умолчанию: `10`).
+- `MAX_WAIT_TIME_MINUTES`: Максимальное время в минутах ожидания загрузки минимального процента торрента (по умолчанию: `10`).
+- `LANG`: Язык сообщений бота. Поддерживаемые значения: ru, en.
+- `PROXY`: Использовать прокси для yt-dlp. Адрес прокси.
+- `PROXY_HOST`: Использовать прокси только для перечисленных доменов. Если пустое, то использовать прокси всегда
 
-### Пример файла **.env**:
+### Пример файла **.env**
 
 ```env
 BOT_TOKEN=123456789:ABCDEFghIJKlmnoPQRStuvWXyz
@@ -311,29 +317,31 @@ PROXY_HOST=youtube.com,youtu.be # опционально
 
 ### Доступные команды
 
-* `/start` — Отображает приветственное сообщение.
-* `/login <password>` — Авторизация пользователя в боте.
-* `/ls` — Показывает список текущих загрузок и их статус.
-* `/rm <id>` — Удаляет загрузку по ID, полученному из команды /ls.
-* `/rm all` — Удаляет все текущие загрузки.
-* `/stop <ID>` — Останавливает загрузку
-* `/stop all` — Останавливает все текущие загрузки.
+- `/start` — Отображает приветственное сообщение.
+- `/login <password>` — Авторизация пользователя в боте.
+- `/ls` — Показывает список текущих загрузок и их статус.
+- `/rm <id>` — Удаляет загрузку по ID, полученному из команды /ls.
+- `/rm all` — Удаляет все текущие загрузки.
+- `/stop <ID>` — Останавливает загрузку
+- `/stop all` — Останавливает все текущие загрузки.
 
 ### Управление загрузками
 
 После авторизации вы можете отправлять боту ссылки на потоковые видео или торрент-файлы.
 Бот поддерживает все ссылки, которые обрабатываются утилитой `yt-dlp`.
 
-![Управление потоковыми видео](https://github.com/telegram-media-server/images/manage_video.png)
-![Управление torrent файлами](https://github.com/telegram-media-server/images/manage_torrent.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="./images/manage_video.png" alt="Управление потоковыми видео" style="width: 45%;">
+  <img src="./images/manage_torrent.png" alt="Управление torrent файлами" style="width: 45%;">
+</div>
 
-### Примеры поддерживаемых ссылок:
+### Примеры поддерживаемых ссылок
 
-* YouTube
-* VK
-* RuTube
-* и другие
+- YouTube
+- VK
+- RuTube
+- и другие
 
-### Медленные загрузки:
+### Медленные загрузки
 
 Если торрент-файл не загрузится на минимальный процент (`MIN_DOWNLOAD_PERCENTAGE`) в течение максимального времени ожидания (`MAX_WAIT_TIME_MINUTES`), загрузка будет автоматически остановлена и удалена.
