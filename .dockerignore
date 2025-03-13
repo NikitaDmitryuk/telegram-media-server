@@ -5,3 +5,4 @@ artifacts
 docker-compose.yml
 Dockerfile
 Makefile
+images

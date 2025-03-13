@@ -35,6 +35,11 @@ Telegram Media Server is a Telegram bot that accepts links to streaming videos o
 - **Other**:
 - Installed and configured DLNA server (e.g. `minidlna`)
 
+The bot host can be the cheapest single-board computer, such as [Beaglebone](https://www.beagleboard.org/boards/beaglebone-black) or [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), or any other single-board computer that can run an operating system.
+
+![Beaglebone](https://github.com/telegram-media-server/images/beaglebone.webp)
+![Orenge Pi zero 3](https://github.com/telegram-media-server/images/orangepizero3.png)
+
 ## Installation
 
 ### Installing the bot
@@ -146,10 +151,13 @@ Where **<password>** is the password specified in the **PASSWORD** parameter of 
 * `/stop <ID>` — Stops the download
 * `/stop all` — Stops all current downloads.
 
-### Sending links
+### Managing downloads
 
-After authorization, you can send the bot links to videos or torrent files.
+After authorization, you can send the bot links to streaming videos or torrent files.
 The bot supports all links that are processed by the `yt-dlp` utility.
+
+![Managing streaming videos](https://github.com/telegram-media-server/images/manage_video.png)
+![Managing torrent files](https://github.com/telegram-media-server/images/manage_torrent.png)
 
 ### Examples of supported links:
 
@@ -194,6 +202,11 @@ Telegram Media Server — это Telegram-бот, который принима�
   - **Для выполнения**: `yt-dlp`, `minidlna` (рекомендуется)
 - **Прочее**:
   - Установленный и настроенный DLNA-сервер (например, `minidlna`)
+
+В качестве хоста бота можно использовать самые дешевые одноплатные компьютеры, такие как [Beaglebone](https://www.beagleboard.org/boards/beaglebone-black) или [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), а также любые другие одноплатные компьютеры на которые можно поставить операционную систему.
+
+![Beaglebone](https://github.com/telegram-media-server/images/beaglebone.webp)
+![Orenge Pi zero 3](https://github.com/telegram-media-server/images/orangepizero3.png)
 
 ## Установка
 
@@ -306,10 +319,13 @@ PROXY_HOST=youtube.com,youtu.be # опционально
 * `/stop <ID>` — Останавливает загрузку
 * `/stop all` — Останавливает все текущие загрузки.
 
-### Отправка ссылок
+### Управление загрузками
 
-После авторизации вы можете отправлять боту ссылки на видео или торрент-файлы.
+После авторизации вы можете отправлять боту ссылки на потоковые видео или торрент-файлы.
 Бот поддерживает все ссылки, которые обрабатываются утилитой `yt-dlp`.
+
+![Управление потоковыми видео](https://github.com/telegram-media-server/images/manage_video.png)
+![Управление torrent файлами](https://github.com/telegram-media-server/images/manage_torrent.png)
 
 ### Примеры поддерживаемых ссылок:
 
