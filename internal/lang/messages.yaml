@@ -54,6 +54,10 @@ VideoTitleError:
   en: "Error getting video title: %s"
   ru: "Ошибка получения названия видео: %s"
 
+VideoGetSizeError:
+  en: "Error getting video size: %s"
+  ru: "Ошибка получения размера видео: %s"
+
 VideoDownloadError:
   en: "Error downloading video: %s"
   ru: "Ошибка загрузки видео: %s"
@@ -71,8 +75,8 @@ FileAlreadyExists:
   ru: "Файл уже существует"
 
 StartCommand:
-  en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all"
-  ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех\n/stop <ID> - остановить загрузку, all - для остановки всех"
+  en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all"
+  ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех"
 
 TorrentDownloadsStopped:
   en: "All downloads have been stopped!"

@@ -19,6 +19,7 @@ const (
 	NotEnoughSpaceMsgID              MessageID = "NotEnoughSpace"
 	DownloadStoppedLowSpeedMsgID     MessageID = "DownloadStoppedLowSpeed"
 	VideoTitleErrorMsgID             MessageID = "VideoTitleError"
+	VideoGetSizeErrorMsgID           MessageID = "VideoGetSizeError"
 	VideoDownloadErrorMsgID          MessageID = "VideoDownloadError"
 	VideoExistsMsgID                 MessageID = "VideoExists"
 	VideoDownloadingMsgID            MessageID = "VideoDownloading"
@@ -103,6 +104,10 @@ var messages = map[MessageID]map[string]string{
 		"en": "Error getting video title: %s",
 		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f \u0432\u0438\u0434\u0435\u043e: %s",
 	},
+	"VideoGetSizeError": {
+		"en": "Error getting video size: %s",
+		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f \u0440\u0430\u0437\u043c\u0435\u0440\u0430 \u0432\u0438\u0434\u0435\u043e: %s",
+	},
 	"VideoDownloadError": {
 		"en": "Error downloading video: %s",
 		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0432\u0438\u0434\u0435\u043e: %s",
@@ -120,8 +125,8 @@ var messages = map[MessageID]map[string]string{
 		"ru": "\u0424\u0430\u0439\u043b \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442",
 	},
 	"StartCommand": {
-		"en": "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all\n/stop <ID> - stop download, all - to stop all",
-		"ru": "<file.torrent> - \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c torrent\n<URL> - \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0442\u043e\u043a\u043e\u0432\u043e\u0435 \u0432\u0438\u0434\u0435\u043e\n/ls - \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0444\u0430\u0439\u043b\u043e\u0432\n/rm <ID> - \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c, all - \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0432\u0441\u0435\u0445\n/stop <ID> - \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443, all - \u0434\u043b\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438 \u0432\u0441\u0435\u0445",
+		"en": "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all",
+		"ru": "<file.torrent> - \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c torrent\n<URL> - \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0442\u043e\u043a\u043e\u0432\u043e\u0435 \u0432\u0438\u0434\u0435\u043e\n/ls - \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0444\u0430\u0439\u043b\u043e\u0432\n/rm <ID> - \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c, all - \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0432\u0441\u0435\u0445",
 	},
 	"TorrentDownloadsStopped": {
 		"en": "All downloads have been stopped!",

@@ -31,7 +31,7 @@ Telegram Media Server is a Telegram bot that accepts links to streaming videos o
 - **Architectures**: `aarch64`, `armv7h`, `x86_64`
 - **Dependencies**:
 - **For building**: `go`
-- **For running**: `yt-dlp`, `minidlna` (recommended)
+- **For running**: `yt-dlp`, `aria2`, `minidlna` (recommended)
 - **Other**:
 - Installed and configured DLNA server (e.g. `minidlna`)
 
@@ -108,10 +108,6 @@ The bot configuration file is located at **/etc/telegram-media-server/.env**. Av
 - `BOT_TOKEN (required)`: Your Telegram bot token received from BotFather.
 - `MOVIE_PATH`: Path to the directory where the database, downloaded files and movies will be stored.
 - `PASSWORD`: Password for authorizing users in the bot. Login is performed once for each chat.
-- `UPDATE_INTERVAL_SECONDS`: Interval in seconds for sending updates on download progress (default: `30`).
-- `UPDATE_PERCENTAGE_STEP`: Download progress step in percent for sending updates (default: `20`).
-- `MIN_DOWNLOAD_PERCENTAGE`: Minimum download percentage of a torrent to continue downloading (default: `10`).
-- `MAX_WAIT_TIME_MINUTES`: Maximum time in minutes to wait for the minimum download percentage of a torrent (default: `10`).
 - `LANG`: Bot message language. Supported values: ru, en.
 - `PROXY`: Use proxy for yt-dlp. Proxy address.
 - `PROXY_HOST`: Use proxy only for listed domains. If empty, use proxy always
@@ -122,10 +118,6 @@ The bot configuration file is located at **/etc/telegram-media-server/.env**. Av
 BOT_TOKEN=123456789:ABCDEFghIJKlmnoPQRStuvWXyz
 MOVIE_PATH=/media/videos
 PASSWORD=MySecretPassword
-UPDATE_INTERVAL_SECONDS=30
-UPDATE_PERCENTAGE_STEP=20
-MIN_DOWNLOAD_PERCENTAGE=10
-MAX_WAIT_TIME_MINUTES=10
 LANG=en
 PROXY=socks5://127.0.0.1:2080 # optional
 PROXY_HOST=youtube.com,youtu.be # optional
@@ -150,8 +142,6 @@ Where **<password>** is the password specified in the **PASSWORD** parameter of 
 - `/ls` — Shows a list of current downloads and their status.
 - `/rm <id>` — Deletes a download by ID obtained from the /ls command.
 - `/rm all` — Deletes all current downloads.
-- `/stop <ID>` — Stops the download
-- `/stop all` — Stops all current downloads.
 
 ### Managing downloads
 
@@ -170,9 +160,6 @@ The bot supports all links that are processed by the `yt-dlp` utility.
 - RuTube
 - and others
 
-### Slow downloads
-
-If the torrent file does not download to the minimum percentage (`MIN_DOWNLOAD_PERCENTAGE`) within the maximum waiting time (`MAX_WAIT_TIME_MINUTES`), the download will be automatically stopped and deleted.
 
 # RU Documentation
 
@@ -203,7 +190,7 @@ Telegram Media Server — это Telegram-бот, который принима�
 - **Архитектуры**: `aarch64`, `armv7h`, `x86_64`
 - **Зависимости**:
   - **Для сборки**: `go`
-  - **Для выполнения**: `yt-dlp`, `minidlna` (рекомендуется)
+  - **Для выполнения**: `yt-dlp`, `aria2`, `minidlna` (рекомендуется)
 - **Прочее**:
   - Установленный и настроенный DLNA-сервер (например, `minidlna`)
 
@@ -280,10 +267,6 @@ sudo systemctl start minidlna
 - `BOT_TOKEN (обязательно)`: Токен вашего Telegram-бота, полученный от BotFather.
 - `MOVIE_PATH`: Путь к директории, где будут храниться база данных, загружаемые файлы и фильмы.
 - `PASSWORD`: Пароль для авторизации пользователей в боте. Вход выполняется один раз для каждого чата.
-- `UPDATE_INTERVAL_SECONDS`: Интервал в секундах для отправки обновлений о прогрессе загрузки (по умолчанию: `30`).
-- `UPDATE_PERCENTAGE_STEP`: Шаг прогресса загрузки в процентах для отправки обновлений (по умолчанию: `20`).
-- `MIN_DOWNLOAD_PERCENTAGE`: Минимальный процент загрузки торрента для продолжения загрузки (по умолчанию: `10`).
-- `MAX_WAIT_TIME_MINUTES`: Максимальное время в минутах ожидания загрузки минимального процента торрента (по умолчанию: `10`).
 - `LANG`: Язык сообщений бота. Поддерживаемые значения: ru, en.
 - `PROXY`: Использовать прокси для yt-dlp. Адрес прокси.
 - `PROXY_HOST`: Использовать прокси только для перечисленных доменов. Если пустое, то использовать прокси всегда
@@ -294,10 +277,6 @@ sudo systemctl start minidlna
 BOT_TOKEN=123456789:ABCDEFghIJKlmnoPQRStuvWXyz
 MOVIE_PATH=/media/videos
 PASSWORD=MySecretPassword
-UPDATE_INTERVAL_SECONDS=30
-UPDATE_PERCENTAGE_STEP=20
-MIN_DOWNLOAD_PERCENTAGE=10
-MAX_WAIT_TIME_MINUTES=10
 LANG=en
 PROXY=socks5://127.0.0.1:2080 # опционально
 PROXY_HOST=youtube.com,youtu.be # опционально
@@ -322,8 +301,6 @@ PROXY_HOST=youtube.com,youtu.be # опционально
 - `/ls` — Показывает список текущих загрузок и их статус.
 - `/rm <id>` — Удаляет загрузку по ID, полученному из команды /ls.
 - `/rm all` — Удаляет все текущие загрузки.
-- `/stop <ID>` — Останавливает загрузку
-- `/stop all` — Останавливает все текущие загрузки.
 
 ### Управление загрузками
 
@@ -341,7 +318,3 @@ PROXY_HOST=youtube.com,youtu.be # опционально
 - VK
 - RuTube
 - и другие
-
-### Медленные загрузки
-
-Если торрент-файл не загрузится на минимальный процент (`MIN_DOWNLOAD_PERCENTAGE`) в течение максимального времени ожидания (`MAX_WAIT_TIME_MINUTES`), загрузка будет автоматически остановлена и удалена.
