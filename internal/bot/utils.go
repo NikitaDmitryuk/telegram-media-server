@@ -1,0 +1,108 @@
+package bot
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+
+	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
+	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
+	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
+	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/sirupsen/logrus"
+)
+
+func DownloadFile(bot *Bot, fileID, fileName string) error {
+	file, err := bot.Api.GetFile(tgbotapi.FileConfig{FileID: fileID})
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get file")
+		return err
+	}
+
+	fileURL := file.Link(bot.Api.Token)
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to download file")
+		return err
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(filepath.Join(tmsconfig.GlobalConfig.MoviePath, fileName))
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create file")
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save file")
+		return err
+	}
+
+	logrus.Info("File downloaded successfully")
+	return nil
+}
+
+func DeleteMovie(bot *Bot, id int) error {
+	exist, err := tmsdb.GlobalDB.MovieExistsId(context.Background(), id)
+	if !exist {
+		logrus.WithError(err).Warn("Movie not found")
+		return tmsutils.LogAndReturnError(tmslang.GetMessage(tmslang.MovieNotFoundMsgID), err)
+	}
+
+	tmsdmanager.GlobalDownloadManager.StopDownload(id)
+
+	files, err := tmsdb.GlobalDB.GetFilesByMovieID(context.Background(), id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get files by movie ID")
+		return tmsutils.LogAndReturnError(tmslang.GetMessage(tmslang.GetFilesErrorMsgID), err)
+	}
+
+	logrus.Debugf("Files to delete: %v", files)
+
+	var rootFolder string
+
+	for _, file := range files {
+		filePath := filepath.Join(tmsconfig.GlobalConfig.MoviePath, file.FilePath)
+
+		if rootFolder == "" {
+			rootFolder = filepath.Dir(filePath)
+		}
+
+		err := os.Remove(filePath)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to delete file %s", filePath)
+		} else {
+			logrus.Infof("File %s deleted successfully", filePath)
+		}
+	}
+
+	err = tmsdb.GlobalDB.RemoveMovie(context.Background(), id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to remove movie from database")
+		return tmsutils.LogAndReturnError(tmslang.GetMessage(tmslang.DeleteMovieDBErrorMsgID), err)
+	}
+
+	err = tmsdb.GlobalDB.RemoveFilesByMovieID(context.Background(), id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to remove files from database")
+		return tmsutils.LogAndReturnError(tmslang.GetMessage(tmslang.DeleteFilesDBErrorMsgID), err)
+	}
+
+	if rootFolder != "" && rootFolder != tmsconfig.GlobalConfig.MoviePath && tmsutils.IsEmptyDirectory(rootFolder) {
+		err = os.Remove(rootFolder)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to delete root folder %s", rootFolder)
+		} else {
+			logrus.Infof("Root folder %s deleted successfully", rootFolder)
+		}
+	}
+
+	logrus.Infof("Movie with ID %d and all associated files deleted successfully", id)
+	return nil
+}

@@ -1,39 +1,32 @@
 package main
 
 import (
-	"log"
+	"github.com/sirupsen/logrus"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/db"
-	tmsapi "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers"
 	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func main() {
 
-	config, err := tmsconfig.NewConfig()
+	if err := tmslang.SetupLang(tmsconfig.GlobalConfig); err != nil {
+		logrus.WithError(err).Error("Failed to load messages")
+	}
+
+	botInstance, err := tmsbot.InitBot(tmsconfig.GlobalConfig)
 
 	if err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
+		logrus.WithError(err).Error("Bot initialization failed")
 	}
 
-	if err := tmslang.SetupLang(config); err != nil {
-		log.Fatalf("Failed to load messages: %v", err)
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+	updates := botInstance.Api.GetUpdatesChan(u)
+
+	for update := range updates {
+		handlers.Router(botInstance, update)
 	}
-
-	db, err := tmsdb.DBInit(config)
-
-	if err != nil {
-		log.Fatalf("Database initialization failed: %v", err)
-	}
-
-	bot, err := tmsbot.InitBot(config, db)
-
-	if err != nil {
-		log.Fatalf("Bot initialization failed: %v", err)
-	}
-
-	tmsapi.HandleUpdates(bot)
-
 }

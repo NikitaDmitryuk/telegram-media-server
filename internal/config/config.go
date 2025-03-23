@@ -2,23 +2,35 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
-	"strconv"
+	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
+var GlobalConfig *Config
+
+func init() {
+	var err error
+	GlobalConfig, err = NewConfig()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create configuration")
+	}
+
+	if err := setLogLevel(GlobalConfig.LogLevel); err != nil {
+		logrus.WithError(err).Fatal("Invalid log level configuration")
+	}
+}
+
 type Config struct {
-	BotToken              string
-	MoviePath             string
-	Password              string
-	Lang                  string
-	Proxy                 string
-	ProxyHost             string
-	UpdateIntervalSeconds int
-	UpdatePercentageStep  int
-	MaxWaitTimeMinutes    int
-	MinDownloadPercentage int
-	MessageFilePath       string
+	BotToken        string
+	MoviePath       string
+	Password        string
+	Lang            string
+	Proxy           string
+	ProxyHost       string
+	MessageFilePath string
+	LogLevel        string
 }
 
 func getEnv(key string, defaultValue string) string {
@@ -28,36 +40,24 @@ func getEnv(key string, defaultValue string) string {
 	return defaultValue
 }
 
-func getEnvInt(key string, defaultValue int) int {
-	if valueStr, exists := os.LookupEnv(key); exists {
-		if value, err := strconv.Atoi(valueStr); err == nil {
-			return value
-		} else {
-			log.Fatalf("Error converting %s to int: %v", key, err)
-		}
-	}
-	return defaultValue
-}
-
 func NewConfig() (*Config, error) {
 	config := &Config{
-		BotToken:              getEnv("BOT_TOKEN", ""),
-		MoviePath:             getEnv("MOVIE_PATH", ""),
-		Password:              getEnv("PASSWORD", ""),
-		Lang:                  getEnv("LANG", "en"),
-		Proxy:                 getEnv("PROXY", ""),
-		ProxyHost:             getEnv("PROXY_HOST", ""),
-		UpdateIntervalSeconds: getEnvInt("UPDATE_INTERVAL_SECONDS", 30),
-		UpdatePercentageStep:  getEnvInt("UPDATE_PERCENTAGE_STEP", 20),
-		MaxWaitTimeMinutes:    getEnvInt("MAX_WAIT_TIME_MINUTES", 10),
-		MinDownloadPercentage: getEnvInt("MIN_DOWNLOAD_PERCENTAGE", 10),
+		BotToken:        getEnv("BOT_TOKEN", ""),
+		MoviePath:       getEnv("MOVIE_PATH", ""),
+		Password:        getEnv("PASSWORD", ""),
+		Lang:            getEnv("LANG", "en"),
+		Proxy:           getEnv("PROXY", ""),
+		ProxyHost:       getEnv("PROXY_HOST", ""),
+		MessageFilePath: getEnv("MESSAGE_FILE_PATH", ""),
+		LogLevel:        getEnv("LOG_LEVEL", "info"),
 	}
 
 	if err := config.validate(); err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
+		logrus.WithError(err).Error("Configuration validation failed")
 		return nil, err
 	}
 
+	logrus.Info("Configuration loaded successfully")
 	return config, nil
 }
 
@@ -75,5 +75,15 @@ func (c *Config) validate() error {
 	if len(missingFields) > 0 {
 		return fmt.Errorf("missing required environment variables: %v", missingFields)
 	}
+	return nil
+}
+
+func setLogLevel(level string) error {
+	parsedLevel, err := logrus.ParseLevel(strings.ToLower(level))
+	if err != nil {
+		return fmt.Errorf("invalid log level: %s", level)
+	}
+	logrus.SetLevel(parsedLevel)
+	logrus.Infof("Log level set to %s", level)
 	return nil
 }

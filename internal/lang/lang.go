@@ -2,15 +2,16 @@ package lang
 
 import (
 	"fmt"
-	"log"
 
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
+	"github.com/sirupsen/logrus"
 )
 
 var lang string
 
 func SetupLang(config *tmsconfig.Config) error {
 	lang = config.Lang
+	logrus.Infof("Language set to: %s", lang)
 	return nil
 }
 
@@ -23,6 +24,6 @@ func GetMessage(id MessageID, args ...interface{}) string {
 			return fmt.Sprintf(msg, args...)
 		}
 	}
-	log.Printf("Message not found for ID: %s", id)
+	logrus.Warnf("Message not found for ID: %s", id)
 	return "Message not found"
 }
