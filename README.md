@@ -35,11 +35,11 @@ Telegram Media Server is a Telegram bot that accepts links to streaming videos o
 - **Other**:
 - Installed and configured DLNA server (e.g. `minidlna`)
 
-The bot host can be the cheapest single-board computer, such as [Beaglebone](https://www.beagleboard.org/boards/beaglebone-black) or [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), or any other single-board computer that can run an operating system.
+The bot host can be the cheapest single-board computer, such as [Raspberry PI](https://www.raspberrypi.com) or [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), or any other single-board computer that can run an operating system.
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="./images/beaglebone.webp" alt="Beaglebone" style="width: 45%;">
-  <img src="./images/orangepizero3.png" alt="Orenge Pi zero 3" style="width: 45%;">
+  <img src="./images/raspberrypi.jpg" alt="Raspberry PI" style="width: 45%;">
+  <img src="./images/orangepizero3.png" alt="Orange PI zero 3" style="width: 45%;">
 </div>
 
 ## Installation
@@ -194,11 +194,11 @@ Telegram Media Server — это Telegram-бот, который принима�
 - **Прочее**:
   - Установленный и настроенный DLNA-сервер (например, `minidlna`)
 
-В качестве хоста бота можно использовать самые дешевые одноплатные компьютеры, такие как [Beaglebone](https://www.beagleboard.org/boards/beaglebone-black) или [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), а также любые другие одноплатные компьютеры на которые можно поставить операционную систему.
+В качестве хоста бота можно использовать самые дешевые одноплатные компьютеры, такие как [Raspberry PI](https://www.raspberrypi.com) или [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), а также любые другие одноплатные компьютеры на которые можно поставить операционную систему.
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="./images/beaglebone.webp" alt="Beaglebone" style="width: 45%;">
-  <img src="./images/orangepizero3.png" alt="Orenge Pi zero 3" style="width: 45%;">
+  <img src="./images/raspberrypi.jpg" alt="Raspberry PI" style="width: 45%;">
+  <img src="./images/orangepizero3.png" alt="Orange PI zero 3" style="width: 45%;">
 </div>
 
 ## Установка

@@ -51,16 +51,16 @@ DownloadStoppedLowSpeed:
   ru: "Загрузка фильма %s остановлена из-за низкой скорости загрузки"
 
 VideoTitleError:
-  en: "Error getting video title: %s"
-  ru: "Ошибка получения названия видео: %s"
+  en: "Error getting video title: %v"
+  ru: "Ошибка получения названия видео: %v"
 
 VideoGetSizeError:
-  en: "Error getting video size: %s"
-  ru: "Ошибка получения размера видео: %s"
+  en: "Error getting video size: %v"
+  ru: "Ошибка получения размера видео: %v"
 
 VideoDownloadError:
-  en: "Error downloading video: %s"
-  ru: "Ошибка загрузки видео: %s"
+  en: "Error downloading video: %v"
+  ru: "Ошибка загрузки видео: %v"
 
 VideoExists:
   en: "Video already exists or is in the process of downloading"

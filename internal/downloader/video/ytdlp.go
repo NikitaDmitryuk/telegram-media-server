@@ -126,7 +126,19 @@ func (d *YTDLPDownloader) GetFiles() (string, []string, error) {
 }
 
 func (d *YTDLPDownloader) GetFileSize() (int64, error) {
-	cmd := exec.Command("yt-dlp", "--skip-download", "--print-json", d.url)
+	useProxy, err := shouldUseProxy(d.bot, d.url)
+	if err != nil {
+		return 0, fmt.Errorf("error checking proxy requirement: %v", err)
+	}
+
+	var cmd *exec.Cmd
+	if useProxy {
+		proxy := tmsconfig.GlobalConfig.Proxy
+		cmd = exec.Command("yt-dlp", "--proxy", proxy, "--skip-download", "--print-json", d.url)
+	} else {
+		cmd = exec.Command("yt-dlp", "--skip-download", "--print-json", d.url)
+	}
+
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("failed to retrieve metadata with yt-dlp: %v", err)

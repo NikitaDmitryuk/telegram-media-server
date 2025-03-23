@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        arch: [armv7h, aarch64, x86_64]
+        arch: [aarch64, x86_64]
 
     steps:
       - name: Checkout code
@@ -41,9 +41,6 @@ jobs:
               case \"${{ matrix.arch }}\" in
                 'aarch64')
                   CARCH=aarch64 makepkg -Acsf --config build/makepkg.conf
-                  ;;
-                'armv7h')
-                  CARCH=armv7h makepkg -Acsf --config build/makepkg.conf
                   ;;
                 'x86_64')
                   CARCH=x86_64 makepkg -Acsf --config build/makepkg.conf
