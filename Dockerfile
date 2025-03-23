@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . ./
 
-RUN CGO_ENABLED=1 GOOS=linux go build -o /telegram-media-server ./cmd/telegram-media-server
+RUN GOOS=linux go build -o /telegram-media-server ./cmd/telegram-media-server
 
 FROM archlinux:latest
 

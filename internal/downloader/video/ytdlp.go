@@ -128,7 +128,8 @@ func (d *YTDLPDownloader) GetFiles() (string, []string, error) {
 func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 	useProxy, err := shouldUseProxy(d.bot, d.url)
 	if err != nil {
-		return 0, fmt.Errorf("error checking proxy requirement: %v", err)
+		logrus.Warnf("Error checking proxy requirement: %v; returning 0", err)
+		return 0, nil
 	}
 
 	var cmd *exec.Cmd
@@ -141,12 +142,14 @@ func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return 0, fmt.Errorf("failed to retrieve metadata with yt-dlp: %v", err)
+		logrus.Warnf("Failed to retrieve metadata with yt-dlp: %v; returning 0", err)
+		return 0, nil
 	}
 
 	var info map[string]interface{}
 	if err := json.Unmarshal(output, &info); err != nil {
-		return 0, fmt.Errorf("failed to parse metadata JSON: %v", err)
+		logrus.Warnf("Failed to parse metadata JSON: %v; returning 0", err)
+		return 0, nil
 	}
 
 	var size float64
@@ -154,16 +157,19 @@ func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 		if filesize, ok := v.(float64); ok {
 			size = filesize
 		} else {
-			return 0, fmt.Errorf("unexpected type for filesize")
+			logrus.Warn("Unexpected type for filesize; returning 0")
+			return 0, nil
 		}
 	} else if v, ok := info["filesize_approx"]; ok && v != nil {
 		if filesizeApprox, ok := v.(float64); ok {
 			size = filesizeApprox
 		} else {
-			return 0, fmt.Errorf("unexpected type for filesize_approx")
+			logrus.Warn("Unexpected type for filesize_approx; returning 0")
+			return 0, nil
 		}
 	} else {
-		return 0, fmt.Errorf("filesize information not found in metadata")
+		logrus.Warn("Filesize information not found in metadata; returning 0")
+		return 0, nil
 	}
 
 	return int64(size), nil

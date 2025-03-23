@@ -74,11 +74,26 @@ func DeleteMovie(bot *Bot, id int) error {
 			rootFolder = filepath.Dir(filePath)
 		}
 
-		err := os.Remove(filePath)
+		fileInfo, err := os.Stat(filePath)
 		if err != nil {
-			logrus.WithError(err).Warnf("Failed to delete file %s", filePath)
+			logrus.WithError(err).Warnf("Failed to stat file %s", filePath)
+			continue
+		}
+
+		if fileInfo.IsDir() {
+			err := os.RemoveAll(filePath)
+			if err != nil {
+				logrus.WithError(err).Warnf("Failed to delete folder %s", filePath)
+			} else {
+				logrus.Infof("Folder %s deleted successfully", filePath)
+			}
 		} else {
-			logrus.Infof("File %s deleted successfully", filePath)
+			err := os.Remove(filePath)
+			if err != nil {
+				logrus.WithError(err).Warnf("Failed to delete file %s", filePath)
+			} else {
+				logrus.Infof("File %s deleted successfully", filePath)
+			}
 		}
 	}
 
