@@ -33,7 +33,7 @@ jobs:
       - name: Build package in Arch Linux container
         run: |
           docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -c "
-            pacman -Sy --noconfirm base-devel go git yt-dlp
+            pacman -Sy --noconfirm base-devel go git aarch64-linux-gnu-gcc
             useradd -m builder
             chown -R builder /workspace
             su builder -c '
