@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
@@ -33,7 +34,7 @@ func Router(bot *tmsbot.Bot, update tgbotapi.Update) {
 				DeleteMoviesHandler(bot, update)
 			default:
 				logrus.Warnf("Unknown command: %s", update.Message.Command())
-				bot.SendErrorMessage(update.Message.Chat.ID, "Unknown command")
+				bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
 			}
 		}
 		return
@@ -49,6 +50,6 @@ func Router(bot *tmsbot.Bot, update tgbotapi.Update) {
 		HandleTorrentFile(bot, update)
 	} else {
 		logrus.Warn("Invalid input received")
-		bot.SendErrorMessage(update.Message.Chat.ID, "Invalid input")
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
 	}
 }
