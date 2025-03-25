@@ -120,8 +120,9 @@ func (d *YTDLPDownloader) GetTitle() (string, error) {
 
 func (d *YTDLPDownloader) GetFiles() (string, []string, error) {
 	mainFile := d.outputFileName
-	tempFile := d.outputFileName + ".part"
-	tempFiles := []string{tempFile}
+	tempFilePart := d.outputFileName + ".part"
+	tempfileYtdl := d.outputFileName + ".ytdl"
+	tempFiles := []string{tempFilePart, tempfileYtdl}
 	return mainFile, tempFiles, nil
 }
 
