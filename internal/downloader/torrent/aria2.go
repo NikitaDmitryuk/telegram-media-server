@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
@@ -43,38 +42,36 @@ func NewAria2Downloader(bot *bot.Bot, torrentFileName string) downloader.Downloa
 	}
 }
 
-func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, error) {
+func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan error, error) {
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
 	d.cmd = exec.CommandContext(ctx, "aria2c", "--dir", d.downloadDir, "--seed-time=0", "--summary-interval=1", torrentPath)
 
 	stdout, err := d.cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("failed to capture stdout: %v", err)
+		return nil, nil, fmt.Errorf("failed to capture stdout: %v", err)
 	}
 
 	if err := d.cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start aria2c: %v", err)
+		return nil, nil, fmt.Errorf("failed to start aria2c: %v", err)
 	}
 
 	progressChan := make(chan float64)
-	wg := &sync.WaitGroup{}
+	errChan := make(chan error, 1)
 
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer close(progressChan)
 		d.parseProgress(stdout, progressChan)
-	}()
-
-	go func() {
 		err := d.cmd.Wait()
 		if err != nil {
 			logrus.Warnf("aria2c exited with error: %v", err)
+			errChan <- err
+		} else {
+			errChan <- nil
 		}
-		wg.Wait()
-		close(progressChan)
+		close(errChan)
 	}()
 
-	return progressChan, nil
+	return progressChan, errChan, nil
 }
 
 func (d *Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {

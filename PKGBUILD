@@ -1,5 +1,5 @@
 pkgname=telegram-media-server
-pkgver=1.1.3
+pkgver=1.1.4
 pkgrel=1
 pkgdesc="Telegram Media Server"
 arch=('aarch64' 'x86_64')

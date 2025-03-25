@@ -77,41 +77,49 @@ func DeleteMovie(bot *Bot, id int) error {
 		fileInfo, err := os.Stat(filePath)
 		if err != nil {
 			logrus.WithError(err).Warnf("Failed to stat file %s", filePath)
-			continue
+		} else {
+			if fileInfo.IsDir() {
+				if err := os.RemoveAll(filePath); err != nil {
+					logrus.WithError(err).Warnf("Failed to delete folder %s", filePath)
+				} else {
+					logrus.Infof("Folder %s deleted successfully", filePath)
+				}
+			} else {
+				if err := os.Remove(filePath); err != nil {
+					logrus.WithError(err).Warnf("Failed to delete file %s", filePath)
+				} else {
+					logrus.Infof("File %s deleted successfully", filePath)
+				}
+			}
 		}
 
-		if fileInfo.IsDir() {
-			err := os.RemoveAll(filePath)
-			if err != nil {
-				logrus.WithError(err).Warnf("Failed to delete folder %s", filePath)
+		pattern := filePath + "*"
+		matchedFiles, err := filepath.Glob(pattern)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to find files matching pattern %s", pattern)
+			continue
+		}
+		for _, matchedFile := range matchedFiles {
+			if err := os.Remove(matchedFile); err != nil {
+				logrus.WithError(err).Warnf("Failed to delete file %s", matchedFile)
 			} else {
-				logrus.Infof("Folder %s deleted successfully", filePath)
-			}
-		} else {
-			err := os.Remove(filePath)
-			if err != nil {
-				logrus.WithError(err).Warnf("Failed to delete file %s", filePath)
-			} else {
-				logrus.Infof("File %s deleted successfully", filePath)
+				logrus.Infof("File %s deleted successfully", matchedFile)
 			}
 		}
 	}
 
-	err = tmsdb.GlobalDB.RemoveMovie(context.Background(), id)
-	if err != nil {
+	if err := tmsdb.GlobalDB.RemoveMovie(context.Background(), id); err != nil {
 		logrus.WithError(err).Error("Failed to remove movie from database")
 		return tmsutils.LogAndReturnError(tmslang.GetMessage(tmslang.DeleteMovieDBErrorMsgID), err)
 	}
 
-	err = tmsdb.GlobalDB.RemoveFilesByMovieID(context.Background(), id)
-	if err != nil {
+	if err := tmsdb.GlobalDB.RemoveFilesByMovieID(context.Background(), id); err != nil {
 		logrus.WithError(err).Error("Failed to remove files from database")
 		return tmsutils.LogAndReturnError(tmslang.GetMessage(tmslang.DeleteFilesDBErrorMsgID), err)
 	}
 
 	if rootFolder != "" && rootFolder != tmsconfig.GlobalConfig.MoviePath && tmsutils.IsEmptyDirectory(rootFolder) {
-		err = os.Remove(rootFolder)
-		if err != nil {
+		if err := os.Remove(rootFolder); err != nil {
 			logrus.WithError(err).Warnf("Failed to delete root folder %s", rootFolder)
 		} else {
 			logrus.Infof("Root folder %s deleted successfully", rootFolder)
