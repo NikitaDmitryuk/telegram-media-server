@@ -32,7 +32,7 @@ type Downloader interface {
 	// StartDownload initiates the download process.
 	// It returns a channel to receive progress updates (in percentage) and an error if the start fails.
 	// The progress channel must be closed when the download completes or is stopped.
-	StartDownload(ctx context.Context) (chan float64, error)
+	StartDownload(ctx context.Context) (chan float64, chan error, error)
 
 	// StopDownload stops the download process.
 	// If the download is stopped manually, implementations should track that state so that handlers

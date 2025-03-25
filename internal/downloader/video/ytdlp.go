@@ -43,10 +43,10 @@ func NewYTDLPDownloader(bot *bot.Bot, url string) downloader.Downloader {
 	}
 }
 
-func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, error) {
+func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, chan error, error) {
 	useProxy, err := shouldUseProxy(d.bot, d.url)
 	if err != nil {
-		return nil, fmt.Errorf("error checking proxy requirement: %v", err)
+		return nil, nil, fmt.Errorf("error checking proxy requirement: %v", err)
 	}
 
 	outputFileName := tmsutils.GenerateFileName(d.title)
@@ -61,26 +61,33 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, erro
 		proxy := tmsconfig.GlobalConfig.Proxy
 		logrus.WithField("proxy", proxy).Infof("Using proxy for URL: %s", d.url)
 		cmd = exec.CommandContext(ctx, "yt-dlp", "--newline", "--proxy", proxy,
-			"-f", "bestvideo[vcodec=h264]+bestaudio[acodec=aac]/best", "-o", outputPath, d.url)
+			"-S", "vext:mp4,aext:m4a",
+			"-f", "bv*+ba/b",
+			"--recode-video", "mp4",
+			"-o", outputPath, d.url)
 	} else {
 		logrus.Infof("No proxy used for URL: %s", d.url)
 		cmd = exec.CommandContext(ctx, "yt-dlp", "--newline",
-			"-f", "bestvideo[vcodec=h264]+bestaudio[acodec=aac]/best", "-o", outputPath, d.url)
+			"-S", "vext:mp4,aext:m4a",
+			"-f", "bv*+ba/b",
+			"--recode-video", "mp4",
+			"-o", outputPath, d.url)
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create stdout pipe")
-		return nil, fmt.Errorf("failed to create stdout pipe: %v", err)
+		return nil, nil, fmt.Errorf("failed to create stdout pipe: %v", err)
 	}
 
 	if err := cmd.Start(); err != nil {
 		logrus.WithError(err).Error("Failed to start yt-dlp")
-		return nil, fmt.Errorf("failed to start yt-dlp: %v", err)
+		return nil, nil, fmt.Errorf("failed to start yt-dlp: %v", err)
 	}
 
 	d.cmd = cmd
 	progressChan := make(chan float64)
+	errChan := make(chan error, 1)
 
 	go func() {
 		defer close(progressChan)
@@ -99,10 +106,14 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, erro
 		}
 		if err := cmd.Wait(); err != nil {
 			logrus.WithError(err).Error("yt-dlp exited with an error")
+			errChan <- err
+		} else {
+			errChan <- nil
 		}
+		close(errChan)
 	}()
 
-	return progressChan, nil
+	return progressChan, errChan, nil
 }
 
 func (d *YTDLPDownloader) StopDownload() error {
@@ -122,7 +133,17 @@ func (d *YTDLPDownloader) GetFiles() (string, []string, error) {
 	mainFile := d.outputFileName
 	tempFilePart := d.outputFileName + ".part"
 	tempfileYtdl := d.outputFileName + ".ytdl"
+
 	tempFiles := []string{tempFilePart, tempfileYtdl}
+
+	pattern := d.outputFileName + ".part-Frag*"
+	matchedFiles, err := filepath.Glob(pattern)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to search files with pattern %s: %w", pattern, err)
+	}
+
+	tempFiles = append(tempFiles, matchedFiles...)
+
 	return mainFile, tempFiles, nil
 }
 
