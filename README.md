@@ -13,9 +13,9 @@ Telegram Media Server — это Telegram-бот, который принима�
 ## Contents / Оглавление
 
 - [Features / Особенности](#features--особенности)
-- [Requirements / Требования](#requirements--требования)
 - [Installation / Установка](#installation--установка)
-  - [Installing the bot / Установка бота](#installing-the-bot--установка-бота)
+  - [Using Docker Compose / Использование Docker Compose](#using-docker-compose--использование-docker-compose)
+  - [Installing the bot manually / Установка бота вручную](#installing-the-bot-manually--установка-бота-вручную)
   - [Installing and configuring minidlna / Установка и настройка minidlna](#installing-and-configuring-minidlna--установка-и-настройка-minidlna)
 - [Configuration / Конфигурация](#configuration--конфигурация)
 - [Usage / Использование](#usage--использование)
@@ -36,67 +36,64 @@ Telegram Media Server — это Telegram-бот, который принима�
 
 ---
 
-## Requirements / Требования
+## Installation / Установка
 
-- **Operating system / Операционная система**: Arch Linux
-- **Architectures / Архитектуры**: `aarch64`, `armv7h`, `x86_64`
-- **Dependencies / Зависимости**:
-  - **For building / Для сборки**: `go`
-  - **For running / Для выполнения**: `yt-dlp`, `aria2`, `minidlna` (recommended / рекомендуется)
-- **Other / Прочее**:
-  - Installed and configured DLNA server (e.g., `minidlna`) / Установленный и настроенный DLNA-сервер (например, `minidlna`)
+### Using Docker Compose / Использование Docker Compose
 
-The bot host can be the cheapest single-board computer, such as [Raspberry PI](https://www.raspberrypi.com) or [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), or any other single-board computer that can run an operating system.
+The easiest way to run Telegram Media Server is by using Docker Compose. This method works on any operating system and architecture that supports Docker.
 
-В качестве хоста бота можно использовать самые дешевые одноплатные компьютеры, такие как [Raspberry PI](https://www.raspberrypi.com) или [Orange pi zero 3](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3), а также любые другие одноплатные компьютеры, на которые можно поставить операционную систему.
+Самый простой способ запустить Telegram Media Server — использовать Docker Compose. Этот метод работает на любой операционной системе и архитектуре, поддерживающей Docker.
 
-<div style="display: flex; justify-content: space-between;">
-  <img src="./images/raspberrypi.jpg" alt="Raspberry PI" style="width: 45%;">
-  <img src="./images/orangepizero3.png" alt="Orange PI zero 3" style="width: 45%;">
-</div>
+1. **Clone the repository / Клонируйте репозиторий:**
+
+   ```bash
+   git clone https://github.com/NikitaDmitryuk/telegram-media-server.git
+   cd telegram-media-server
+   ```
+
+2. **Create and edit the `.env` file / Создайте и отредактируйте файл `.env`:**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Open the `.env` file and configure the parameters according to your requirements.
+
+   Откройте файл `.env` и настройте параметры в соответствии с вашими требованиями.
+
+3. **Start the container in the background / Запустите контейнер в фоне:**
+
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Check the logs / Проверьте логи:**
+
+   ```bash
+   docker-compose logs -f
+   ```
+
+5. **Stop the container / Остановите контейнер:**
+
+   ```bash
+   docker-compose down
+   ```
 
 ---
 
-## Installation / Установка
+### Installing the bot manually / Установка бота вручную
 
-### Installing the bot / Установка бота
+For Arch Linux users, there is an official package available. You can install it using the `pacman` package manager:
 
-1. **Installing the package / Установка пакета:**
-
-Install the `telegram-media-server` package using the `pacman` package manager:
-
-Установите пакет `telegram-media-server` с помощью пакетного менеджера `pacman`:
+Для пользователей Arch Linux доступен официальный пакет. Вы можете установить его с помощью пакетного менеджера `pacman`:
 
 ```bash
 sudo pacman -U telegram-media-server.pkg.tar.zst
 ```
 
-2. **Configuration / Конфигурация:**
+Follow the steps in the [Configuration / Конфигурация](#configuration--конфигурация) section to set up the bot.
 
-During installation, the sample configuration file will be copied to **/etc/telegram-media-server/.env**. If the configuration file is not created automatically, copy it manually:
-
-При установке файл примера конфигурации будет скопирован в **/etc/telegram-media-server/.env**. Если файл конфигурации не создан автоматически, скопируйте его вручную:
-
-```bash
-sudo cp /etc/telegram-media-server/.env.example /etc/telegram-media-server/.env
-```
-
-3. **Editing the configuration / Редактирование конфигурации:**
-
-Open the **/etc/telegram-media-server/.env** file and configure the parameters according to your requirements.
-
-Откройте файл **/etc/telegram-media-server/.env** и настройте параметры в соответствии с вашими требованиями.
-
-4. **Starting the service / Запуск сервиса:**
-
-The `telegram-media-server` service should automatically be enabled and started. If this does not happen, run:
-
-Сервис `telegram-media-server` должен автоматически включиться и запуститься. Если этого не произошло, выполните:
-
-```bash
-sudo systemctl enable telegram-media-server
-sudo systemctl start telegram-media-server
-```
+Следуйте шагам из раздела [Configuration / Конфигурация](#configuration--конфигурация), чтобы настроить бота.
 
 ---
 
@@ -104,31 +101,31 @@ sudo systemctl start telegram-media-server
 
 1. **Installing minidlna / Установка minidlna:**
 
-```bash
-sudo pacman -Sy minidlna
-```
+   ```bash
+   sudo apt install minidlna
+   ```
 
 2. **Configuring minidlna / Настройка minidlna:**
 
-Edit the configuration file **/etc/minidlna.conf** and configure the following parameters:
+   Edit the configuration file **/etc/minidlna.conf** and configure the following parameters:
 
-Отредактируйте файл конфигурации **/etc/minidlna.conf** и настройте следующие параметры:
+   Отредактируйте файл конфигурации **/etc/minidlna.conf** и настройте следующие параметры:
 
-```conf
-media_dir=V,/path/to/dir
-friendly_name=My DLNA Server
-```
+   ```conf
+   media_dir=V,/path/to/dir
+   friendly_name=My DLNA Server
+   ```
 
-Replace **/path/to/dir** with the same path specified in the **MOVIE_PATH** parameter of the bot's **.env** file.
+   Replace **/path/to/dir** with the same path specified in the **MOVIE_PATH** parameter of the bot's **.env** file.
 
-Замените **/path/to/dir** на тот же путь, что указан в параметре **MOVIE_PATH** файла **.env** бота.
+   Замените **/path/to/dir** на тот же путь, что указан в параметре **MOVIE_PATH** файла **.env** бота.
 
 3. **Starting minidlna / Запуск minidlna:**
 
-```bash
-sudo systemctl enable minidlna
-sudo systemctl start minidlna
-```
+   ```bash
+   sudo systemctl enable minidlna
+   sudo systemctl start minidlna
+   ```
 
 ---
 

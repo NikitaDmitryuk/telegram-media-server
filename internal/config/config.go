@@ -52,6 +52,11 @@ func NewConfig() (*Config, error) {
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
 	}
 
+	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
+		config.MoviePath = "/app/media"
+		logrus.Infof("Running inside Docker, setting MOVIE_PATH to %s", config.MoviePath)
+	}
+
 	if err := config.validate(); err != nil {
 		logrus.WithError(err).Error("Configuration validation failed")
 		return nil, err

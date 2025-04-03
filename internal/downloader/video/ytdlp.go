@@ -32,8 +32,13 @@ type YTDLPDownloader struct {
 func NewYTDLPDownloader(bot *bot.Bot, url string) downloader.Downloader {
 	videoTitle, err := getVideoTitle(bot, url)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to retrieve video title")
+		logrus.WithError(err).Error("Failed to retrieve video title, generating fallback title")
+		videoTitle, _ = extractVideoID(url)
+		if videoTitle == "" {
+			videoTitle = "unknown_video"
+		}
 	}
+
 	outputFileName := tmsutils.GenerateFileName(videoTitle)
 	return &YTDLPDownloader{
 		bot:            bot,
@@ -80,6 +85,12 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, chan
 		return nil, nil, fmt.Errorf("failed to create stdout pipe: %v", err)
 	}
 
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create stderr pipe")
+		return nil, nil, fmt.Errorf("failed to create stderr pipe: %v", err)
+	}
+
 	if err := cmd.Start(); err != nil {
 		logrus.WithError(err).Error("Failed to start yt-dlp")
 		return nil, nil, fmt.Errorf("failed to start yt-dlp: %v", err)
@@ -91,6 +102,16 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, chan
 
 	go func() {
 		defer close(progressChan)
+		errorOutput := make(chan string)
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			var output strings.Builder
+			for scanner.Scan() {
+				output.WriteString(scanner.Text() + "\n")
+			}
+			errorOutput <- output.String()
+		}()
+
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -104,8 +125,10 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, chan
 				}
 			}
 		}
+
 		if err := cmd.Wait(); err != nil {
-			logrus.WithError(err).Error("yt-dlp exited with an error")
+			stderrOutput := <-errorOutput
+			logrus.WithError(err).Errorf("yt-dlp exited with error: %s", stderrOutput)
 			errChan <- err
 		} else {
 			errChan <- nil
@@ -162,9 +185,31 @@ func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 		cmd = exec.Command("yt-dlp", "--skip-download", "--print-json", d.url)
 	}
 
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create stderr pipe")
+		return 0, nil
+	}
+
+	if err := cmd.Start(); err != nil {
+		logrus.WithError(err).Error("Failed to start yt-dlp")
+		return 0, nil
+	}
+
+	errorOutput := make(chan string)
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		var output strings.Builder
+		for scanner.Scan() {
+			output.WriteString(scanner.Text() + "\n")
+		}
+		errorOutput <- output.String()
+	}()
+
 	output, err := cmd.Output()
 	if err != nil {
-		logrus.Warnf("Failed to retrieve metadata with yt-dlp: %v; returning 0", err)
+		stderrOutput := <-errorOutput
+		logrus.WithError(err).Errorf("yt-dlp failed with error: %s", stderrOutput)
 		return 0, nil
 	}
 
@@ -242,13 +287,74 @@ func getVideoTitle(bot *bot.Bot, url string) (string, error) {
 		cmd = exec.Command("yt-dlp", "--get-title", url)
 	}
 
-	output, err := cmd.Output()
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get video title")
-		return "", err
+		logrus.WithError(err).Error("Failed to create stdout pipe")
+		return "", fmt.Errorf("failed to create stdout pipe: %v", err)
 	}
 
-	videoTitle := strings.TrimSpace(string(output))
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create stderr pipe")
+		return "", fmt.Errorf("failed to create stderr pipe: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		logrus.WithError(err).Error("Failed to start yt-dlp")
+		return "", fmt.Errorf("failed to start yt-dlp: %v", err)
+	}
+
+	errorOutput := make(chan string)
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		var output strings.Builder
+		for scanner.Scan() {
+			output.WriteString(scanner.Text() + "\n")
+		}
+		errorOutput <- output.String()
+	}()
+
+	scanner := bufio.NewScanner(stdout)
+	var videoTitle string
+	if scanner.Scan() {
+		videoTitle = strings.TrimSpace(scanner.Text())
+	}
+
+	if err := cmd.Wait(); err != nil {
+		stderrOutput := <-errorOutput
+		logrus.WithError(err).Errorf("yt-dlp failed with error: %s", stderrOutput)
+		return "", fmt.Errorf("yt-dlp failed: %v", err)
+	}
+
+	if videoTitle == "" {
+		logrus.Warn("Video title is empty, falling back to video ID")
+		videoID, idErr := extractVideoID(url)
+		if idErr != nil {
+			logrus.WithError(idErr).Error("Failed to extract video ID")
+			return "unknown_video", nil
+		}
+		return videoID, nil
+	}
+
 	logrus.Infof("Video title retrieved: %s", videoTitle)
 	return videoTitle, nil
+}
+
+func extractVideoID(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %v", err)
+	}
+
+	queryParams := parsedURL.Query()
+	if videoID := queryParams.Get("v"); videoID != "" {
+		return videoID, nil
+	}
+
+	pathSegments := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+	if len(pathSegments) > 0 {
+		return pathSegments[len(pathSegments)-1], nil
+	}
+
+	return "", errors.New("unable to extract video ID")
 }
