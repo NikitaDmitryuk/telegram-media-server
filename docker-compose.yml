@@ -4,5 +4,7 @@ services:
       dockerfile: Dockerfile
       context: .
     env_file: ".env"
+    environment:
+      - RUNNING_IN_DOCKER=true
     volumes:
-      - .:/app
+      - ${MOVIE_PATH}:/app/media
