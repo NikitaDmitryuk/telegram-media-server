@@ -15,10 +15,16 @@ RUN GOOS=linux go build -o /telegram-media-server ./cmd/telegram-media-server
 FROM ubuntu:24.04 AS runtime
 
 RUN apt-get update && \
-    apt-get install -y \
-    yt-dlp \
+    apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
     aria2 \
-    ca-certificates
+    ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir --break-system-packages yt-dlp
+RUN yt-dlp --update-to stable
 
 COPY --from=builder /telegram-media-server /telegram-media-server
 
