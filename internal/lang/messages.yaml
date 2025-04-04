@@ -43,8 +43,8 @@ MovieCheckError:
   ru: "Ошибка при проверке существования фильма: %v"
 
 NotEnoughSpace:
-  en: "Not enough space to download movie %s"
-  ru: "Недостаточно места для загрузки фильма %s"
+  en: "Not enough space to download movie"
+  ru: "Недостаточно места для загрузки фильма"
 
 DownloadStoppedLowSpeed:
   en: "Download of movie %s stopped due to low download speed"
