@@ -19,9 +19,7 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     aria2 \
-    ca-certificates && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    ca-certificates
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages yt-dlp
 RUN yt-dlp --update-to stable
