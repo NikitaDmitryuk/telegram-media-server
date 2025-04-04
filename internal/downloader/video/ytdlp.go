@@ -287,45 +287,16 @@ func getVideoTitle(bot *bot.Bot, url string) (string, error) {
 		cmd = exec.Command("yt-dlp", "--get-title", url)
 	}
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create stdout pipe")
-		return "", fmt.Errorf("failed to create stdout pipe: %v", err)
-	}
+	var stdoutBuf, stderrBuf strings.Builder
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create stderr pipe")
-		return "", fmt.Errorf("failed to create stderr pipe: %v", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		logrus.WithError(err).Error("Failed to start yt-dlp")
-		return "", fmt.Errorf("failed to start yt-dlp: %v", err)
-	}
-
-	errorOutput := make(chan string)
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		var output strings.Builder
-		for scanner.Scan() {
-			output.WriteString(scanner.Text() + "\n")
-		}
-		errorOutput <- output.String()
-	}()
-
-	scanner := bufio.NewScanner(stdout)
-	var videoTitle string
-	if scanner.Scan() {
-		videoTitle = strings.TrimSpace(scanner.Text())
-	}
-
-	if err := cmd.Wait(); err != nil {
-		stderrOutput := <-errorOutput
-		logrus.WithError(err).Errorf("yt-dlp failed with error: %s", stderrOutput)
+	if err := cmd.Run(); err != nil {
+		logrus.WithError(err).Errorf("yt-dlp failed with error: %s", stderrBuf.String())
 		return "", fmt.Errorf("yt-dlp failed: %v", err)
 	}
 
+	videoTitle := strings.TrimSpace(stdoutBuf.String())
 	if videoTitle == "" {
 		logrus.Warn("Video title is empty, falling back to video ID")
 		videoID, idErr := extractVideoID(url)

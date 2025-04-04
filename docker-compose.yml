@@ -8,3 +8,4 @@ services:
       - RUNNING_IN_DOCKER=true
     volumes:
       - ${MOVIE_PATH}:/app/media
+    network_mode: host
