@@ -29,3 +29,5 @@ artifacts/
 src/
 pkg/
 .vscode/
+packages/
+dist/

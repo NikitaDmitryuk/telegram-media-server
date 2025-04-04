@@ -1,0 +1,32 @@
+pkgname=telegram-media-server
+pkgver=1.1.6
+pkgrel=1
+pkgdesc="Telegram Media Server"
+arch=('aarch64' 'x86_64')
+url="https://github.com/NikitaDmitryuk/telegram-media-server"
+license=('MIT')
+depends=('yt-dlp' 'aria2')
+source=()
+install="telegram-media-server.install"
+options=(!strip)
+
+build() {
+    case "$CARCH" in
+        x86_64)
+            cp "$startdir/../../dist/telegram-media-server-amd64" "$srcdir/telegram-media-server"
+            ;;
+        aarch64)
+            cp "$startdir/../../dist/telegram-media-server-arm64" "$srcdir/telegram-media-server"
+            ;;
+        *)
+            echo "Unsupported architecture: $CARCH"
+            exit 1
+            ;;
+    esac
+}
+
+package() {
+    install -Dm755 "$srcdir/telegram-media-server" "$pkgdir/usr/bin/telegram-media-server"
+    install -Dm644 "$startdir/../../.env.example" "$pkgdir/etc/telegram-media-server/.env.example"
+    install -Dm644 "$startdir/../../build/telegram-media-server.service" "$pkgdir/usr/lib/systemd/system/telegram-media-server.service"
+}

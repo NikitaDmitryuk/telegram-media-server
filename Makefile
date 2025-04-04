@@ -1,6 +1,6 @@
 .PHONY: build
 build:
-	makepkg -Acsf --config build/makepkg.conf
+	./build/scripts/build.sh
 
 .PHONY: run
 run:
