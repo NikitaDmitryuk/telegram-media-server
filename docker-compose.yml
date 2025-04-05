@@ -14,10 +14,6 @@ services:
     build:
       dockerfile: dockerfile.builder
       context: .
-    volumes:
-      - ./dist:/app/dist
-      - ./build:/app/build
-      - ./:/app/source
     environment:
       - DEBIAN_ARCHS=amd64,arm64
       - ARCHLINUX_ARCHS=x86_64,aarch64

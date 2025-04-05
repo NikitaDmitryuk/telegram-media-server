@@ -5,6 +5,7 @@ pkgdesc="Telegram Media Server"
 arch=('aarch64' 'x86_64')
 url="https://github.com/NikitaDmitryuk/telegram-media-server"
 license=('MIT')
+makedepends=('go' 'aarch64-linux-gnu-gcc' 'gcc')
 depends=('yt-dlp' 'aria2')
 source=()
 install="telegram-media-server.install"
@@ -13,20 +14,31 @@ options=(!strip)
 build() {
     case "$CARCH" in
         x86_64)
-            cp "$startdir/../../dist/telegram-media-server-amd64" "$srcdir/telegram-media-server"
+            CC=gcc
+            GOARCH=amd64
             ;;
         aarch64)
-            cp "$startdir/../../dist/telegram-media-server-arm64" "$srcdir/telegram-media-server"
+            CC=aarch64-linux-gnu-gcc
+            GOARCH=arm64
             ;;
         *)
             echo "Unsupported architecture: $CARCH"
             exit 1
             ;;
     esac
+
+    export CC
+    export GOOS=linux
+    export GOARCH
+    export CGO_ENABLED=1
+
+    echo "Building telegram-media-server for $CARCH..."
+    cd "$srcdir/../../../source"
+    go build -trimpath -o "$srcdir/telegram-media-server" ./cmd/telegram-media-server
 }
 
 package() {
     install -Dm755 "$srcdir/telegram-media-server" "$pkgdir/usr/bin/telegram-media-server"
-    install -Dm644 "$startdir/../../.env.example" "$pkgdir/etc/telegram-media-server/.env.example"
-    install -Dm644 "$startdir/../../build/telegram-media-server.service" "$pkgdir/usr/lib/systemd/system/telegram-media-server.service"
+    install -Dm644 "$startdir/../../source/.env.example" "$pkgdir/etc/telegram-media-server/.env.example"
+    install -Dm644 "$startdir/../telegram-media-server.service" "$pkgdir/usr/lib/systemd/system/telegram-media-server.service"
 }

@@ -1,6 +1,4 @@
 .git
-build
-scripts
 artifacts
 docker-compose.yml
 Dockerfile
