@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,8 +44,24 @@ func NewAria2Downloader(bot *bot.Bot, torrentFileName string) downloader.Downloa
 }
 
 func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan error, error) {
+	dhtPort := 6881 + rand.Intn(1000)
+	listenPort := 7881 + rand.Intn(1000)
+
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
-	d.cmd = exec.CommandContext(ctx, "aria2c", "--dir", d.downloadDir, "--seed-time=0", "--summary-interval=1", torrentPath)
+	d.cmd = exec.CommandContext(ctx, "aria2c",
+		"--dir", d.downloadDir,
+		"--seed-time=0",
+		"--summary-interval=1",
+		"--enable-dht=true",
+		fmt.Sprintf("--dht-listen-port=%d", dhtPort),
+		fmt.Sprintf("--listen-port=%d", listenPort),
+		"--bt-tracker=udp://tracker.openbittorrent.com:80,udp://tracker.opentrackr.org:1337,udp://tracker.leechers-paradise.org:6969",
+		"--bt-exclude-tracker=http://retracker.local",
+		"--disable-ipv6",
+		"--max-connection-per-server=16",
+		"--split=16",
+		"--min-split-size=1M",
+		torrentPath)
 
 	stdout, err := d.cmd.StdoutPipe()
 	if err != nil {
