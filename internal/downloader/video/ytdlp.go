@@ -66,16 +66,18 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (chan float64, chan
 		proxy := tmsconfig.GlobalConfig.Proxy
 		logrus.WithField("proxy", proxy).Infof("Using proxy for URL: %s", d.url)
 		cmd = exec.CommandContext(ctx, "yt-dlp", "--newline", "--proxy", proxy,
-			"-S", "vext:mp4,aext:m4a",
+			"-S", "vcodec:h264,acodec:mp3",
 			"-f", "bv*+ba/b",
 			"--recode-video", "mp4",
+			"--postprocessor-args", "ffmpeg:-pix_fmt yuv420p",
 			"-o", outputPath, d.url)
 	} else {
 		logrus.Infof("No proxy used for URL: %s", d.url)
 		cmd = exec.CommandContext(ctx, "yt-dlp", "--newline",
-			"-S", "vext:mp4,aext:m4a",
+			"-S", "vcodec:h264,acodec:mp3",
 			"-f", "bv*+ba/b",
 			"--recode-video", "mp4",
+			"--postprocessor-args", "ffmpeg:-pix_fmt yuv420p",
 			"-o", outputPath, d.url)
 	}
 
