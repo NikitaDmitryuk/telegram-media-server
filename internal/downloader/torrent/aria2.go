@@ -51,7 +51,7 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan
 	d.cmd = exec.CommandContext(ctx, "aria2c",
 		"--dir", d.downloadDir,
 		"--seed-time=0",
-		"--summary-interval=1",
+		"--summary-interval=3",
 		"--enable-dht=true",
 		fmt.Sprintf("--dht-listen-port=%d", dhtPort),
 		fmt.Sprintf("--listen-port=%d", listenPort),
