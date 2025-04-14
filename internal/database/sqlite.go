@@ -35,26 +35,29 @@ func (s *SQLiteDatabase) Init(config *tmsconfig.Config) error {
 	return nil
 }
 
-func (s *SQLiteDatabase) AddMovie(ctx context.Context, name string, mainFile string, tempFiles []string) (int, error) {
+func (s *SQLiteDatabase) AddMovie(ctx context.Context, name string, mainFiles []string, tempFiles []string) (int, error) {
 	movie := Movie{Name: name}
 	if err := s.db.WithContext(ctx).Create(&movie).Error; err != nil {
 		logrus.Error("Failed to add movie: ", err)
 		return 0, err
 	}
 
-	main_file := MovieFile{MovieID: movie.ID, FilePath: mainFile, TempFile: false}
-	if err := s.db.WithContext(ctx).Create(&main_file).Error; err != nil {
-		logrus.Error("Failed to add main file: ", err)
-		return 0, err
+	for _, mainFile := range mainFiles {
+		mainFileRecord := MovieFile{MovieID: movie.ID, FilePath: mainFile, TempFile: false}
+		if err := s.db.WithContext(ctx).Create(&mainFileRecord).Error; err != nil {
+			logrus.Error("Failed to add main file: ", err)
+			return 0, err
+		}
 	}
 
 	for _, filePath := range tempFiles {
-		movieFile := MovieFile{MovieID: movie.ID, FilePath: filePath, TempFile: true}
-		if err := s.db.WithContext(ctx).Create(&movieFile).Error; err != nil {
+		tempFileRecord := MovieFile{MovieID: movie.ID, FilePath: filePath, TempFile: true}
+		if err := s.db.WithContext(ctx).Create(&tempFileRecord).Error; err != nil {
 			logrus.Error("Failed to add temp file: ", err)
 			return 0, err
 		}
 	}
+
 	logrus.Debug("Movie added successfully with ID: ", movie.ID)
 	return int(movie.ID), nil
 }
@@ -145,6 +148,15 @@ func (s *SQLiteDatabase) RemoveFilesByMovieID(ctx context.Context, movieID int) 
 	return nil
 }
 
+func (s *SQLiteDatabase) RemoveTempFilesByMovieID(ctx context.Context, movieID int) error {
+	if err := s.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, true).Delete(&MovieFile{}).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to get temp files for movie ID %d", movieID)
+		return err
+	}
+	logrus.Debug("Temp files removed successfully for movie ID: ", movieID)
+	return nil
+}
+
 func (s *SQLiteDatabase) MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error) {
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path = ?", fileName).Count(&count).Error; err != nil {
@@ -153,6 +165,15 @@ func (s *SQLiteDatabase) MovieExistsUploadedFile(ctx context.Context, fileName s
 	}
 	logrus.Debug("Uploaded file existence check completed for file: ", fileName)
 	return count > 0, nil
+}
+
+func (s *SQLiteDatabase) GetTempFilesByMovieID(ctx context.Context, movieID int) ([]MovieFile, error) {
+	var tempFiles []MovieFile
+	if err := s.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, true).Find(&tempFiles).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to get temp files for movie ID %d", movieID)
+		return nil, err
+	}
+	return tempFiles, nil
 }
 
 func (s *SQLiteDatabase) Login(ctx context.Context, password string, chatID int64, userName string) (bool, error) {

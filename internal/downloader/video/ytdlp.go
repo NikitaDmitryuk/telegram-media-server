@@ -154,8 +154,8 @@ func (d *YTDLPDownloader) GetTitle() (string, error) {
 	return d.title, nil
 }
 
-func (d *YTDLPDownloader) GetFiles() (string, []string, error) {
-	mainFile := d.outputFileName
+func (d *YTDLPDownloader) GetFiles() ([]string, []string, error) {
+	mainFiles := []string{d.outputFileName}
 	tempFilePart := d.outputFileName + ".part"
 	tempfileYtdl := d.outputFileName + ".ytdl"
 
@@ -164,12 +164,12 @@ func (d *YTDLPDownloader) GetFiles() (string, []string, error) {
 	pattern := d.outputFileName + ".part-Frag*"
 	matchedFiles, err := filepath.Glob(pattern)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to search files with pattern %s: %w", pattern, err)
+		return nil, nil, fmt.Errorf("failed to search files with pattern %s: %w", pattern, err)
 	}
 
 	tempFiles = append(tempFiles, matchedFiles...)
 
-	return mainFile, tempFiles, nil
+	return mainFiles, tempFiles, nil
 }
 
 func (d *YTDLPDownloader) GetFileSize() (int64, error) {

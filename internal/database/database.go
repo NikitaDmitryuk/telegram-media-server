@@ -9,9 +9,10 @@ import (
 
 type Database interface {
 	Init(config *tmsconfig.Config) error
-	AddMovie(ctx context.Context, name string, mainFile string, tempFiles []string) (int, error)
+	AddMovie(ctx context.Context, name string, mainFiles []string, tempFiles []string) (int, error)
 	RemoveMovie(ctx context.Context, movieID int) error
 	GetMovieList(ctx context.Context) ([]Movie, error)
+	GetTempFilesByMovieID(ctx context.Context, movieID int) ([]MovieFile, error)
 	UpdateDownloadedPercentage(ctx context.Context, id int, percentage int) error
 	SetLoaded(ctx context.Context, id int) error
 	GetMovieByID(ctx context.Context, movieID int) (Movie, error)
@@ -19,6 +20,7 @@ type Database interface {
 	MovieExistsId(ctx context.Context, id int) (bool, error)
 	GetFilesByMovieID(ctx context.Context, movieID int) ([]MovieFile, error)
 	RemoveFilesByMovieID(ctx context.Context, movieID int) error
+	RemoveTempFilesByMovieID(ctx context.Context, movieID int) error
 	MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error)
 	Login(ctx context.Context, password string, chatID int64, userName string) (bool, error)
 	CheckUser(ctx context.Context, chatID int64) (bool, error)

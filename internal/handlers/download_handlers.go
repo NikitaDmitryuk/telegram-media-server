@@ -17,13 +17,13 @@ import (
 )
 
 func handleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloader.Downloader) {
-	mainFile, tempFiles, err := downloaderInstance.GetFiles()
+	mainFiles, tempFiles, err := downloaderInstance.GetFiles()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get files from downloader instance")
 		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.MovieCheckErrorMsgID, err))
 		return
 	}
-	allFiles := append(tempFiles, mainFile)
+	allFiles := append(tempFiles, mainFiles...)
 
 	if exists, err := tmsdb.GlobalDB.MovieExistsFiles(context.Background(), allFiles); err != nil {
 		logrus.WithError(err).Error("Failed to check if media files exist in the database")
