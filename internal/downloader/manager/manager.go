@@ -39,13 +39,13 @@ func (dm *DownloadManager) StartDownload(dl downloader.Downloader) (int, chan fl
 		return 0, nil, nil, err
 	}
 
-	mainFile, tempFiles, err := dl.GetFiles()
+	mainFiles, tempFiles, err := dl.GetFiles()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get files")
 		return 0, nil, nil, err
 	}
 
-	movieID, err := database.GlobalDB.AddMovie(context.Background(), movieTitle, mainFile, tempFiles)
+	movieID, err := database.GlobalDB.AddMovie(context.Background(), movieTitle, mainFiles, tempFiles)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to add movie to database")
 		return 0, nil, nil, err
@@ -91,6 +91,12 @@ func (dm *DownloadManager) StartDownload(dl downloader.Downloader) (int, chan fl
 			err = database.GlobalDB.SetLoaded(context.Background(), movieID)
 			if err != nil {
 				logrus.WithError(err).Warnf("Failed to set movie as loaded for movieID %d", movieID)
+			}
+
+			if tempFilesErr := DeleteTempFilesByMovieID(movieID); tempFilesErr != nil {
+				logrus.WithError(tempFilesErr).Warnf("Failed to delete temp files for movieID %d", movieID)
+			} else {
+				logrus.Infof("Temp files deleted successfully for movieID %d", movieID)
 			}
 		}
 

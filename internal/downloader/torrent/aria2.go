@@ -24,6 +24,10 @@ type TorrentMeta struct {
 	Info struct {
 		Name   string `bencode:"name"`
 		Length int64  `bencode:"length"`
+		Files  []struct {
+			Length int64    `bencode:"length"`
+			Path   []string `bencode:"path"`
+		} `bencode:"files"`
 	} `bencode:"info"`
 }
 
@@ -158,14 +162,33 @@ func (d *Aria2Downloader) GetTitle() (string, error) {
 	return meta.Info.Name, nil
 }
 
-func (d *Aria2Downloader) GetFiles() (string, []string, error) {
+func (d *Aria2Downloader) GetFiles() ([]string, []string, error) {
 	meta, err := d.parseTorrentMeta()
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
-	mainFile := meta.Info.Name
-	tempFiles := []string{d.torrentFileName, mainFile + ".aria2"}
-	return mainFile, tempFiles, nil
+
+	var mainFiles []string
+	if len(meta.Info.Files) > 0 {
+		for _, file := range meta.Info.Files {
+			if meta.Info.Name == "" {
+				return nil, nil, fmt.Errorf("torrent meta does not contain a root directory name")
+			}
+			if len(file.Path) == 0 {
+				return nil, nil, fmt.Errorf("file path is empty in torrent meta")
+			}
+			mainFiles = append(mainFiles, filepath.Join(meta.Info.Name, filepath.Join(file.Path...)))
+		}
+	} else {
+		mainFiles = append(mainFiles, meta.Info.Name)
+	}
+
+	tempFiles := []string{
+		filepath.Join(meta.Info.Name + ".aria2"),
+		filepath.Join(d.torrentFileName),
+	}
+
+	return mainFiles, tempFiles, nil
 }
 
 func (d *Aria2Downloader) GetFileSize() (int64, error) {

@@ -20,7 +20,7 @@ type Downloader interface {
 	// GetFiles retrieves the file paths associated with the content.
 	// The first return value should be the path to the main downloaded file.
 	// The second return value is a slice of paths to temporary files (like the torrent file itself and any .aria2 file).
-	GetFiles() (string, []string, error)
+	GetFiles() ([]string, []string, error)
 
 	// GetFileSize retrieves the size (in bytes) of the main downloaded file.
 	// For a single file downloader, the returned size relates to that one file.
