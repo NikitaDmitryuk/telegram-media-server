@@ -92,12 +92,6 @@ func (dm *DownloadManager) StartDownload(dl downloader.Downloader) (int, chan fl
 			if err != nil {
 				logrus.WithError(err).Warnf("Failed to set movie as loaded for movieID %d", movieID)
 			}
-
-			if tempFilesErr := DeleteTempFilesByMovieID(movieID); tempFilesErr != nil {
-				logrus.WithError(tempFilesErr).Warnf("Failed to delete temp files for movieID %d", movieID)
-			} else {
-				logrus.Infof("Temp files deleted successfully for movieID %d", movieID)
-			}
 		}
 
 		delete(dm.jobs, movieID)

@@ -55,7 +55,7 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan
 	d.cmd = exec.CommandContext(ctx, "aria2c",
 		"--dir", d.downloadDir,
 		"--seed-time=0",
-		"--summary-interval=1",
+		"--summary-interval=3",
 		"--enable-dht=true",
 		fmt.Sprintf("--dht-listen-port=%d", dhtPort),
 		fmt.Sprintf("--listen-port=%d", listenPort),
@@ -81,15 +81,17 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan
 
 	go func() {
 		defer close(progressChan)
+		defer close(errChan)
+
 		d.parseProgress(stdout, progressChan)
+
 		err := d.cmd.Wait()
-		if err != nil {
+		if err != nil && !d.stoppedManually {
 			logrus.Warnf("aria2c exited with error: %v", err)
 			errChan <- err
 		} else {
 			errChan <- nil
 		}
-		close(errChan)
 	}()
 
 	return progressChan, errChan, nil
@@ -126,26 +128,6 @@ func (d *Aria2Downloader) StopDownload() error {
 			return fmt.Errorf("failed to send SIGINT to aria2c process: %v", err)
 		}
 		logrus.Info("Sent SIGINT to aria2c process")
-
-		done := make(chan error, 1)
-		go func() {
-			done <- d.cmd.Wait()
-		}()
-
-		select {
-		case err := <-done:
-			if err != nil {
-				logrus.Warnf("aria2c process exited with error: %v", err)
-			} else {
-				logrus.Info("aria2c process stopped successfully")
-			}
-		case <-time.After(10 * time.Second):
-			logrus.Warn("aria2c did not stop in time, killing process")
-			if err := d.cmd.Process.Kill(); err != nil {
-				return fmt.Errorf("failed to kill aria2c process after timeout: %v", err)
-			}
-			logrus.Info("aria2c process killed after timeout")
-		}
 	}
 	return nil
 }
