@@ -3,39 +3,11 @@ package utils
 import (
 	"fmt"
 	"net/url"
-	"os"
+
 	"regexp"
-	"syscall"
 
 	"github.com/sirupsen/logrus"
 )
-
-func HasEnoughSpace(path string, requiredSpace int64) bool {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
-		logrus.WithError(err).Error("Failed to get filesystem stats")
-		return false
-	}
-	availableSpace := stat.Bavail * uint64(stat.Bsize)
-
-	logrus.WithFields(logrus.Fields{
-		"required_space":  requiredSpace,
-		"available_space": availableSpace,
-	}).Info("Checking available disk space")
-
-	return availableSpace >= uint64(requiredSpace)
-}
-
-func IsEmptyDirectory(dir string) bool {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		logrus.WithError(err).Errorf("Failed to read directory: %s", dir)
-		return false
-	}
-
-	logrus.WithField("directory", dir).Info("Checking if directory is empty")
-	return len(entries) == 0
-}
 
 func SanitizeFileName(name string) string {
 	re := regexp.MustCompile(`[^а-яА-Яa-zA-Z0-9]+`)

@@ -2,6 +2,10 @@ package bot
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -37,4 +41,36 @@ func (b *Bot) SendSuccessMessage(chatID int64, message string) {
 	} else {
 		logrus.Infof("Message (%s) sent successfully", smsg.Text)
 	}
+}
+
+func (b *Bot) DownloadFile(fileID, fileName string) error {
+	file, err := b.Api.GetFile(tgbotapi.FileConfig{FileID: fileID})
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get file")
+		return err
+	}
+
+	fileURL := file.Link(b.Api.Token)
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to download file")
+		return err
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(filepath.Join(tmsconfig.GlobalConfig.MoviePath, fileName))
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create file")
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save file")
+		return err
+	}
+
+	logrus.Info("File downloaded successfully")
+	return nil
 }

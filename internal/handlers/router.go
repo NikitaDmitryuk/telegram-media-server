@@ -18,24 +18,23 @@ func Router(bot *tmsbot.Bot, update tgbotapi.Update) {
 	LoggingMiddleware(update)
 
 	if update.Message.IsCommand() {
-		switch update.Message.Command() {
+		command := strings.ToLower(update.Message.Command())
+		switch command {
 		case "login":
 			LoginHandler(bot, update)
-		default:
+		case "start":
 			if !AuthMiddleware(bot, update) {
 				return
 			}
-			switch update.Message.Command() {
-			case "start":
-				StartHandler(bot, update)
-			case "ls":
-				ListMoviesHandler(bot, update)
-			case "rm":
-				DeleteMoviesHandler(bot, update)
-			default:
-				logrus.Warnf("Unknown command: %s", update.Message.Command())
-				bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
+			StartHandler(bot, update)
+		case "ls", "rm":
+			if !AuthMiddleware(bot, update) {
+				return
 			}
+			handleBasicCommands(bot, update, command)
+		default:
+			logrus.Warnf("Unknown command: %s", command)
+			bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
 		}
 		return
 	}
@@ -46,10 +45,39 @@ func Router(bot *tmsbot.Bot, update tgbotapi.Update) {
 
 	if tmsutils.IsValidLink(update.Message.Text) {
 		HandleDownloadLink(bot, update)
-	} else if doc := update.Message.Document; doc != nil && strings.HasSuffix(doc.FileName, ".torrent") {
-		HandleTorrentFile(bot, update)
-	} else {
-		logrus.Warn("Invalid input received")
+		return
+	} else if doc := update.Message.Document; doc != nil {
+		if strings.HasSuffix(doc.FileName, ".torrent") {
+			HandleTorrentFile(bot, update)
+		} else {
+			logrus.Warnf("Unsupported document type: %s", doc.FileName)
+			bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnsupportedFileTypeMsgID))
+		}
+		return
+	}
+
+	args := strings.Fields(strings.ToLower(update.Message.Text))
+	if len(args) == 0 {
+		logrus.Warn("Empty message received")
 		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
+		return
+	}
+
+	command := args[0]
+	switch command {
+	case "ls", "rm":
+		handleBasicCommands(bot, update, command)
+	default:
+		logrus.Warnf("Unknown command or message: %s", update.Message.Text)
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
+	}
+}
+
+func handleBasicCommands(bot *tmsbot.Bot, update tgbotapi.Update, command string) {
+	switch command {
+	case "ls":
+		ListMoviesHandler(bot, update)
+	case "rm":
+		DeleteMoviesHandler(bot, update)
 	}
 }
