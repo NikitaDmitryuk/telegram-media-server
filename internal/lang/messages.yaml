@@ -78,7 +78,6 @@ StartCommand:
   en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all"
   ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех"
 
-
 NoMovies:
   en: "The list is empty"
   ru: "Список пуст"
@@ -90,10 +89,6 @@ LoginSuccess:
 AllMoviesDeleted:
   en: "All videos have been deleted"
   ru: "Все видео удалены"
-
-MovieDownloaded:
-  en: "ID: %d\nTitle: %s\nDownloaded: Yes\n\n"
-  ru: "ID: %d\nНазвание: %s\nЗагружено: Да\n\n"
 
 MovieDownloading:
   en: "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n\n"
@@ -131,10 +126,6 @@ TorrentFileExistsError:
 TorrentFileDownloadError:
   en: "Error downloading torrent file"
   ru: "Ошибка при загрузке торрет файла"
-
-StopNoArgument:
-  en: "Please specify the movie ID or 'all' to stop all downloads."
-  ru: "Пожалуйста, укажите ID фильма или 'all' для остановки всех загрузок."
 
 DownloadCancelled:
   en: "Download canceled: %s"

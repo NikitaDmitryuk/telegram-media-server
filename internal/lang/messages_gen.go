@@ -28,7 +28,6 @@ const (
 	NoMoviesMsgID                    MessageID = "NoMovies"
 	LoginSuccessMsgID                MessageID = "LoginSuccess"
 	AllMoviesDeletedMsgID            MessageID = "AllMoviesDeleted"
-	MovieDownloadedMsgID             MessageID = "MovieDownloaded"
 	MovieDownloadingMsgID            MessageID = "MovieDownloading"
 	DownloadProgressMsgID            MessageID = "DownloadProgress"
 	DownloadCompleteMsgID            MessageID = "DownloadComplete"
@@ -38,7 +37,6 @@ const (
 	DownloadDocumentErrorMsgID       MessageID = "DownloadDocumentError"
 	TorrentFileExistsErrorMsgID      MessageID = "TorrentFileExistsError"
 	TorrentFileDownloadErrorMsgID    MessageID = "TorrentFileDownloadError"
-	StopNoArgumentMsgID              MessageID = "StopNoArgument"
 	DownloadCancelledMsgID           MessageID = "DownloadCancelled"
 	InvalidIDsMsgID                  MessageID = "InvalidIDs"
 	DeletedMoviesMsgID               MessageID = "DeletedMovies"
@@ -145,10 +143,6 @@ var messages = map[MessageID]map[string]string{
 		"en": "All videos have been deleted",
 		"ru": "\u0412\u0441\u0435 \u0432\u0438\u0434\u0435\u043e \u0443\u0434\u0430\u043b\u0435\u043d\u044b",
 	},
-	"MovieDownloaded": {
-		"en": "ID: %d\nTitle: %s\nDownloaded: Yes\n\n",
-		"ru": "ID: %d\n\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435: %s\n\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043e: \u0414\u0430\n\n",
-	},
 	"MovieDownloading": {
 		"en": "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n\n",
 		"ru": "ID: %d\n\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435: %s\n\u041f\u0440\u043e\u0446\u0435\u043d\u0442 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438: %d%%\n\n",
@@ -184,10 +178,6 @@ var messages = map[MessageID]map[string]string{
 	"TorrentFileDownloadError": {
 		"en": "Error downloading torrent file",
 		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0435 \u0442\u043e\u0440\u0440\u0435\u0442 \u0444\u0430\u0439\u043b\u0430",
-	},
-	"StopNoArgument": {
-		"en": "Please specify the movie ID or 'all' to stop all downloads.",
-		"ru": "\u041f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u0443\u043a\u0430\u0436\u0438\u0442\u0435 ID \u0444\u0438\u043b\u044c\u043c\u0430 \u0438\u043b\u0438 'all' \u0434\u043b\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438 \u0432\u0441\u0435\u0445 \u0437\u0430\u0433\u0440\u0443\u0437\u043e\u043a.",
 	},
 	"DownloadCancelled": {
 		"en": "Download canceled: %s",
