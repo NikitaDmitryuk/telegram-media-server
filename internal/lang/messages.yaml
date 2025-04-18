@@ -78,10 +78,6 @@ StartCommand:
   en: "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all"
   ru: "<file.torrent> - загрузить torrent\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, all - для удаления всех"
 
-TorrentDownloadsStopped:
-  en: "All downloads have been stopped!"
-  ru: "Все загрузки остановлены!"
-
 NoMovies:
   en: "The list is empty"
   ru: "Список пуст"
@@ -93,10 +89,6 @@ LoginSuccess:
 AllMoviesDeleted:
   en: "All videos have been deleted"
   ru: "Все видео удалены"
-
-MovieDownloaded:
-  en: "ID: %d\nTitle: %s\nDownloaded: Yes\n\n"
-  ru: "ID: %d\nНазвание: %s\nЗагружено: Да\n\n"
 
 MovieDownloading:
   en: "ID: %d\nTitle: %s\nDownload Percentage: %d%%\n\n"
@@ -135,10 +127,6 @@ TorrentFileDownloadError:
   en: "Error downloading torrent file"
   ru: "Ошибка при загрузке торрет файла"
 
-StopNoArgument:
-  en: "Please specify the movie ID or 'all' to stop all downloads."
-  ru: "Пожалуйста, укажите ID фильма или 'all' для остановки всех загрузок."
-
 DownloadCancelled:
   en: "Download canceled: %s"
   ru: "Загрузка отменена: %s"
@@ -162,3 +150,23 @@ NoValidIDs:
 UnsupportedFileType:
   en: "Unsupported file type. Please upload a .torrent file or a video URL"
   ru: "Неподдерживаемый тип файла. Пожалуйста, загрузите .torrent файл или URL видео"
+
+FailedToDeleteMovie:
+  en: "Failed to delete movie with ID: %s"
+  ru: "Не удалось удалить фильм с ID: %s"
+
+MessageToDelete:
+  en: "Select a movie to delete:"
+  ru: "Выберите фильм для удаления:"
+
+NoMoviesToDelete:
+  en: "No movies to delete"
+  ru: "Нет фильмов для удаления"
+
+ListMovies:
+  en: "List of movies"
+  ru: "Список фильмов"
+
+DeleteMovie:
+  en: "Delete movie"
+  ru: "Удалить фильм"

@@ -38,5 +38,5 @@ func LoginHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 
 func StartHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	message := tmslang.GetMessage(tmslang.StartCommandMsgID)
-	bot.SendSuccessMessage(update.Message.Chat.ID, message)
+	SendMainMenu(bot, update.Message.Chat.ID, message)
 }
