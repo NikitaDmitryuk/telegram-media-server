@@ -24,7 +24,7 @@ func SendMainMenu(bot *tmsbot.Bot, chatID int64, message string) {
 
 func SendDeleteMovieMenu(bot *tmsbot.Bot, chatID int64, movies []tmsdb.Movie) {
 	if len(movies) == 0 {
-		bot.SendErrorMessage(chatID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
+		bot.SendSuccessMessage(chatID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
 		return
 	}
 	var rows [][]tgbotapi.InlineKeyboardButton

@@ -32,7 +32,7 @@ func ListMoviesHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 
 	var msg string
 	for _, movie := range movies {
-		msg += lang.GetMessage(lang.MovieDownloadingMsgID, movie.ID, movie.Name, movie.DownloadedPercentage) + "\n"
+		msg += lang.GetMessage(lang.MovieDownloadingMsgID, movie.ID, movie.Name, movie.DownloadedPercentage)
 	}
 
 	if msg == "" {

@@ -169,8 +169,8 @@ MessageToDelete:
   ru: "Выберите фильм для удаления:"
 
 NoMoviesToDelete:
-  en: "No movies to delete."
-  ru: "Нет фильмов для удаления."
+  en: "No movies to delete"
+  ru: "Нет фильмов для удаления"
 
 ListMovies:
   en: "List of movies"

@@ -27,7 +27,7 @@ func InitBot(config *tmsconfig.Config) (*Bot, error) {
 }
 
 func (b *Bot) SendErrorMessage(chatID int64, message string) {
-	logrus.Error(message)
+	logrus.Warn(message)
 	msg := tgbotapi.NewMessage(chatID, message)
 	if smsg, err := b.Api.Send(msg); err != nil {
 		logrus.WithError(err).Errorf("Message (%s) not sent", smsg.Text)
