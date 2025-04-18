@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
+	"time"
 
 	"regexp"
 
@@ -52,4 +55,29 @@ func GenerateFileName(title string) string {
 		"file_name": fileName,
 	}).Info("Generating file name")
 	return fileName
+}
+
+func ValidateDurationString(durationStr string) (time.Duration, error) {
+	re := regexp.MustCompile(`^(\d+)([hmd])$`)
+	matches := re.FindStringSubmatch(durationStr)
+	if len(matches) != 3 {
+		return 0, errors.New("invalid duration format, expected format like '3h', '30m', '1d'")
+	}
+
+	value, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0, errors.New("invalid numeric value in duration string")
+	}
+
+	unit := matches[2]
+	switch unit {
+	case "h":
+		return time.Duration(value) * time.Hour, nil
+	case "m":
+		return time.Duration(value) * time.Minute, nil
+	case "d":
+		return time.Duration(value) * 24 * time.Hour, nil
+	default:
+		return 0, errors.New("invalid time unit in duration string, expected 'h', 'm', or 'd'")
+	}
 }

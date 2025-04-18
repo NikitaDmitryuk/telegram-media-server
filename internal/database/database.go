@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/sirupsen/logrus"
@@ -23,7 +24,13 @@ type Database interface {
 	RemoveTempFilesByMovieID(ctx context.Context, movieID int) error
 	MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error)
 	Login(ctx context.Context, password string, chatID int64, userName string) (bool, error)
-	CheckUser(ctx context.Context, chatID int64) (bool, error)
+	GetUserRole(ctx context.Context, chatID int64) (UserRole, error)
+	IsUserAccessAllowed(ctx context.Context, chatID int64) (bool, UserRole, error)
+	AssignTemporaryPassword(ctx context.Context, password string, chatID int64) error
+	ExtendTemporaryUser(ctx context.Context, chatID int64, newExpiration time.Time) error
+	GenerateTemporaryPassword(ctx context.Context, duration time.Duration) (string, error)
+	AddDownloadHistory(ctx context.Context, userID uint, movieID uint) error
+	GetUserByChatID(ctx context.Context, chatID int64) (User, error)
 }
 
 var GlobalDB Database

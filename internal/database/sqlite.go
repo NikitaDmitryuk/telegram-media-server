@@ -2,8 +2,12 @@ package database
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/sirupsen/logrus"
@@ -28,7 +32,7 @@ func (s *SQLiteDatabase) Init(config *tmsconfig.Config) error {
 	}
 	s.db = db
 
-	if err := s.db.AutoMigrate(&Movie{}, &MovieFile{}, &User{}); err != nil {
+	if err := s.db.AutoMigrate(&Movie{}, &MovieFile{}, &User{}, &DownloadHistory{}, &TemporaryPassword{}, &DownloadHistory{}); err != nil {
 		logrus.Error("Failed to perform migration: ", err)
 		return fmt.Errorf("failed to perform migration: %v", err)
 	}
@@ -177,25 +181,209 @@ func (s *SQLiteDatabase) GetTempFilesByMovieID(ctx context.Context, movieID int)
 }
 
 func (s *SQLiteDatabase) Login(ctx context.Context, password string, chatID int64, userName string) (bool, error) {
-	if password != tmsconfig.GlobalConfig.Password {
-		logrus.Warn("Invalid password attempt")
-		return false, nil
+	if password == tmsconfig.GlobalConfig.AdminPassword {
+		user := User{
+			Name:   userName,
+			ChatID: chatID,
+			Role:   AdminRole,
+		}
+		if err := s.db.WithContext(ctx).Where("chat_id = ?", chatID).FirstOrCreate(&user).Error; err != nil {
+			logrus.WithError(err).Error("Failed to create or update admin user")
+			return false, err
+		}
+
+		if err := s.db.WithContext(ctx).Model(&user).Updates(User{Name: userName, ChatID: chatID, Role: AdminRole}).Error; err != nil {
+			logrus.WithError(err).Error("Failed to update admin user")
+			return false, err
+		}
+
+		logrus.Infof("Admin user logged in successfully: %s", userName)
+		return true, nil
 	}
-	user := User{Name: userName, ChatID: chatID}
-	if err := s.db.WithContext(ctx).Create(&user).Error; err != nil {
-		logrus.Error("Failed to add user: ", err)
+
+	if password == tmsconfig.GlobalConfig.RegularPassword {
+		user := User{
+			Name:   userName,
+			ChatID: chatID,
+			Role:   RegularRole,
+		}
+		if err := s.db.WithContext(ctx).Where("chat_id = ?", chatID).FirstOrCreate(&user).Error; err != nil {
+			logrus.WithError(err).Error("Failed to create or update regular user")
+			return false, err
+		}
+
+		if err := s.db.WithContext(ctx).Model(&user).Updates(User{Name: userName, ChatID: chatID, Role: RegularRole}).Error; err != nil {
+			logrus.WithError(err).Error("Failed to update regular user")
+			return false, err
+		}
+
+		logrus.Infof("Regular user logged in successfully: %s", userName)
+		return true, nil
+	}
+
+	var tempPass TemporaryPassword
+	if err := s.db.WithContext(ctx).Where("password = ?", password).First(&tempPass).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			logrus.Warnf("Invalid password attempt by user: %s", userName)
+			return false, nil
+		}
+		logrus.WithError(err).Error("Failed to check temporary password")
 		return false, err
 	}
-	logrus.Debug("User logged in successfully with chat ID: ", chatID)
+
+	if time.Now().After(tempPass.ExpiresAt) {
+		logrus.Warnf("Temporary password expired for user: %s", userName)
+		return false, nil
+	}
+
+	var user User
+	if err := s.db.WithContext(ctx).Where("chat_id = ?", chatID).FirstOrCreate(&user).Error; err != nil {
+		logrus.WithError(err).Error("Failed to fetch or create user")
+		return false, err
+	}
+
+	user.Role = TemporaryRole
+	user.ExpiresAt = &tempPass.ExpiresAt
+	if err := s.db.WithContext(ctx).Model(&user).Updates(User{Name: userName, ChatID: chatID, Role: TemporaryRole, ExpiresAt: &tempPass.ExpiresAt}).Error; err != nil {
+		logrus.WithError(err).Error("Failed to update temporary user")
+		return false, err
+	}
+
+	if err := s.db.Model(&user).Association("Passwords").Append(&tempPass); err != nil {
+		logrus.WithError(err).Error("Failed to associate user with temporary password")
+		return false, err
+	}
+
+	logrus.Infof("Temporary user logged in successfully: %s", userName)
 	return true, nil
 }
 
-func (s *SQLiteDatabase) CheckUser(ctx context.Context, chatID int64) (bool, error) {
-	var count int64
-	if err := s.db.WithContext(ctx).Model(&User{}).Where("chat_id = ?", chatID).Count(&count).Error; err != nil {
-		logrus.Error("Failed to check if user exists: ", err)
-		return false, err
+func (s *SQLiteDatabase) GetUserRole(ctx context.Context, chatID int64) (UserRole, error) {
+	var user User
+	if err := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to get user role for chat ID %d", chatID)
+		return "", err
 	}
-	logrus.Debug("User existence check completed for chat ID: ", chatID)
-	return count > 0, nil
+	logrus.Debugf("User role fetched successfully for chat ID %d: %s", chatID, user.Role)
+	return user.Role, nil
+}
+
+func (s *SQLiteDatabase) IsUserAccessAllowed(ctx context.Context, chatID int64) (bool, UserRole, error) {
+	var user User
+	if err := s.db.WithContext(ctx).Preload("Passwords").Where("chat_id = ?", chatID).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			logrus.Warnf("Access denied for unknown user with chat ID %d: user not found", chatID)
+			return false, "", nil
+		}
+		logrus.WithError(err).Errorf("Failed to check access for chat ID %d", chatID)
+		return false, "", err
+	}
+
+	if user.Role == TemporaryRole {
+		for _, tempPass := range user.Passwords {
+			if time.Now().Before(tempPass.ExpiresAt) {
+				logrus.Debugf("Access allowed for temporary user with chat ID %d", chatID)
+				return true, TemporaryRole, nil
+			}
+		}
+		logrus.Warnf("Access denied for temporary user with chat ID %d: all passwords expired", chatID)
+		return false, TemporaryRole, nil
+	}
+
+	logrus.Debugf("Access allowed for user with chat ID %d, role: %s", chatID, user.Role)
+	return true, user.Role, nil
+}
+
+func (s *SQLiteDatabase) AssignTemporaryPassword(ctx context.Context, password string, chatID int64) error {
+	var tempPass TemporaryPassword
+	if err := s.db.WithContext(ctx).Where("password = ?", password).First(&tempPass).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to find temporary password: %s", password)
+		return err
+	}
+
+	if time.Now().After(tempPass.ExpiresAt) {
+		logrus.Warnf("Cannot assign expired temporary password: %s", password)
+		return fmt.Errorf("temporary password expired")
+	}
+
+	if err := s.db.WithContext(ctx).Model(&User{}).Where("chat_id = ?", chatID).Update("temp_pass_id", nil).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to clear previous temporary password for user with chat ID %d", chatID)
+		return err
+	}
+
+	if err := s.db.WithContext(ctx).Model(&User{}).Where("chat_id = ?", chatID).Updates(map[string]interface{}{
+		"temp_pass_id": tempPass.ID,
+		"expires_at":   tempPass.ExpiresAt,
+		"role":         TemporaryRole,
+	}).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to assign new temporary password to user with chat ID %d", chatID)
+		return err
+	}
+
+	logrus.Debugf("New temporary password assigned successfully to user with chat ID %d", chatID)
+	return nil
+}
+
+func (s *SQLiteDatabase) ExtendTemporaryUser(ctx context.Context, chatID int64, newExpiration time.Time) error {
+	if err := s.db.WithContext(ctx).Model(&User{}).Where("chat_id = ? AND role = ?", chatID, TemporaryRole).Update("expires_at", newExpiration).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to extend expiration for temporary user with chat ID %d", chatID)
+		return err
+	}
+
+	logrus.Debugf("Temporary user with chat ID %d extended until %s", chatID, newExpiration)
+	return nil
+}
+
+func (s *SQLiteDatabase) GenerateTemporaryPassword(ctx context.Context, duration time.Duration) (string, error) {
+	passwordBytes := make([]byte, 16)
+	if _, err := rand.Read(passwordBytes); err != nil {
+		logrus.WithError(err).Error("Failed to generate random password")
+		return "", err
+	}
+	password := hex.EncodeToString(passwordBytes)
+
+	expiresAt := time.Now().Add(duration)
+
+	tempPass := TemporaryPassword{
+		Password:  password,
+		ExpiresAt: expiresAt,
+	}
+
+	if err := s.db.WithContext(ctx).Create(&tempPass).Error; err != nil {
+		logrus.WithError(err).Error("Failed to save temporary password to database")
+		return "", err
+	}
+
+	logrus.Debugf("Temporary password generated and saved: %s, expires at: %s", password, expiresAt)
+	return password, nil
+}
+
+func (s *SQLiteDatabase) AddDownloadHistory(ctx context.Context, userID uint, movieID uint) error {
+	downloadHistory := DownloadHistory{
+		UserID:  userID,
+		MovieID: movieID,
+	}
+
+	if err := s.db.WithContext(ctx).Create(&downloadHistory).Error; err != nil {
+		logrus.WithError(err).Errorf("Failed to add download history for user ID %d and movie ID %d", userID, movieID)
+		return err
+	}
+
+	logrus.Debugf("Download history added successfully for user ID %d and movie ID %d", userID, movieID)
+	return nil
+}
+
+func (s *SQLiteDatabase) GetUserByChatID(ctx context.Context, chatID int64) (User, error) {
+	var user User
+	if err := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			logrus.Warnf("User with chat ID %d not found", chatID)
+			return User{}, nil
+		}
+		logrus.WithError(err).Errorf("Failed to fetch user with chat ID %d", chatID)
+		return User{}, err
+	}
+
+	logrus.Debugf("User fetched successfully with chat ID %d", chatID)
+	return user, nil
 }

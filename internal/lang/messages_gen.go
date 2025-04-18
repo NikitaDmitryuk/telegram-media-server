@@ -48,6 +48,9 @@ const (
 	NoMoviesToDeleteMsgID            MessageID = "NoMoviesToDelete"
 	ListMoviesMsgID                  MessageID = "ListMovies"
 	DeleteMovieMsgID                 MessageID = "DeleteMovie"
+	AccessDeniedMsgID                MessageID = "AccessDenied"
+	InvalidDurationMsgID             MessageID = "InvalidDuration"
+	TempPasswordGenerationErrorMsgID MessageID = "TempPasswordGenerationError"
 )
 
 var messages = map[MessageID]map[string]string{
@@ -222,5 +225,17 @@ var messages = map[MessageID]map[string]string{
 	"DeleteMovie": {
 		"en": "Delete movie",
 		"ru": "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c",
+	},
+	"AccessDenied": {
+		"en": "Access denied",
+		"ru": "\u0414\u043e\u0441\u0442\u0443\u043f \u0437\u0430\u043f\u0440\u0435\u0449\u0435\u043d",
+	},
+	"InvalidDuration": {
+		"en": "Invalid duration format. Use 3h, 30m",
+		"ru": "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u0444\u043e\u0440\u043c\u0430\u0442 \u0434\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u0438. \u0418\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 3h, 30m",
+	},
+	"TempPasswordGenerationError": {
+		"en": "Error generating temporary password",
+		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e\u0433\u043e \u043f\u0430\u0440\u043e\u043b\u044f",
 	},
 }

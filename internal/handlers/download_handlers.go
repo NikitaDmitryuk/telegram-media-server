@@ -61,6 +61,15 @@ func handleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloa
 		return
 	}
 
+	user, err := tmsdb.GlobalDB.GetUserByChatID(context.Background(), chatID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to fetch user for download history")
+	}
+
+	if err := tmsdb.GlobalDB.AddDownloadHistory(context.Background(), user.ID, uint(movieID)); err != nil {
+		logrus.WithError(err).Error("Failed to record download history")
+	}
+
 	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
 
 	go handleDownloadCompletion(bot, chatID, downloaderInstance, movieID, videoTitle, progressChan, errChan)
