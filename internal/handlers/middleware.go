@@ -5,7 +5,6 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
 )
@@ -19,22 +18,32 @@ func LoggingMiddleware(update tgbotapi.Update) {
 	}
 }
 
-func AuthMiddleware(bot *bot.Bot, update tgbotapi.Update) bool {
-	if update.Message == nil {
-		return false
+func AuthMiddleware(bot *bot.Bot, update tgbotapi.Update) (bool, database.UserRole) {
+	var chatID int64
+	var userID int64
+
+	if update.Message != nil {
+		chatID = update.Message.Chat.ID
+		userID = update.Message.From.ID
+	} else if update.CallbackQuery != nil {
+		chatID = update.CallbackQuery.Message.Chat.ID
+		userID = update.CallbackQuery.From.ID
+	} else {
+		logrus.Error("Unable to determine chat ID or user ID")
+		return false, ""
 	}
 
-	userExists, err := database.GlobalDB.CheckUser(context.Background(), update.Message.From.ID)
+	isAllowed, userRole, err := database.GlobalDB.IsUserAccessAllowed(context.Background(), userID)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to check if user exists")
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.CheckUserErrorMsgID))
-		return false
+		logrus.WithError(err).Error("Failed to check user access")
+		return false, ""
 	}
 
-	if !userExists {
-		bot.SendSuccessMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownUserMsgID))
-		return false
+	if !isAllowed {
+		logrus.Warnf("Access denied for user with chat ID %d", chatID)
+		return false, userRole
 	}
 
-	return true
+	logrus.Debugf("Access granted for user with chat ID %d, role: %s", chatID, userRole)
+	return true, userRole
 }

@@ -170,3 +170,15 @@ ListMovies:
 DeleteMovie:
   en: "Delete movie"
   ru: "Удалить фильм"
+
+AccessDenied:
+  en: "Access denied"
+  ru: "Доступ запрещен"
+
+InvalidDuration:
+  en: "Invalid duration format. Use 3h, 30m"
+  ru: "Неверный формат длительности. Используйте 3h, 30m"
+
+TempPasswordGenerationError:
+  en: "Error generating temporary password"
+  ru: "Ошибка генерации временного пароля"

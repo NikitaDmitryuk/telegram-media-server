@@ -25,7 +25,8 @@ func init() {
 type Config struct {
 	BotToken        string
 	MoviePath       string
-	Password        string
+	AdminPassword   string
+	RegularPassword string
 	Lang            string
 	Proxy           string
 	ProxyHost       string
@@ -44,7 +45,8 @@ func NewConfig() (*Config, error) {
 	config := &Config{
 		BotToken:        getEnv("BOT_TOKEN", ""),
 		MoviePath:       getEnv("MOVIE_PATH", ""),
-		Password:        getEnv("PASSWORD", ""),
+		AdminPassword:   getEnv("ADMIN_PASSWORD", ""),
+		RegularPassword: getEnv("REGULAR_PASSWORD", ""),
 		Lang:            getEnv("LANG", "en"),
 		Proxy:           getEnv("PROXY", ""),
 		ProxyHost:       getEnv("PROXY_HOST", ""),
@@ -74,9 +76,15 @@ func (c *Config) validate() error {
 	if c.MoviePath == "" {
 		missingFields = append(missingFields, "MOVIE_PATH")
 	}
-	if c.Password == "" {
-		missingFields = append(missingFields, "PASSWORD")
+	if c.AdminPassword == "" {
+		missingFields = append(missingFields, "ADMIN_PASSWORD")
 	}
+
+	if c.RegularPassword == "" {
+		logrus.Warn("REGULAR_PASSWORD not set, using ADMIN_PASSWORD as REGULAR_PASSWORD")
+		c.RegularPassword = c.AdminPassword
+	}
+
 	if len(missingFields) > 0 {
 		return fmt.Errorf("missing required environment variables: %v", missingFields)
 	}
