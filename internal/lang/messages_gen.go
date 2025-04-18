@@ -25,7 +25,6 @@ const (
 	VideoDownloadingMsgID            MessageID = "VideoDownloading"
 	FileAlreadyExistsMsgID           MessageID = "FileAlreadyExists"
 	StartCommandMsgID                MessageID = "StartCommand"
-	TorrentDownloadsStoppedMsgID     MessageID = "TorrentDownloadsStopped"
 	NoMoviesMsgID                    MessageID = "NoMovies"
 	LoginSuccessMsgID                MessageID = "LoginSuccess"
 	AllMoviesDeletedMsgID            MessageID = "AllMoviesDeleted"
@@ -46,6 +45,11 @@ const (
 	StoppedDownloadsMsgID            MessageID = "StoppedDownloads"
 	NoValidIDsMsgID                  MessageID = "NoValidIDs"
 	UnsupportedFileTypeMsgID         MessageID = "UnsupportedFileType"
+	FailedToDeleteMovieMsgID         MessageID = "FailedToDeleteMovie"
+	MessageToDeleteMsgID             MessageID = "MessageToDelete"
+	NoMoviesToDeleteMsgID            MessageID = "NoMoviesToDelete"
+	ListMoviesMsgID                  MessageID = "ListMovies"
+	DeleteMovieMsgID                 MessageID = "DeleteMovie"
 )
 
 var messages = map[MessageID]map[string]string{
@@ -129,10 +133,6 @@ var messages = map[MessageID]map[string]string{
 		"en": "<file.torrent> - download torrent\n<URL> - download streaming video\n/ls - get list of files\n/rm <ID> - delete movie, all - to delete all",
 		"ru": "<file.torrent> - \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c torrent\n<URL> - \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0442\u043e\u043a\u043e\u0432\u043e\u0435 \u0432\u0438\u0434\u0435\u043e\n/ls - \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0444\u0430\u0439\u043b\u043e\u0432\n/rm <ID> - \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c, all - \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0432\u0441\u0435\u0445",
 	},
-	"TorrentDownloadsStopped": {
-		"en": "All downloads have been stopped!",
-		"ru": "\u0412\u0441\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u044b!",
-	},
 	"NoMovies": {
 		"en": "The list is empty",
 		"ru": "\u0421\u043f\u0438\u0441\u043e\u043a \u043f\u0443\u0441\u0442",
@@ -212,5 +212,25 @@ var messages = map[MessageID]map[string]string{
 	"UnsupportedFileType": {
 		"en": "Unsupported file type. Please upload a .torrent file or a video URL",
 		"ru": "\u041d\u0435\u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0442\u0438\u043f \u0444\u0430\u0439\u043b\u0430. \u041f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 .torrent \u0444\u0430\u0439\u043b \u0438\u043b\u0438 URL \u0432\u0438\u0434\u0435\u043e",
+	},
+	"FailedToDeleteMovie": {
+		"en": "Failed to delete movie with ID: %s",
+		"ru": "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c \u0441 ID: %s",
+	},
+	"MessageToDelete": {
+		"en": "Select a movie to delete:",
+		"ru": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0444\u0438\u043b\u044c\u043c \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f:",
+	},
+	"NoMoviesToDelete": {
+		"en": "No movies to delete.",
+		"ru": "\u041d\u0435\u0442 \u0444\u0438\u043b\u044c\u043c\u043e\u0432 \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f.",
+	},
+	"ListMovies": {
+		"en": "List of movies",
+		"ru": "\u0421\u043f\u0438\u0441\u043e\u043a \u0444\u0438\u043b\u044c\u043c\u043e\u0432",
+	},
+	"DeleteMovie": {
+		"en": "Delete movie",
+		"ru": "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u043c",
 	},
 }

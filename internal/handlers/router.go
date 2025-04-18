@@ -11,6 +11,11 @@ import (
 )
 
 func Router(bot *tmsbot.Bot, update tgbotapi.Update) {
+	if update.CallbackQuery != nil {
+		HandleCallbackQuery(bot, update)
+		return
+	}
+
 	if update.Message == nil {
 		return
 	}

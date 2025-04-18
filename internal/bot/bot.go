@@ -43,6 +43,14 @@ func (b *Bot) SendSuccessMessage(chatID int64, message string) {
 	}
 }
 
+func (b *Bot) Send(msg tgbotapi.Chattable) {
+	if smsg, err := b.Api.Send(msg); err != nil {
+		logrus.WithError(err).Errorf("Message (%s) not sent", smsg.Text)
+	} else {
+		logrus.Infof("Message (%s) sent successfully", smsg.Text)
+	}
+}
+
 func (b *Bot) DownloadFile(fileID, fileName string) error {
 	file, err := b.Api.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
@@ -73,4 +81,10 @@ func (b *Bot) DownloadFile(fileID, fileName string) error {
 
 	logrus.Info("File downloaded successfully")
 	return nil
+}
+
+func (b *Bot) AnswerCallbackQuery(callbackConfig tgbotapi.CallbackConfig) {
+	if _, err := b.Api.Request(callbackConfig); err != nil {
+		logrus.WithError(err).Error("Failed to answer callback query")
+	}
 }
