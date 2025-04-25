@@ -29,3 +29,4 @@ artifacts/
 src/
 pkg/
 .vscode/
+build/
