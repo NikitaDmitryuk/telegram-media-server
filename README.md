@@ -1,6 +1,4 @@
-![build](https://img.shields.io/github/actions/workflow/status/NikitaDmitryuk/telegram-media-server/main.yml)  
-![downloads](https://img.shields.io/github/downloads/NikitaDmitryuk/telegram-media-server/total)  
-![release](https://img.shields.io/github/v/release/NikitaDmitryuk/telegram-media-server?display_name=tag)  
+![release](https://img.shields.io/github/v/release/NikitaDmitryuk/telegram-media-server?display_name=tag)
 
 # Telegram Media Server
 
