@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/telegram-media-server
+ExecStart=/usr/local/bin/telegram-media-server
 EnvironmentFile=/etc/telegram-media-server/.env
 Restart=always
 
