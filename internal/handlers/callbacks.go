@@ -34,10 +34,9 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update tgbotapi.Update) {
 			}
 
 			if len(movies) == 0 {
-				editMsg := tgbotapi.NewEditMessageText(chatID, update.CallbackQuery.Message.MessageID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
-				if _, err := bot.Api.Send(editMsg); err != nil {
-					logrus.WithError(err).Error("Failed to send edit message")
-					return
+				deleteMsg := tgbotapi.NewDeleteMessage(chatID, update.CallbackQuery.Message.MessageID)
+				if _, err := bot.Api.Send(deleteMsg); err != nil {
+					logrus.WithError(err).Error("Failed to delete message")
 				}
 				return
 			}
@@ -51,14 +50,34 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update tgbotapi.Update) {
 		} else {
 			bot.SendErrorMessage(chatID, lang.GetMessage(lang.AccessDeniedMsgID))
 		}
+
 	case callbackData == "delete_movie_menu":
 		if role == database.AdminRole || role == database.RegularRole {
 			movies, err := database.GlobalDB.GetMovieList(context.Background())
 			if err != nil {
 				bot.SendErrorMessage(chatID, lang.GetMessage(lang.GetMovieListErrorMsgID))
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 				return
 			}
+
+			if len(movies) == 0 {
+				bot.SendSuccessMessage(chatID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+				return
+			}
+
 			SendDeleteMovieMenu(bot, chatID, movies)
+			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+		} else {
+			bot.SendErrorMessage(chatID, lang.GetMessage(lang.AccessDeniedMsgID))
+			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+		}
+	case callbackData == "cancel_delete_menu":
+		if role == database.AdminRole || role == database.RegularRole {
+			deleteMsg := tgbotapi.NewDeleteMessage(chatID, update.CallbackQuery.Message.MessageID)
+			if _, err := bot.Api.Send(deleteMsg); err != nil {
+				logrus.WithError(err).Error("Failed to delete message")
+			}
 		} else {
 			bot.SendErrorMessage(chatID, lang.GetMessage(lang.AccessDeniedMsgID))
 		}

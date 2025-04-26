@@ -51,6 +51,7 @@ const (
 	AccessDeniedMsgID                MessageID = "AccessDenied"
 	InvalidDurationMsgID             MessageID = "InvalidDuration"
 	TempPasswordGenerationErrorMsgID MessageID = "TempPasswordGenerationError"
+	CancelMsgID                      MessageID = "Cancel"
 )
 
 var messages = map[MessageID]map[string]string{
@@ -237,5 +238,9 @@ var messages = map[MessageID]map[string]string{
 	"TempPasswordGenerationError": {
 		"en": "Error generating temporary password",
 		"ru": "\u041e\u0448\u0438\u0431\u043a\u0430 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e\u0433\u043e \u043f\u0430\u0440\u043e\u043b\u044f",
+	},
+	"Cancel": {
+		"en": "Cancel",
+		"ru": "\u041e\u0442\u043c\u0435\u043d\u0430",
 	},
 }
