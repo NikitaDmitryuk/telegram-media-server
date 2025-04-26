@@ -10,12 +10,15 @@ import (
 )
 
 func SendMainMenu(bot *tmsbot.Bot, chatID int64, message string) {
-	buttons := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(lang.GetMessage(lang.ListMoviesMsgID), "list_movies"),
-			tgbotapi.NewInlineKeyboardButtonData(lang.GetMessage(lang.DeleteMovieMsgID), "delete_movie_menu"),
+	buttons := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton(lang.GetMessage(lang.ListMoviesMsgID)),
+			tgbotapi.NewKeyboardButton(lang.GetMessage(lang.DeleteMovieMsgID)),
 		),
 	)
+
+	buttons.OneTimeKeyboard = false
+	buttons.ResizeKeyboard = true
 
 	msg := tgbotapi.NewMessage(chatID, message)
 	msg.ReplyMarkup = buttons
