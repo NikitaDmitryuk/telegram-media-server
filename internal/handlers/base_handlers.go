@@ -107,17 +107,38 @@ func handleCommand(bot *tmsbot.Bot, update tgbotapi.Update) {
 }
 
 func handleMessage(bot *tmsbot.Bot, update tgbotapi.Update) {
-	if tmsutils.IsValidLink(update.Message.Text) {
-		HandleDownloadLink(bot, update)
-	} else if doc := update.Message.Document; doc != nil {
-		if strings.HasSuffix(doc.FileName, ".torrent") {
-			HandleTorrentFile(bot, update)
-		} else {
-			logrus.Warnf("Unsupported document type: %s", doc.FileName)
-			bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnsupportedFileTypeMsgID))
+	chatID := update.Message.Chat.ID
+	text := update.Message.Text
+
+	switch text {
+	case lang.GetMessage(lang.ListMoviesMsgID):
+		ListMoviesHandler(bot, update)
+	case lang.GetMessage(lang.DeleteMovieMsgID):
+		movies, err := database.GlobalDB.GetMovieList(context.Background())
+		if err != nil {
+			bot.SendErrorMessage(chatID, lang.GetMessage(lang.GetMovieListErrorMsgID))
+			return
 		}
-	} else {
-		logrus.Warnf("Unknown command or message: %s", update.Message.Text)
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
+
+		if len(movies) == 0 {
+			bot.SendSuccessMessage(chatID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
+			return
+		}
+
+		SendDeleteMovieMenu(bot, chatID, movies)
+	default:
+		if tmsutils.IsValidLink(text) {
+			HandleDownloadLink(bot, update)
+		} else if doc := update.Message.Document; doc != nil {
+			if strings.HasSuffix(doc.FileName, ".torrent") {
+				HandleTorrentFile(bot, update)
+			} else {
+				logrus.Warnf("Unsupported document type: %s", doc.FileName)
+				bot.SendErrorMessage(chatID, lang.GetMessage(lang.UnsupportedFileTypeMsgID))
+			}
+		} else {
+			logrus.Warnf("Unknown command or message: %s", text)
+			bot.SendErrorMessage(chatID, lang.GetMessage(lang.UnknownCommandMsgID))
+		}
 	}
 }
