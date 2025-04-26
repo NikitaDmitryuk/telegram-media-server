@@ -10,7 +10,7 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 
-RUN GOOS=linux go build -o /telegram-media-server ./cmd/telegram-media-server
+RUN go build -o /telegram-media-server ./cmd/telegram-media-server
 
 FROM ubuntu:24.04 AS runtime
 

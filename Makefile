@@ -48,12 +48,17 @@ install: build
 	install -Dm755 $(BUILD_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
 	install -Dm644 .env.example $(CONFIG_DIR)/.env.example
 	install -Dm644 telegram-media-server.service $(SERVICE_DIR)/telegram-media-server.service
-	@echo "Installation complete. To start the service, run:"
-	@echo "  sudo systemctl enable --now telegram-media-server"
+	systemctl daemon-reload
+	systemctl enable --now telegram-media-server
+	systemctl restart telegram-media-server
+	@echo "Installation complete"
+	@echo "Please configure the service by creating a .env file in $(CONFIG_DIR) based on the provided $(CONFIG_DIR)/.env.example and then restarting the service."
 
 .PHONY: uninstall
 uninstall:
 	@echo "Uninstalling $(BINARY_NAME)..."
+	systemctl stop telegram-media-server
+	systemctl disable telegram-media-server
 	rm -f $(INSTALL_DIR)/$(BINARY_NAME)
 	rm -f $(CONFIG_DIR)/.env.example
 	rm -f $(SERVICE_DIR)/telegram-media-server.service
