@@ -182,3 +182,7 @@ InvalidDuration:
 TempPasswordGenerationError:
   en: "Error generating temporary password"
   ru: "Ошибка генерации временного пароля"
+
+Cancel:
+  en: "Cancel"
+  ru: "Отмена"

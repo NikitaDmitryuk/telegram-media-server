@@ -29,6 +29,10 @@ func CreateDeleteMovieMenuMarkup(movies []tmsdb.Movie) tgbotapi.InlineKeyboardMa
 			tgbotapi.NewInlineKeyboardButtonData(movie.Name, "delete_movie:"+strconv.Itoa(int(movie.ID))),
 		))
 	}
+
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData(lang.GetMessage(lang.CancelMsgID), "cancel_delete_menu"),
+	))
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
 
