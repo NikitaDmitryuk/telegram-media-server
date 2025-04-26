@@ -26,6 +26,28 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update tgbotapi.Update) {
 		if role == database.AdminRole || role == database.RegularRole {
 			movieID := strings.TrimPrefix(callbackData, "delete_movie:")
 			DeleteMovieByID(bot, chatID, movieID)
+
+			movies, err := database.GlobalDB.GetMovieList(context.Background())
+			if err != nil {
+				bot.SendErrorMessage(chatID, lang.GetMessage(lang.GetMovieListErrorMsgID))
+				return
+			}
+
+			if len(movies) == 0 {
+				editMsg := tgbotapi.NewEditMessageText(chatID, update.CallbackQuery.Message.MessageID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
+				if _, err := bot.Api.Send(editMsg); err != nil {
+					logrus.WithError(err).Error("Failed to send edit message")
+					return
+				}
+				return
+			}
+
+			newMarkup := CreateDeleteMovieMenuMarkup(movies)
+			editMsg := tgbotapi.NewEditMessageTextAndMarkup(chatID, update.CallbackQuery.Message.MessageID, lang.GetMessage(lang.MessageToDeleteMsgID), newMarkup)
+			if _, err := bot.Api.Send(editMsg); err != nil {
+				logrus.WithError(err).Error("Failed to send edit message")
+				return
+			}
 		} else {
 			bot.SendErrorMessage(chatID, lang.GetMessage(lang.AccessDeniedMsgID))
 		}

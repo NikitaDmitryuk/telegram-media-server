@@ -1,5 +1,3 @@
-![release](https://img.shields.io/github/v/release/NikitaDmitryuk/telegram-media-server?display_name=tag)
-
 # Telegram Media Server
 
 **Telegram Media Server** — это Telegram-бот, который принимает ссылки на стриминговое видео или торрент-файлы, загружает их и раздает во внутренней сети через DLNA-сервер (например, `minidlna`).  
