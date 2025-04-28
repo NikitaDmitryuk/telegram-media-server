@@ -1,0 +1,68 @@
+{
+    "general": {
+        "commands": {
+            "start": "<file.torrent> - download a torrent\n<URL> - stream video\n/ls - list files\n/rm <ID> - delete a movie, 'all' to delete all"
+        },
+        "status_messages": {
+            "empty_list": "The list is empty",
+            "login_success": "Logged in successfully",
+            "all_movies_deleted": "All movies have been deleted",
+            "deleted_movie": "Movie with ID {{.ID}} has been deleted"
+        },
+        "download": {
+            "progress": "Downloading {{.Name}}: {{.Progress}}%"
+        },
+        "video_downloading": "Downloading video: {{.Title}}",
+        "download_stopped": "Download stopped for video: {{.Title}}",
+        "downloaded_list": "ID: {{.ID}}\nTitle: {{.Name}}\nDownload Progress: {{.Progress}}%\n\n",
+        "video_successfully_downloaded": "Video successfully downloaded: {{.Title}}",
+        "user_prompts": {
+            "unknown_user": "Please login using /login [PASSWORD]",
+            "delete_prompt": "Select a movie to delete:",
+            "no_movies_to_delete": "There are no movies to delete"
+        },
+        "interface": {
+            "list_movies": "Movie List",
+            "delete_movie": "Delete Movie",
+            "cancel": "Cancel"
+        }
+    },
+    "error": {
+        "authentication": {
+            "login": "An error occurred during login. Please try again.",
+            "wrong_password": "Incorrect password.",
+            "access_denied": "Access denied."
+        },
+        "commands": {
+            "unknown_command": "Unknown command. Use /start to see available commands.",
+            "invalid_format": "Invalid command format."
+        },
+        "movies": {
+            "fetch_error": "An error occurred while fetching the movie list. Please try again later.",
+            "check_error": "Error checking movie existence: {{.Error}}",
+            "already_exists": "The video already exists or is being downloaded."
+        },
+        "storage": {
+            "not_enough_space": "Not enough space to download the movie."
+        },
+        "downloads": {
+            "video_title_error": "Error retrieving video title: {{.Error}}",
+            "video_size_error": "Error retrieving video size: {{.Error}}",
+            "video_download_error": "Error downloading video: {{.Error}}",
+            "document_download_error": "Error downloading file (files larger than 50MB are not supported)."
+        },
+        "database": {
+            "delete_movie_error": "Error deleting movie record from database."
+        },
+        "validation": {
+            "invalid_ids": "Invalid IDs: {{.IDs}}",
+            "invalid_duration": "Invalid duration format. Use formats like 3h, 30m."
+        },
+        "file_management": {
+            "unsupported_type": "Unsupported file type. Please upload a .torrent file or a video URL."
+        },
+        "security": {
+            "temp_password_error": "Error generating temporary password."
+        }
+    }
+}

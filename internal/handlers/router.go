@@ -24,7 +24,7 @@ func Router(bot *tmsbot.Bot, update tgbotapi.Update) {
 	}
 
 	if !checkAccess(bot, update) {
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownUserMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil))
 		return
 	}
 

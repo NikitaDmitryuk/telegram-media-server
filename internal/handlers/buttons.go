@@ -12,8 +12,8 @@ import (
 func SendMainMenu(bot *tmsbot.Bot, chatID int64, message string) {
 	buttons := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton(lang.GetMessage(lang.ListMoviesMsgID)),
-			tgbotapi.NewKeyboardButton(lang.GetMessage(lang.DeleteMovieMsgID)),
+			tgbotapi.NewKeyboardButton(lang.Translate("general.interface.list_movies", nil)),
+			tgbotapi.NewKeyboardButton(lang.Translate("general.interface.delete_movie", nil)),
 		),
 	)
 
@@ -34,19 +34,19 @@ func CreateDeleteMovieMenuMarkup(movies []tmsdb.Movie) tgbotapi.InlineKeyboardMa
 	}
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData(lang.GetMessage(lang.CancelMsgID), "cancel_delete_menu"),
+		tgbotapi.NewInlineKeyboardButtonData(lang.Translate("general.interface.cancel", nil), "cancel_delete_menu"),
 	))
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
 
 func SendDeleteMovieMenu(bot *tmsbot.Bot, chatID int64, movies []tmsdb.Movie) {
 	if len(movies) == 0 {
-		bot.SendSuccessMessage(chatID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
+		bot.SendSuccessMessage(chatID, lang.Translate("general.user_prompts.no_movies_to_delete", nil))
 		return
 	}
 
 	buttons := CreateDeleteMovieMenuMarkup(movies)
-	msg := tgbotapi.NewMessage(chatID, lang.GetMessage(lang.MessageToDeleteMsgID))
+	msg := tgbotapi.NewMessage(chatID, lang.Translate("general.user_prompts.delete_prompt", nil))
 	msg.ReplyMarkup = buttons
 	bot.Send(msg)
 }

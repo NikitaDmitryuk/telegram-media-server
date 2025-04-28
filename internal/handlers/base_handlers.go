@@ -6,7 +6,6 @@ import (
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
-
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -18,7 +17,7 @@ func LoginHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 
 	if len(textFields) != 2 {
 		logrus.Warn("Invalid login command format")
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.InvalidCommandFormatMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.commands.invalid_format", nil))
 		return
 	}
 
@@ -29,21 +28,21 @@ func LoginHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	success, err := database.GlobalDB.Login(context.Background(), password, chatID, userName)
 	if err != nil {
 		logrus.WithError(err).Error("Login failed due to an error")
-		bot.SendErrorMessage(chatID, lang.GetMessage(lang.LoginErrorMsgID))
+		bot.SendErrorMessage(chatID, lang.Translate("error.authentication.login", nil))
 		return
 	}
 
 	if success {
 		logrus.WithField("username", userName).Info("User logged in successfully")
-		bot.SendSuccessMessage(chatID, lang.GetMessage(lang.LoginSuccessMsgID))
+		bot.SendSuccessMessage(chatID, lang.Translate("general.status_messages.login_success", nil))
 	} else {
 		logrus.WithField("username", userName).Warn("Login failed due to incorrect or expired password")
-		bot.SendErrorMessage(chatID, lang.GetMessage(lang.WrongPasswordMsgID))
+		bot.SendErrorMessage(chatID, lang.Translate("error.authentication.wrong_password", nil))
 	}
 }
 
 func StartHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
-	message := lang.GetMessage(lang.StartCommandMsgID)
+	message := lang.Translate("general.commands.start", nil)
 	SendMainMenu(bot, update.Message.Chat.ID, message)
 }
 
@@ -51,7 +50,7 @@ func GenerateTempPasswordHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	args := strings.Fields(update.Message.Text)
 	if len(args) != 2 {
 		logrus.Warn("Invalid /temp command format")
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.InvalidCommandFormatMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.commands.invalid_format", nil))
 		return
 	}
 
@@ -59,14 +58,14 @@ func GenerateTempPasswordHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	duration, err := tmsutils.ValidateDurationString(durationStr)
 	if err != nil {
 		logrus.WithError(err).Warn("Invalid duration string for /temp command")
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.InvalidDurationMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.validation.invalid_duration", nil))
 		return
 	}
 
 	password, err := database.GlobalDB.GenerateTemporaryPassword(context.Background(), duration)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate temporary password")
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.TempPasswordGenerationErrorMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.security.temp_password_error", nil))
 		return
 	}
 
@@ -86,23 +85,23 @@ func handleCommand(bot *tmsbot.Bot, update tgbotapi.Update) {
 				ListMoviesHandler(bot, update)
 			}
 		} else {
-			bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownUserMsgID))
+			bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil))
 		}
 	case "rm":
 		if checkAccessWithRole(bot, update, []database.UserRole{database.AdminRole, database.RegularRole}) {
 			DeleteMoviesHandler(bot, update)
 		} else {
-			bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.AccessDeniedMsgID))
+			bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.authentication.access_denied", nil))
 		}
 	case "temp":
 		if checkAccessWithRole(bot, update, []database.UserRole{database.AdminRole}) {
 			GenerateTempPasswordHandler(bot, update)
 		} else {
-			bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.AccessDeniedMsgID))
+			bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.authentication.access_denied", nil))
 		}
 	default:
 		logrus.Warnf("Unknown command: %s", command)
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.UnknownCommandMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.commands.unknown_command", nil))
 	}
 }
 
@@ -111,17 +110,17 @@ func handleMessage(bot *tmsbot.Bot, update tgbotapi.Update) {
 	text := update.Message.Text
 
 	switch text {
-	case lang.GetMessage(lang.ListMoviesMsgID):
+	case lang.Translate("general.interface.list_movies", nil):
 		ListMoviesHandler(bot, update)
-	case lang.GetMessage(lang.DeleteMovieMsgID):
+	case lang.Translate("general.interface.delete_movie", nil):
 		movies, err := database.GlobalDB.GetMovieList(context.Background())
 		if err != nil {
-			bot.SendErrorMessage(chatID, lang.GetMessage(lang.GetMovieListErrorMsgID))
+			bot.SendErrorMessage(chatID, lang.Translate("error.movies.fetch_error", nil))
 			return
 		}
 
 		if len(movies) == 0 {
-			bot.SendSuccessMessage(chatID, lang.GetMessage(lang.NoMoviesToDeleteMsgID))
+			bot.SendSuccessMessage(chatID, lang.Translate("general.user_prompts.no_movies_to_delete", nil))
 			return
 		}
 
@@ -134,11 +133,11 @@ func handleMessage(bot *tmsbot.Bot, update tgbotapi.Update) {
 				HandleTorrentFile(bot, update)
 			} else {
 				logrus.Warnf("Unsupported document type: %s", doc.FileName)
-				bot.SendErrorMessage(chatID, lang.GetMessage(lang.UnsupportedFileTypeMsgID))
+				bot.SendErrorMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil))
 			}
 		} else {
 			logrus.Warnf("Unknown command or message: %s", text)
-			bot.SendErrorMessage(chatID, lang.GetMessage(lang.UnknownCommandMsgID))
+			bot.SendErrorMessage(chatID, lang.Translate("error.commands.unknown_command", nil))
 		}
 	}
 }

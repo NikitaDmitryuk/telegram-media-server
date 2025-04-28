@@ -3,9 +3,11 @@ BUILD_DIR=build
 INSTALL_DIR=/usr/local/bin
 CONFIG_DIR=/etc/telegram-media-server
 SERVICE_DIR=/usr/lib/systemd/system
+LOCALES_SRC=locales
+LOCALES_DEST=/usr/local/share/telegram-media-server/locales
 
-DEPENDENCIES=yt-dlp aria2
-DEPENDENCY_BINARIES=yt-dlp aria2c
+DEPENDENCIES=yt-dlp aria2 ffmpeg
+DEPENDENCY_BINARIES=yt-dlp aria2c ffmpeg
 BUILD_DEPENDENCIES=go
 OPTIONAL_DEPENDENCIES=minidlna
 OPTIONAL_DEPENDENCY_CHECK=minidlna.service
@@ -48,6 +50,8 @@ install: build
 	install -Dm755 $(BUILD_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
 	install -Dm644 .env.example $(CONFIG_DIR)/.env.example
 	install -Dm644 telegram-media-server.service $(SERVICE_DIR)/telegram-media-server.service
+	install -d $(LOCALES_DEST)
+	install -Dm644 $(LOCALES_SRC)/* $(LOCALES_DEST)/
 	systemctl daemon-reload
 	systemctl enable --now telegram-media-server
 	systemctl restart telegram-media-server
@@ -62,6 +66,7 @@ uninstall:
 	rm -f $(INSTALL_DIR)/$(BINARY_NAME)
 	rm -f $(CONFIG_DIR)/.env.example
 	rm -f $(SERVICE_DIR)/telegram-media-server.service
+	rm -rf $(LOCALES_DEST)
 	@echo "Uninstallation complete."
 
 .PHONY: clean

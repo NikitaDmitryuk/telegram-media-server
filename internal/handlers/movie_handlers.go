@@ -26,17 +26,21 @@ func ListMoviesHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	movies, err := tmsdb.GlobalDB.GetMovieList(context.Background())
 	if err != nil {
 		logrus.WithError(err).Error("Failed to retrieve movie list")
-		bot.SendErrorMessage(chatID, lang.GetMessage(lang.GetMovieListErrorMsgID))
+		bot.SendErrorMessage(chatID, lang.Translate("error.movies.fetch_error", nil))
 		return
 	}
 
 	var msg string
 	for _, movie := range movies {
-		msg += lang.GetMessage(lang.MovieDownloadingMsgID, movie.ID, movie.Name, movie.DownloadedPercentage)
+		msg += lang.Translate("general.downloaded_list", map[string]interface{}{
+			"ID":       movie.ID,
+			"Name":     movie.Name,
+			"Progress": movie.DownloadedPercentage,
+		})
 	}
 
 	if msg == "" {
-		msg = lang.GetMessage(lang.NoMoviesMsgID)
+		msg = lang.Translate("general.status_messages.empty_list", nil)
 	}
 
 	SendMainMenu(bot, chatID, msg)
@@ -45,20 +49,21 @@ func ListMoviesHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 func DeleteMoviesHandler(bot *tmsbot.Bot, update tgbotapi.Update) {
 	args := strings.Fields(strings.TrimPrefix(update.Message.Text, "/"))
 	if len(args) < 2 {
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.GetMessage(lang.InvalidCommandFormatMsgID))
+		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.commands.invalid_format", nil))
 		return
 	}
 
 	if args[1] == "all" {
 		movies, err := tmsdb.GlobalDB.GetMovieList(context.Background())
 		if err != nil {
-			bot.SendErrorMessage(update.Message.Chat.ID, err.Error())
+			logrus.WithError(err).Error("Failed to retrieve movie list for deletion")
+			bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.movies.fetch_error", nil))
 			return
 		}
 		for _, movie := range movies {
 			DeleteMovieByID(bot, update.Message.Chat.ID, strconv.Itoa(int(movie.ID)))
 		}
-		bot.SendSuccessMessage(update.Message.Chat.ID, lang.GetMessage(lang.AllMoviesDeletedMsgID))
+		bot.SendSuccessMessage(update.Message.Chat.ID, lang.Translate("general.status_messages.all_movies_deleted", nil))
 	} else {
 		for _, arg := range args[1:] {
 			DeleteMovieByID(bot, update.Message.Chat.ID, arg)
