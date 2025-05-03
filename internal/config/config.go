@@ -51,7 +51,7 @@ func NewConfig() (*Config, error) {
 		Proxy:           getEnv("PROXY", ""),
 		ProxyHost:       getEnv("PROXY_HOST", ""),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		LangPath:        getEnv("LANG_PATH", "/etc/telegram-media-server/locales"),
+		LangPath:        getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
 	}
 
 	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
