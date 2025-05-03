@@ -20,44 +20,50 @@ func handleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloa
 	mainFiles, tempFiles, err := downloaderInstance.GetFiles()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get files from downloader instance")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.MovieCheckErrorMsgID, err))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.movies.check_error", map[string]interface{}{
+			"Error": err.Error(),
+		}))
 		return
 	}
 	allFiles := append(tempFiles, mainFiles...)
 
 	if exists, err := tmsdb.GlobalDB.MovieExistsFiles(context.Background(), allFiles); err != nil {
 		logrus.WithError(err).Error("Failed to check if media files exist in the database")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.MovieCheckErrorMsgID, err))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.movies.check_error", map[string]interface{}{
+			"Error": err.Error(),
+		}))
 		return
 	} else if exists {
 		logrus.Warn("Media already exists")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VideoExistsMsgID))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.movies.already_exists", nil))
 		return
 	}
 
 	videoTitle, err := downloaderInstance.GetTitle()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get video title")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VideoTitleErrorMsgID, err))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.downloads.video_title_error", map[string]interface{}{
+			"Error": err.Error(),
+		}))
 		return
 	}
 
 	fileSize, err := downloaderInstance.GetFileSize()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get file size")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VideoGetSizeErrorMsgID))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.downloads.video_size_error", nil))
 		return
 	}
 	if !filemanager.HasEnoughSpace(tmsconfig.GlobalConfig.MoviePath, fileSize) {
 		logrus.Warn("Not enough space for the download")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.NotEnoughSpaceMsgID))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.storage.not_enough_space", nil))
 		return
 	}
 
 	movieID, progressChan, errChan, err := tmsdmanager.GlobalDownloadManager.StartDownload(downloaderInstance)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to start download")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.DownloadDocumentErrorMsgID))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.downloads.document_download_error", nil))
 		return
 	}
 
@@ -70,7 +76,9 @@ func handleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloa
 		logrus.WithError(err).Error("Failed to record download history")
 	}
 
-	bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadingMsgID))
+	bot.SendSuccessMessage(chatID, tmslang.Translate("general.video_downloading", map[string]interface{}{
+		"Title": videoTitle,
+	}))
 
 	go handleDownloadCompletion(bot, chatID, downloaderInstance, movieID, videoTitle, progressChan, errChan)
 }
@@ -81,16 +89,22 @@ func handleDownloadCompletion(bot *tmsbot.Bot, chatID int64, downloaderInstance 
 	err := <-errChan
 	if downloaderInstance.StoppedManually() {
 		logrus.Info("Download was manually stopped")
-		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.DownloadCancelledMsgID, videoTitle))
+		bot.SendSuccessMessage(chatID, tmslang.Translate("general.download_stopped", map[string]interface{}{
+			"Title": videoTitle,
+		}))
 	} else if err != nil {
 		logrus.WithError(err).Error("Download failed")
 		if err := filemanager.DeleteMovie(movieID); err != nil {
 			logrus.WithError(err).Error("Failed to delete movie after download failed")
 		}
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.VideoDownloadErrorMsgID, err))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.downloads.video_download_error", map[string]interface{}{
+			"Error": err.Error(),
+		}))
 	} else {
 		logrus.Info("Download completed successfully")
-		bot.SendSuccessMessage(chatID, tmslang.GetMessage(tmslang.VideoSuccessfullyDownloadedMsgID, videoTitle))
+		bot.SendSuccessMessage(chatID, tmslang.Translate("general.video_successfully_downloaded", map[string]interface{}{
+			"Title": videoTitle,
+		}))
 		if err := filemanager.DeleteTemporaryFilesByMovieID(movieID); err != nil {
 			logrus.WithError(err).Error("Failed to delete temporary files after download")
 		}
@@ -116,7 +130,7 @@ func HandleTorrentFile(bot *tmsbot.Bot, update tgbotapi.Update) {
 
 	if err := bot.DownloadFile(doc.FileID, fileName); err != nil {
 		logrus.WithError(err).Error("Failed to download torrent file")
-		bot.SendErrorMessage(chatID, tmslang.GetMessage(tmslang.DownloadDocumentErrorMsgID))
+		bot.SendErrorMessage(chatID, tmslang.Translate("error.downloads.document_download_error", nil))
 		return
 	}
 

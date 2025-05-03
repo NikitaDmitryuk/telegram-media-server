@@ -1,0 +1,68 @@
+{
+    "general": {
+        "commands": {
+            "start": "<file.torrent> - загрузить торрент\n<URL> - скачать потоковое видео\n/ls - получить список файлов\n/rm <ID> - удалить фильм, \"all\" для удаления всех"
+        },
+        "status_messages": {
+            "empty_list": "Список пуст",
+            "login_success": "Вход выполнен успешно",
+            "all_movies_deleted": "Все видео удалены",
+            "deleted_movie": "Фильм с ID {{.ID}} удалён"
+        },
+        "download": {
+            "progress": "Загрузка {{.Name}}: {{.Progress}}%"
+        },
+        "video_downloading": "Загрузка видео: {{.Title}}",
+        "download_stopped": "Загрузка видео остановлена: {{.Title}}",
+        "downloaded_list": "ID: {{.ID}}\nНазвание: {{.Name}}\nПроцент загрузки: {{.Progress}}%\n\n",
+        "video_successfully_downloaded": "Видео успешно загружено: {{.Title}}",
+        "user_prompts": {
+            "unknown_user": "Выполните вход с помощью команды /login [PASSWORD]",
+            "delete_prompt": "Выберите фильм для удаления:",
+            "no_movies_to_delete": "Нет фильмов для удаления"
+        },
+        "interface": {
+            "list_movies": "Список фильмов",
+            "delete_movie": "Удалить фильм",
+            "cancel": "Отмена"
+        }
+    },
+    "error": {
+        "authentication": {
+            "login": "Произошла ошибка при входе. Пожалуйста, попробуйте снова.",
+            "wrong_password": "Неверный пароль.",
+            "access_denied": "Доступ запрещён."
+        },
+        "commands": {
+            "unknown_command": "Неизвестная команда. Используйте /start для получения списка доступных команд.",
+            "invalid_format": "Неправильный формат команды."
+        },
+        "movies": {
+            "fetch_error": "Произошла ошибка при получении списка фильмов. Пожалуйста, попробуйте позже.",
+            "check_error": "Ошибка при проверке существования фильма: {{.Error}}",
+            "already_exists": "Видео уже существует или находится в процессе загрузки."
+        },
+        "storage": {
+            "not_enough_space": "Недостаточно места для загрузки фильма."
+        },
+        "downloads": {
+            "video_title_error": "Ошибка получения названия видео: {{.Error}}",
+            "video_size_error": "Ошибка получения размера видео: {{.Error}}",
+            "video_download_error": "Ошибка загрузки видео: {{.Error}}",
+            "document_download_error": "Произошла ошибка при загрузке файла (файлы больше 50МБ не поддерживаются)."
+        },
+        "database": {
+            "delete_movie_error": "Ошибка при удалении записи фильма из базы данных."
+        },
+        "validation": {
+            "invalid_ids": "Невалидные ID: {{.IDs}}",
+            "invalid_duration": "Неверный формат длительности. Используйте, например, 3h или 30m."
+        },
+        "file_management": {
+            "unsupported_type": "Неподдерживаемый тип файла. Пожалуйста, загрузите .torrent файл или URL видео."
+        },
+        "security": {
+            "temp_password_error": "Ошибка генерации временного пароля."
+        }
+    }
+}

@@ -30,8 +30,8 @@ type Config struct {
 	Lang            string
 	Proxy           string
 	ProxyHost       string
-	MessageFilePath string
 	LogLevel        string
+	LangPath        string
 }
 
 func getEnv(key string, defaultValue string) string {
@@ -50,13 +50,14 @@ func NewConfig() (*Config, error) {
 		Lang:            getEnv("LANG", "en"),
 		Proxy:           getEnv("PROXY", ""),
 		ProxyHost:       getEnv("PROXY_HOST", ""),
-		MessageFilePath: getEnv("MESSAGE_FILE_PATH", ""),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
+		LangPath:        getEnv("LANG_PATH", "/etc/telegram-media-server/locales"),
 	}
 
 	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
 		config.MoviePath = "/app/media"
-		logrus.Infof("Running inside Docker, setting MOVIE_PATH to %s", config.MoviePath)
+		config.LangPath = "/app/locales"
+		logrus.Infof("Running inside Docker, setting MOVIE_PATH to %s and LANG_PATH to %s", config.MoviePath, config.LangPath)
 	}
 
 	if err := config.validate(); err != nil {
