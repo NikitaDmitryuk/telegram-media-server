@@ -162,13 +162,15 @@ The configuration file is `.env`:
 
 **Доступные параметры / Available parameters**:
 
-- `BOT_TOKEN` (обязательно / required): Токен бота от BotFather. Your Telegram bot token from BotFather.
-- `MOVIE_PATH`: Путь к директории для базы данных и файлов. Path to the directory for the database and files.  
-- `ADMIN_PASSWORD`: Пароль для администратора. Password for admin authorization.  
-- `REGULAR_PASSWORD`: Пароль для обычных пользователей. Password for regular users.  
-- `LANG`: Язык сообщений (ru, en). Bot message language (ru, en).  
-- `PROXY`: Адрес прокси для `yt-dlp`. Proxy address for `yt-dlp`.  
-- `PROXY_HOST`: Домены, для которых использовать прокси (если пусто — всегда). Domains to use proxy for (if empty, always use proxy).
+| **Параметр / Parameter** | **Описание / Description**                                                                 |
+|---------------------------|-------------------------------------------------------------------------------------------|
+| `BOT_TOKEN`              | Токен бота от BotFather. Your Telegram bot token from BotFather.                          |
+| `MOVIE_PATH`             | Путь к директории для базы данных и файлов. Path to the directory for the database and files. |
+| `ADMIN_PASSWORD`         | Пароль для администратора. Password for admin authorization.                              |
+| `REGULAR_PASSWORD`       | Пароль для обычных пользователей. Password for regular users.                             |
+| `LANG`                   | Язык сообщений (ru, en). Bot message language (ru, en).                                   |
+| `PROXY`                  | Адрес прокси для `yt-dlp`. Proxy address for `yt-dlp`.                                    |
+| `PROXY_HOST`             | Домены, для которых использовать прокси (если пусто — всегда). Domains to use proxy for (if empty, always use proxy). |
 
 ---
 
@@ -190,29 +192,24 @@ To start using the bot, log in:
 
 ### Ролевая система / Role System
 
-Бот поддерживает три роли:  
-The bot supports three roles:
-
-1. **Администратор / Admin**:
-   - Авторизация через `ADMIN_PASSWORD`. Authorized with `ADMIN_PASSWORD`.  
-   - Полный доступ, включая команду `/temp`. Full access, including the `/temp` command.  
-2. **Обычный пользователь / Regular User**:  
-   - Авторизация через `REGULAR_PASSWORD`. Authorized with `REGULAR_PASSWORD`.  
-   - Доступ ко всем функциям, кроме `/temp`. Access to all features except `/temp`.  
-3. **Временный пользователь / Temporary User**:  
-   - Авторизация через временный пароль от `/temp`. Authorized with a temporary password from `/temp`.  
-   - Только добавление ссылок для загрузки. Can only add links for download.
+| **Роль / Role**          | **Авторизация / Authorization**                          | **Доступ / Access**                                                                 |
+|---------------------------|---------------------------------------------------------|-------------------------------------------------------------------------------------|
+| **Администратор / Admin** | Через `ADMIN_PASSWORD`. Authorized with `ADMIN_PASSWORD`. | Полный доступ, включая команду `/temp`. Full access, including the `/temp` command. |
+| **Обычный пользователь / Regular User** | Через `REGULAR_PASSWORD`. Authorized with `REGULAR_PASSWORD`. | Доступ ко всем функциям, кроме `/temp`. Access to all features except `/temp`.      |
+| **Временный пользователь / Temporary User** | Через временный пароль от `/temp`. Authorized with a temporary password from `/temp`. | Только добавление ссылок для загрузки. Can only add links for download.            |
 
 ---
 
 ### Доступные команды / Available commands
 
-- `/start`: Приветственное сообщение. Welcome message.  
-- `/login <password>`: Авторизация. User authorization.  
-- `/ls`: Список текущих загрузок. List of current downloads.  
-- `/rm <id>`: Удаление загрузки по ID из `/ls`. Delete a download by ID from `/ls`.  
-- `/rm all`: Удаление всех загрузок. Delete all downloads.  
-- `/temp <1d | 3h | 30m>`: Генерация временного пароля (только для админа). Generate a temporary password (admin only).
+| **Команда / Command**       | **Описание / Description**                                                                 |
+|-----------------------------|-------------------------------------------------------------------------------------------|
+| `/start`                    | Приветственное сообщение. Welcome message.                                                |
+| `/login <password>`         | Авторизация. User authorization.                                                          |
+| `/ls`                       | Список текущих загрузок. List of current downloads.                                       |
+| `/rm <id>`                  | Удаление загрузки по ID из `/ls`. Delete a download by ID from `/ls`.                     |
+| `/rm all`                   | Удаление всех загрузок. Delete all downloads.                                             |
+| `/temp <1d | 3h | 30m>`     | Генерация временного пароля (только для админа). Generate a temporary password (admin only). |
 
 ---
 
@@ -230,8 +227,8 @@ Examples of management:
 Скриншоты:  
 Screenshots:  
 <div style="display: flex; justify-content: space-between;">  
-   <img src="./images/manage_video.png" alt="Управление видео" style="width: 45%;" title="Managing streaming videos / Управление потоковыми видео">  
-   <img src="./images/manage_torrent.png" alt="Управление торрентами" style="width: 45%;" title="Managing torrent files / Управление торрент-файлами">  
+   <img src="./images/example_1.jpg" alt="Управление видео" style="width: 45%;">  
+   <img src="./images/example_2.jpg" alt="Управление загрузками" style="width: 45%;">  
 </div>
 
 ---
