@@ -209,7 +209,7 @@ To start using the bot, log in:
 | `/ls`                       | Список текущих загрузок. List of current downloads.                                       |
 | `/rm <id>`                  | Удаление загрузки по ID из `/ls`. Delete a download by ID from `/ls`.                     |
 | `/rm all`                   | Удаление всех загрузок. Delete all downloads.                                             |
-| `/temp <1d | 3h | 30m>`     | Генерация временного пароля (только для админа). Generate a temporary password (admin only). |
+| `/temp <1d \| 3h \| 30m>`     | Генерация временного пароля (только для админа). Generate a temporary password (admin only). |
 
 ---
 
