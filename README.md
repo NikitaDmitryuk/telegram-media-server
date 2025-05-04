@@ -227,8 +227,8 @@ Examples of management:
 Скриншоты:  
 Screenshots:  
 <div style="display: flex; justify-content: space-between;">  
-   <img src="./images/manage_video.png" alt="Управление видео" style="width: 45%;" title="Managing streaming videos / Управление потоковыми видео">  
-   <img src="./images/manage_torrent.png" alt="Управление торрентами" style="width: 45%;" title="Managing torrent files / Управление торрент-файлами">  
+   <img src="./images/example_1.jpg" alt="Управление видео" style="width: 45%;">  
+   <img src="./images/example_2.jpg" alt="Управление загрузками" style="width: 45%;">  
 </div>
 
 ---

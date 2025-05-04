@@ -30,3 +30,5 @@ src/
 pkg/
 .vscode/
 build/
+
+.DS_Store
