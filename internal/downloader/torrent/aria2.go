@@ -3,21 +3,20 @@ package aria2
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/jackpal/bencode-go"
-	"github.com/sirupsen/logrus"
 )
 
 type TorrentMeta struct {
@@ -39,20 +38,29 @@ type Aria2Downloader struct {
 	stoppedManually bool
 }
 
-func NewAria2Downloader(bot *bot.Bot, torrentFileName string) downloader.Downloader {
+func NewAria2Downloader(botInstance *bot.Bot, torrentFileName string) downloader.Downloader {
 	return &Aria2Downloader{
-		bot:             bot,
+		bot:             botInstance,
 		torrentFileName: torrentFileName,
 		downloadDir:     tmsconfig.GlobalConfig.MoviePath,
 	}
 }
 
-func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan error, error) {
-	dhtPort := 6881 + rand.Intn(1000)
-	listenPort := 7881 + rand.Intn(1000)
+func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
+	const dhtPortBase, listenPortBase, portRange = 6881, 7881, 1000
+
+	dhtPort, err := generateRandomPort(dhtPortBase, portRange)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate DHT port: %w", err)
+	}
+
+	listenPort, err := generateRandomPort(listenPortBase, portRange)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate listen port: %w", err)
+	}
 
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
-	d.cmd = exec.CommandContext(ctx, "aria2c",
+	cmdArgs := []string{
 		"--dir", d.downloadDir,
 		"--seed-time=0",
 		"--summary-interval=3",
@@ -65,19 +73,21 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan
 		"--max-connection-per-server=16",
 		"--split=16",
 		"--min-split-size=1M",
-		torrentPath)
+		torrentPath,
+	}
+	d.cmd = exec.CommandContext(ctx, "aria2c", cmdArgs...)
 
 	stdout, err := d.cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to capture stdout: %v", err)
+		return nil, nil, fmt.Errorf("failed to capture stdout: %w", err)
 	}
 
 	if err := d.cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("failed to start aria2c: %v", err)
+		return nil, nil, fmt.Errorf("failed to start aria2c: %w", err)
 	}
 
-	progressChan := make(chan float64)
-	errChan := make(chan error, 1)
+	progressChan = make(chan float64)
+	errChan = make(chan error, 1)
 
 	go func() {
 		defer close(progressChan)
@@ -85,9 +95,8 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan
 
 		d.parseProgress(stdout, progressChan)
 
-		err := d.cmd.Wait()
-		if err != nil && !d.stoppedManually {
-			logrus.Warnf("aria2c exited with error: %v", err)
+		if err := d.cmd.Wait(); err != nil && !d.stoppedManually {
+			logutils.Log.WithError(err).Warn("aria2c exited with error")
 			errChan <- err
 		} else {
 			errChan <- nil
@@ -97,27 +106,25 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (chan float64, chan
 	return progressChan, errChan, nil
 }
 
-func (d *Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
+func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
 	reProgress := regexp.MustCompile(`\(\s*(\d+\.?\d*)%\s*\)`)
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		logrus.Debugf("aria2c output: %s", line)
+		logutils.Log.Debugf("aria2c output: %s", line)
 
 		matches := reProgress.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			if prog, err := strconv.ParseFloat(matches[1], 64); err == nil {
 				progressChan <- prog
 			} else {
-				logrus.Errorf("failed to parse progress value: %v", err)
+				logutils.Log.WithError(err).Error("failed to parse progress value")
 			}
 		}
-
-		time.Sleep(100 * time.Millisecond)
 	}
 	if err := scanner.Err(); err != nil {
-		logrus.Errorf("error reading aria2c output: %v", err)
+		logutils.Log.WithError(err).Error("error reading aria2c output")
 	}
 }
 
@@ -125,9 +132,9 @@ func (d *Aria2Downloader) StopDownload() error {
 	d.stoppedManually = true
 	if d.cmd != nil && d.cmd.Process != nil {
 		if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
-			return fmt.Errorf("failed to send SIGINT to aria2c process: %v", err)
+			return fmt.Errorf("failed to send SIGINT to aria2c process: %w", err)
 		}
-		logrus.Info("Sent SIGINT to aria2c process")
+		logutils.Log.Info("Sent SIGINT to aria2c process")
 	}
 	return nil
 }
@@ -144,13 +151,12 @@ func (d *Aria2Downloader) GetTitle() (string, error) {
 	return meta.Info.Name, nil
 }
 
-func (d *Aria2Downloader) GetFiles() ([]string, []string, error) {
+func (d *Aria2Downloader) GetFiles() (mainFiles, tempFiles []string, err error) {
 	meta, err := d.parseTorrentMeta()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var mainFiles []string
 	if len(meta.Info.Files) > 0 {
 		for _, file := range meta.Info.Files {
 			if meta.Info.Name == "" {
@@ -165,9 +171,9 @@ func (d *Aria2Downloader) GetFiles() ([]string, []string, error) {
 		mainFiles = append(mainFiles, meta.Info.Name)
 	}
 
-	tempFiles := []string{
-		filepath.Join(meta.Info.Name + ".aria2"),
-		filepath.Join(d.torrentFileName),
+	tempFiles = []string{
+		meta.Info.Name + ".aria2",
+		d.torrentFileName,
 	}
 
 	return mainFiles, tempFiles, nil
@@ -176,11 +182,11 @@ func (d *Aria2Downloader) GetFiles() ([]string, []string, error) {
 func (d *Aria2Downloader) GetFileSize() (int64, error) {
 	meta, err := d.parseTorrentMeta()
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to parse torrent metadata for file size, returning 0")
+		logutils.Log.WithError(err).Warn("Failed to parse torrent metadata for file size, returning 0")
 		return 0, nil
 	}
 	if meta.Info.Length == 0 {
-		logrus.Warn("Torrent metadata does not indicate file size, returning 0")
+		logutils.Log.Warn("Torrent metadata does not indicate file size, returning 0")
 		return 0, nil
 	}
 	return meta.Info.Length, nil
@@ -190,16 +196,32 @@ func (d *Aria2Downloader) parseTorrentMeta() (*TorrentMeta, error) {
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
 	f, err := os.Open(torrentPath)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open torrent file: %v", err)
+		return nil, fmt.Errorf("cannot open torrent file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			logutils.Log.WithError(cerr).Error("Failed to close torrent file")
+		}
+	}()
 
 	var meta TorrentMeta
 	if err := bencode.Unmarshal(f, &meta); err != nil {
-		return nil, fmt.Errorf("failed to decode torrent meta: %v", err)
+		return nil, fmt.Errorf("failed to decode torrent meta: %w", err)
 	}
 	if meta.Info.Name == "" {
 		return nil, fmt.Errorf("torrent meta does not contain a file name")
 	}
 	return &meta, nil
+}
+
+func generateRandomPort(base, rangeSize int) (int, error) {
+	if rangeSize <= 0 {
+		return 0, fmt.Errorf("invalid range size: %d", rangeSize)
+	}
+
+	b := make([]byte, 2)
+	if _, err := rand.Read(b); err != nil {
+		return 0, fmt.Errorf("failed to generate random port: %w", err)
+	}
+	return base + int(b[0])%rangeSize, nil
 }
