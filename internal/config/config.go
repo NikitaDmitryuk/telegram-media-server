@@ -2,24 +2,21 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
-	"strings"
-
-	"github.com/sirupsen/logrus"
 )
 
 var GlobalConfig *Config
 
-func init() {
+func InitConfig() error {
 	var err error
 	GlobalConfig, err = NewConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create configuration")
+		log.Fatalf("Failed to create configuration: %v", err)
+		return err
 	}
 
-	if err := setLogLevel(GlobalConfig.LogLevel); err != nil {
-		logrus.WithError(err).Fatal("Invalid log level configuration")
-	}
+	return nil
 }
 
 type Config struct {
@@ -34,7 +31,7 @@ type Config struct {
 	LangPath        string
 }
 
-func getEnv(key string, defaultValue string) string {
+func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
 	}
@@ -57,20 +54,20 @@ func NewConfig() (*Config, error) {
 	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
 		config.MoviePath = "/app/media"
 		config.LangPath = "/app/locales"
-		logrus.Infof("Running inside Docker, setting MOVIE_PATH to %s and LANG_PATH to %s", config.MoviePath, config.LangPath)
+		log.Printf("Running inside Docker, setting MOVIE_PATH to %s and LANG_PATH to %s", config.MoviePath, config.LangPath)
 	}
 
 	if err := config.validate(); err != nil {
-		logrus.WithError(err).Error("Configuration validation failed")
+		log.Printf("Configuration validation failed: %v", err)
 		return nil, err
 	}
 
-	logrus.Info("Configuration loaded successfully")
+	log.Println("Configuration loaded successfully")
 	return config, nil
 }
 
 func (c *Config) validate() error {
-	missingFields := []string{}
+	var missingFields []string
 	if c.BotToken == "" {
 		missingFields = append(missingFields, "BOT_TOKEN")
 	}
@@ -82,22 +79,12 @@ func (c *Config) validate() error {
 	}
 
 	if c.RegularPassword == "" {
-		logrus.Warn("REGULAR_PASSWORD not set, using ADMIN_PASSWORD as REGULAR_PASSWORD")
+		log.Println("REGULAR_PASSWORD not set, using ADMIN_PASSWORD as REGULAR_PASSWORD")
 		c.RegularPassword = c.AdminPassword
 	}
 
 	if len(missingFields) > 0 {
 		return fmt.Errorf("missing required environment variables: %v", missingFields)
 	}
-	return nil
-}
-
-func setLogLevel(level string) error {
-	parsedLevel, err := logrus.ParseLevel(strings.ToLower(level))
-	if err != nil {
-		return fmt.Errorf("invalid log level: %s", level)
-	}
-	logrus.SetLevel(parsedLevel)
-	logrus.Infof("Log level set to %s", level)
 	return nil
 }

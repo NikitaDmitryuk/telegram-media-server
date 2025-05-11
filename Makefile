@@ -78,6 +78,7 @@ clean:
 format:
 	go fmt ./...
 	go mod tidy
+	golangci-lint run --fix
 
 .PHONY: lint
 lint:

@@ -4,18 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"time"
 
-	"regexp"
-
-	"github.com/sirupsen/logrus"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
 func SanitizeFileName(name string) string {
 	re := regexp.MustCompile(`[^а-яА-Яa-zA-Z0-9]+`)
 	sanitized := re.ReplaceAllString(name, "_")
-	logrus.WithFields(logrus.Fields{
+	logutils.Log.WithFields(map[string]any{
 		"original_name":  name,
 		"sanitized_name": sanitized,
 	}).Debug("Sanitizing file name")
@@ -23,25 +22,25 @@ func SanitizeFileName(name string) string {
 }
 
 func LogAndReturnError(message string, err error) error {
-	logrus.WithError(err).Error(message)
-	return fmt.Errorf("%s: %v", message, err)
+	logutils.Log.WithError(err).Error(message)
+	return fmt.Errorf("%s: %w", message, err)
 }
 
 func IsValidLink(text string) bool {
 	parsedURL, err := url.ParseRequestURI(text)
 	if err != nil {
-		logrus.WithError(err).Warn("Invalid URL format")
+		logutils.Log.WithError(err).Warn("Invalid URL format")
 		return false
 	}
 
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		logrus.WithField("scheme", parsedURL.Scheme).Warn("Invalid URL scheme")
+		logutils.Log.WithField("scheme", parsedURL.Scheme).Warn("Invalid URL scheme")
 		return false
 	}
 
 	re := regexp.MustCompile(`^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	isValid := re.MatchString(parsedURL.Host)
-	logrus.WithFields(logrus.Fields{
+	logutils.Log.WithFields(map[string]any{
 		"url":      text,
 		"is_valid": isValid,
 	}).Debug("Validating URL")
@@ -50,7 +49,7 @@ func IsValidLink(text string) bool {
 
 func GenerateFileName(title string) string {
 	fileName := SanitizeFileName(title) + ".mp4"
-	logrus.WithFields(logrus.Fields{
+	logutils.Log.WithFields(map[string]any{
 		"title":     title,
 		"file_name": fileName,
 	}).Info("Generating file name")

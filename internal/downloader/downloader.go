@@ -36,6 +36,6 @@ type Downloader interface {
 
 	// StopDownload stops the download process.
 	// If the download is stopped manually, implementations should track that state so that handlers
-	// can notify the user that the download was cancelled.
+	// can notify the user that the download was canceled.
 	StopDownload() error
 }
