@@ -27,6 +27,10 @@ func Router(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	auth.LoggingMiddleware(update)
 
 	if update.Message.IsCommand() {
+		if !auth.CheckAccess(update) && update.Message.Command() != "login" {
+			bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil))
+			return
+		}
 		handleCommand(bot, update)
 		return
 	}
