@@ -5,24 +5,6 @@
 
 ---
 
-## Содержание / Contents
-
-- [Особенности / Features](#особенности--features)  
-- [Зависимости / Dependencies](#зависимости--dependencies)  
-- [Установка / Installation](#установка--installation)  
-  - [Использование sudo make install / Using sudo make install](#использование-sudo-make-install--using-sudo-make-install)  
-  - [Использование Docker Compose / Using Docker Compose](#использование-docker-compose--using-docker-compose)  
-  - [Установка и настройка minidlna / Installing and configuring minidlna](#установка-и-настройка-minidlna--installing-and-configuring-minidlna)  
-- [Конфигурация / Configuration](#конфигурация--configuration)  
-- [Использование / Usage](#использование--usage)  
-  - [Авторизация / Authorization](#авторизация--authorization)  
-  - [Ролевая система / Role System](#ролевая-система--role-system)  
-  - [Доступные команды / Available commands](#доступные-команды--available-commands)  
-  - [Управление загрузками / Managing downloads](#управление-загрузками--managing-downloads)  
-  - [Примеры поддерживаемых ссылок / Examples of supported links](#примеры-поддерживаемых-ссылок--examples-of-supported-links)  
-
----
-
 ## Особенности / Features
 
 - **Прием ссылок / Receiving links**: Поддерживает все видео-ссылки, совместимые с утилитой `yt-dlp`. Supports all video links compatible with the `yt-dlp` utility.  
