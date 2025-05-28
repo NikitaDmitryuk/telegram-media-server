@@ -14,7 +14,8 @@
         },
         "video_downloading": "Загрузка видео: {{.Title}}",
         "download_stopped": "Загрузка видео остановлена: {{.Title}}",
-        "downloaded_list": "ID: {{.ID}}\nНазвание: {{.Name}}\nПроцент загрузки: {{.Progress}}%\n\n",
+        "downloaded_list": "ID: {{.ID}}\nНазвание: {{.Name}}\nПроцент загрузки: {{.Progress}}%\n",
+        "disk_space_info": "Свободное место на диске: {{.AvailableSpaceGB}} ГБ",
         "video_successfully_downloaded": "Видео успешно загружено: {{.Title}}",
         "user_prompts": {
             "unknown_user": "Выполните вход с помощью команды /login [PASSWORD]",

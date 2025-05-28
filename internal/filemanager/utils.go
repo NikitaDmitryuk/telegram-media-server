@@ -156,3 +156,13 @@ func deleteFileOrFolder(path string) error {
 	}
 	return os.Remove(path)
 }
+
+func GetAvailableSpaceGB(path string) (float64, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		logutils.Log.WithError(err).Error("Failed to get filesystem stats")
+		return 0, err
+	}
+	availableSpaceGB := float64(int64(stat.Bavail)*stat.Bsize) / (1024 * 1024 * 1024) // #nosec G115
+	return availableSpaceGB, nil
+}

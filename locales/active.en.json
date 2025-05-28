@@ -14,7 +14,8 @@
         },
         "video_downloading": "Downloading video: {{.Title}}",
         "download_stopped": "Download stopped for video: {{.Title}}",
-        "downloaded_list": "ID: {{.ID}}\nTitle: {{.Name}}\nDownload Progress: {{.Progress}}%\n\n",
+        "downloaded_list": "ID: {{.ID}}\nTitle: {{.Name}}\nDownload Progress: {{.Progress}}%\n",
+        "disk_space_info": "Available disk space: {{.AvailableSpaceGB}} GB",
         "video_successfully_downloaded": "Video successfully downloaded: {{.Title}}",
         "user_prompts": {
             "unknown_user": "Please login using /login [PASSWORD]",
