@@ -9,8 +9,8 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/callbacks"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/movies"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/ui"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
