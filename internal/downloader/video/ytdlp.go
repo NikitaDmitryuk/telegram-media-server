@@ -158,7 +158,7 @@ func (d *YTDLPDownloader) GetFiles() (mainFiles, tempFiles []string, err error) 
 		d.outputFileName + ".ytdl",
 	}
 
-	pattern := d.outputFileName + ".part-Frag*"
+	pattern := filepath.Join(tmsconfig.GlobalConfig.MoviePath, d.outputFileName+".part-Frag*")
 	matchedFiles, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to search files with pattern %s: %w", pattern, err)
