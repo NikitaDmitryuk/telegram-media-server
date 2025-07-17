@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/database"
@@ -93,9 +95,35 @@ func deleteFilesByType(movieID uint, isTemp bool) error {
 		return tmsutils.LogAndReturnError("Failed to get files", err)
 	}
 
-	logutils.Log.Debugf("Files to delete: %v", files)
+	logutils.Log.Debugf("Files to delete (relative): %v", files)
 
-	if deleteErr := deleteFiles(files); deleteErr != nil {
+	var expandedFiles []tmsdb.MovieFile
+	for _, file := range files {
+		absPath := filepath.Join(tmsconfig.GlobalConfig.MoviePath, file.FilePath)
+		if isTemp && strings.Contains(file.FilePath, "*") {
+			matches, globErr := filepath.Glob(absPath)
+			if globErr != nil {
+				logutils.Log.WithError(globErr).Warnf("Error while globbing files by pattern: %s", absPath)
+				continue
+			}
+			for _, match := range matches {
+				rel, relErr := filepath.Rel(tmsconfig.GlobalConfig.MoviePath, match)
+				if relErr != nil {
+					logutils.Log.WithError(relErr).Warnf("Error while getting relative path for %s", match)
+					continue
+				}
+				expandedFiles = append(expandedFiles, tmsdb.MovieFile{FilePath: rel})
+			}
+		} else {
+			expandedFiles = append(expandedFiles, file)
+		}
+	}
+
+	for _, file := range expandedFiles {
+		logutils.Log.Debugf("Deleting file (relative): %s", file.FilePath)
+	}
+
+	if deleteErr := deleteFiles(expandedFiles); deleteErr != nil {
 		logutils.Log.WithError(deleteErr).Error("Failed to delete files")
 		return deleteErr
 	}
@@ -142,19 +170,45 @@ func deleteFiles(files []tmsdb.MovieFile) error {
 }
 
 func deleteFileOrFolder(path string) error {
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			logutils.Log.Warnf("File %s does not exist, skipping", path)
-			return nil
+	const (
+		maxAttempts      = 5
+		retrySleepMillis = 500
+	)
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				logutils.Log.Warnf("File %s does not exist, skipping", path)
+				return nil
+			}
+			return err
 		}
-		return err
+
+		canDelete := true
+
+		if !fileInfo.IsDir() {
+			f, openErr := os.OpenFile(path, os.O_RDWR|os.O_EXCL, 0)
+			if openErr != nil {
+				canDelete = false
+			}
+			if f != nil {
+				f.Close()
+			}
+		}
+
+		if canDelete {
+			if fileInfo.IsDir() {
+				return os.RemoveAll(path)
+			}
+			return os.Remove(path)
+		}
+		logutils.Log.Warnf("File %s is in use, attempt %d/%d, retrying...", path, attempt, maxAttempts)
+		time.Sleep(time.Duration(retrySleepMillis) * time.Millisecond)
 	}
 
-	if fileInfo.IsDir() {
-		return os.RemoveAll(path)
-	}
-	return os.Remove(path)
+	logutils.Log.Errorf("Failed to delete %s after %d attempts: file is in use", path, maxAttempts)
+	return tmsutils.LogAndReturnError("File is in use and cannot be deleted", nil)
 }
 
 func GetAvailableSpaceGB(path string) (float64, error) {
@@ -163,6 +217,6 @@ func GetAvailableSpaceGB(path string) (float64, error) {
 		logutils.Log.WithError(err).Error("Failed to get filesystem stats")
 		return 0, err
 	}
-	availableSpaceGB := float64(int64(stat.Bavail)*int64(stat.Bsize)) / (1024 * 1024 * 1024) // #nosec G115
+	availableSpaceGB := float64(int64(stat.Bavail)*stat.Bsize) / (1024 * 1024 * 1024) // #nosec G115
 	return availableSpaceGB, nil
 }

@@ -3,6 +3,7 @@ package logutils
 import (
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 )
 
@@ -97,67 +98,91 @@ func (l *Logger) formatFields() string {
 	return sb.String()
 }
 
+func (l *Logger) traceInfo() string {
+	_, file, line, ok := runtime.Caller(2)
+	if ok {
+		if l.level == LevelDebug {
+			return fmt.Sprintf("%s:%d ", file, line)
+		}
+		return fmt.Sprintf("%s:%d ", file, line)
+	}
+	return ""
+}
+
 func (l *Logger) Debugf(format string, args ...any) {
 	if l.level <= LevelDebug {
+		trace := l.traceInfo()
 		if len(l.fields) > 0 {
-			log.Printf("[DEBUG] "+l.formatFields()+format, args...)
+			log.Printf("[DEBUG] "+trace+l.formatFields()+format, args...)
 		} else {
-			log.Printf("[DEBUG] "+format, args...)
+			log.Printf("[DEBUG] "+trace+format, args...)
 		}
 	}
 }
 
 func (l *Logger) Debug(message string) {
 	if l.level <= LevelDebug {
-		log.Printf("[DEBUG] %s%s", l.formatFields(), message)
+		trace := l.traceInfo()
+		log.Printf("[DEBUG] %s%s%s", trace, l.formatFields(), message)
 	}
 }
 
 func (l *Logger) Infof(format string, args ...any) {
 	if l.level <= LevelInfo {
+		trace := ""
+		if l.level == LevelDebug {
+			trace = l.traceInfo()
+		}
 		if len(l.fields) > 0 {
-			log.Printf("[INFO] "+l.formatFields()+format, args...)
+			log.Printf("[INFO] "+trace+l.formatFields()+format, args...)
 		} else {
-			log.Printf("[INFO] "+format, args...)
+			log.Printf("[INFO] "+trace+format, args...)
 		}
 	}
 }
 
 func (l *Logger) Info(message string) {
 	if l.level <= LevelInfo {
-		log.Printf("[INFO] %s%s", l.formatFields(), message)
+		trace := ""
+		if l.level == LevelDebug {
+			trace = l.traceInfo()
+		}
+		log.Printf("[INFO] %s%s%s", trace, l.formatFields(), message)
 	}
 }
 
 func (l *Logger) Warnf(format string, args ...any) {
 	if l.level <= LevelWarn {
+		trace := l.traceInfo()
 		if len(l.fields) > 0 {
-			log.Printf("[WARN] "+l.formatFields()+format, args...)
+			log.Printf("[WARN] "+trace+l.formatFields()+format, args...)
 		} else {
-			log.Printf("[WARN] "+format, args...)
+			log.Printf("[WARN] "+trace+format, args...)
 		}
 	}
 }
 
 func (l *Logger) Warn(message string) {
 	if l.level <= LevelWarn {
-		log.Printf("[WARN] %s%s", l.formatFields(), message)
+		trace := l.traceInfo()
+		log.Printf("[WARN] %s%s%s", trace, l.formatFields(), message)
 	}
 }
 
 func (l *Logger) Errorf(format string, args ...any) {
 	if l.level <= LevelError {
+		trace := l.traceInfo()
 		if l.err != nil {
 			if len(l.fields) > 0 {
-				log.Printf("[ERROR] "+l.formatFields()+format+": %v", append(args, l.err)...)
+				log.Printf("[ERROR] "+trace+l.formatFields()+format+": %v", append(args, l.err)...)
 			} else {
-				log.Printf("[ERROR] "+format+": %v", append(args, l.err)...)
+				log.Printf("[ERROR] "+trace+format+": %v", append(args, l.err)...)
 			}
 		} else {
 			if len(l.fields) > 0 {
-				log.Printf("[ERROR] "+l.formatFields()+format, args...)
+				log.Printf("[ERROR] "+trace+l.formatFields()+format, args...)
 			} else {
-				log.Printf("[ERROR] "+format, args...)
+				log.Printf("[ERROR] "+trace+format, args...)
 			}
 		}
 	}
@@ -165,15 +190,21 @@ func (l *Logger) Errorf(format string, args ...any) {
 
 func (l *Logger) Error(message string) {
 	if l.level <= LevelError {
+		trace := l.traceInfo()
 		if l.err != nil {
-			log.Printf("[ERROR] %s%s: %v", l.formatFields(), message, l.err)
+			log.Printf("[ERROR] %s%s%s: %v", trace, l.formatFields(), message, l.err)
 		} else {
-			log.Printf("[ERROR] %s%s", l.formatFields(), message)
+			log.Printf("[ERROR] %s%s%s", trace, l.formatFields(), message)
 		}
 	}
 }
 
 func (*Logger) Fatal(format string, args ...any) {
-	log.Printf("[FATAL] "+format, args...)
+	_, file, line, ok := runtime.Caller(1)
+	trace := ""
+	if ok {
+		trace = fmt.Sprintf("%s:%d ", file, line)
+	}
+	log.Printf("[FATAL] "+trace+format, args...)
 	log.Fatal()
 }

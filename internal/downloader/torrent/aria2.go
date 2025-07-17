@@ -135,6 +135,9 @@ func (d *Aria2Downloader) StopDownload() error {
 			return fmt.Errorf("failed to send SIGINT to aria2c process: %w", err)
 		}
 		logutils.Log.Info("Sent SIGINT to aria2c process")
+		if err := d.cmd.Wait(); err != nil {
+			return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
+		}
 	}
 	return nil
 }

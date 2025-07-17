@@ -22,6 +22,9 @@ RUN apt-get update && \
     ffmpeg \
     ca-certificates
 
+RUN update-ca-certificates
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
 RUN python3 -m pip install --no-cache-dir --break-system-packages yt-dlp
 RUN yt-dlp --update-to stable
 

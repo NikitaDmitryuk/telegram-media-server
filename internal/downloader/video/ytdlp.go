@@ -130,8 +130,13 @@ func (d *YTDLPDownloader) monitorDownload(stdout, stderr io.ReadCloser, progress
 
 	if err := d.cmd.Wait(); err != nil {
 		stderrOutput := <-errorOutput
-		logutils.Log.WithError(err).Errorf("yt-dlp exited with error: %s", stderrOutput)
-		errChan <- err
+		if d.stoppedManually {
+			logutils.Log.Info("yt-dlp process stopped manually")
+			errChan <- nil
+		} else {
+			logutils.Log.WithError(err).Errorf("yt-dlp exited with error: %s", stderrOutput)
+			errChan <- err
+		}
 	} else {
 		errChan <- nil
 	}
@@ -152,19 +157,16 @@ func (d *YTDLPDownloader) GetTitle() (string, error) {
 }
 
 func (d *YTDLPDownloader) GetFiles() (mainFiles, tempFiles []string, err error) {
+	baseName := strings.TrimSuffix(d.outputFileName, ".mp4")
 	mainFiles = []string{d.outputFileName}
 	tempFiles = []string{
-		d.outputFileName + ".part",
-		d.outputFileName + ".ytdl",
+		baseName + ".part*",
+		baseName + ".ytdl",
+		baseName + ".f*.mp4",
+		baseName + ".f*.mp4.part*",
+		baseName + ".f*.mp4.ytdlp",
+		baseName + ".f*.mp4.ytdl",
 	}
-
-	pattern := filepath.Join(tmsconfig.GlobalConfig.MoviePath, d.outputFileName+".part-Frag*")
-	matchedFiles, err := filepath.Glob(pattern)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to search files with pattern %s: %w", pattern, err)
-	}
-
-	tempFiles = append(tempFiles, matchedFiles...)
 	return mainFiles, tempFiles, nil
 }
 
