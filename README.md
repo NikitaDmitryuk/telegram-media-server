@@ -227,3 +227,37 @@ The bot supports all services compatible with `yt-dlp`, including:
 
 Полный список см. в [документации yt-dlp](https://github.com/yt-dlp/yt-dlp#supported-sites).  
 See the full list in the [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp#supported-sites).
+
+---
+
+## Интеграция с Prowlarr / Prowlarr Integration
+
+**Prowlarr** — это менеджер торрент-индексаторов, который позволяет искать торрент-файлы по множеству источников. Telegram Media Server поддерживает интеграцию с Prowlarr для поиска и скачивания торрентов прямо из Telegram.
+**Prowlarr** is a torrent indexer manager that allows searching torrent files from multiple sources. Telegram Media Server supports integration with Prowlarr for searching and downloading torrents directly from Telegram.
+
+### Как включить интеграцию / How to enable integration
+
+1. **Установите и настройте Prowlarr.**
+   - Откройте веб-интерфейс Prowlarr: http://localhost:9696
+   - Добавьте нужные торрент-трекеры через меню Indexers.
+1. **Install and configure Prowlarr.**
+   - Open the Prowlarr web interface: http://localhost:9696
+   - Add desired torrent trackers via the Indexers menu.
+
+2. **Получите API-ключ Prowlarr.**
+   - В интерфейсе Prowlarr перейдите в Settings → General → Security и скопируйте API Key.
+2. **Get the Prowlarr API key.**
+   - In the Prowlarr interface, go to Settings → General → Security and copy the API Key.
+
+3. **Добавьте переменные в .env:**
+   ```env
+   PROWLARR_URL=http://localhost:9696
+   PROWLARR_API_KEY=ваш_ключ_от_prowlarr
+   ```
+   Если переменные не заданы, интеграция будет отключена.
+3. **Add variables to .env:**
+   ```env
+   PROWLARR_URL=http://localhost:9696
+   PROWLARR_API_KEY=your_prowlarr_api_key
+   ```
+   If variables are not set, integration will be disabled.
