@@ -16,6 +16,9 @@ import (
 
 func Router(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	if update.CallbackQuery != nil {
+		if downloads.HandleTorrentSearchCallback(bot, update) {
+			return
+		}
 		callbacks.HandleCallbackQuery(bot, update)
 		return
 	}
@@ -75,7 +78,30 @@ func handleMessage(bot *tmsbot.Bot, update *tgbotapi.Update) {
 			return
 		}
 		movies.SendDeleteMovieMenu(bot, chatID, movieList)
+	case lang.Translate("general.interface.search_torrents", nil):
+		downloads.StartTorrentSearch(bot, chatID)
 	default:
+		if s := downloads.GetSearchSession(chatID); s != nil {
+			switch s.Stage {
+			case "await_query":
+				downloads.HandleTorrentSearchQuery(bot, update)
+				return
+			case "show_results":
+				switch text {
+				case lang.Translate("general.torrent_search.more", nil):
+					s.Offset += 5
+					downloads.ShowTorrentSearchResults(bot, chatID)
+					return
+				case lang.Translate("general.torrent_search.cancel", nil):
+					for _, msgID := range s.MessageIDs {
+						_ = bot.DeleteMessage(chatID, msgID)
+					}
+					downloads.DeleteSearchSession(chatID)
+					ui.SendMainMenu(bot, chatID, lang.Translate("general.commands.start", nil))
+					return
+				}
+			}
+		}
 		handleUnknownMessage(bot, update, text, chatID)
 	}
 }

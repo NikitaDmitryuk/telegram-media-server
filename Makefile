@@ -9,8 +9,8 @@ LOCALES_DEST=/usr/local/share/telegram-media-server/locales
 DEPENDENCIES=yt-dlp aria2 ffmpeg
 DEPENDENCY_BINARIES=yt-dlp aria2c ffmpeg
 BUILD_DEPENDENCIES=go
-OPTIONAL_DEPENDENCIES=minidlna
-OPTIONAL_DEPENDENCY_CHECK=minidlna.service
+OPTIONAL_DEPENDENCIES=minidlna prowlarr
+OPTIONAL_DEPENDENCY_CHECK="minidlna.service prowlarr.service"
 
 .PHONY: check-deps
 check-deps:
@@ -32,11 +32,13 @@ check-deps:
 		i=$$((i+1)); \
 	done
 	@echo "Checking optional dependencies..."
-	@if ! systemctl list-units --type=service --all | grep -q $(OPTIONAL_DEPENDENCY_CHECK); then \
-		echo "Warning: Optional dependency minidlna is not installed or not enabled."; \
-	else \
-		echo "Optional dependency minidlna is installed and enabled."; \
-	fi
+	@for dep in $(OPTIONAL_DEPENDENCY_CHECK); do \
+		if ! systemctl list-units --type=service --all | grep -q $$dep; then \
+			echo "Warning: Optional dependency $$dep is not installed or not enabled."; \
+		else \
+			echo "Optional dependency $$dep is installed and enabled."; \
+		fi; \
+	done
 	@echo "All required dependencies are installed."
 
 .PHONY: build

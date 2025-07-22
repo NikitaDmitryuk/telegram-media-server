@@ -98,3 +98,29 @@ func (b *Bot) AnswerCallbackQuery(callbackConfig tgbotapi.CallbackConfig) {
 		logutils.Log.Info("Callback query answered successfully")
 	}
 }
+
+func (b *Bot) DeleteMessage(chatID int64, messageID int) error {
+	deleteMsg := tgbotapi.NewDeleteMessage(chatID, messageID)
+	_, err := b.Api.Request(deleteMsg)
+	if err != nil {
+		logutils.Log.WithError(err).Errorf("Failed to delete message %d in chat %d", messageID, chatID)
+	}
+	return err
+}
+
+func SaveFile(fileName string, data []byte) error {
+	path := filepath.Join(tmsconfig.GlobalConfig.MoviePath, fileName)
+	f, err := os.Create(path)
+	if err != nil {
+		logutils.Log.WithError(err).Errorf("Failed to create file %s", path)
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	if err != nil {
+		logutils.Log.WithError(err).Errorf("Failed to write file %s", path)
+		return err
+	}
+	logutils.Log.Infof("File saved: %s", path)
+	return nil
+}

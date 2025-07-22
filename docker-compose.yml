@@ -9,3 +9,17 @@ services:
     volumes:
       - ${MOVIE_PATH}:/app/media
     network_mode: host
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    env_file: ".env"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ${MOVIE_PATH}/prowlarr-config:/config
+    ports:
+      - "9696:9696"
+    restart: unless-stopped

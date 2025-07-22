@@ -9,21 +9,12 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-// Prowlarr contains the client and settings for API interaction
-// Client must be initialized with base URL and API key
-
 type Prowlarr struct {
 	Client  *resty.Client
 	ApiKey  string
-	BaseURL string // e.g. http://localhost:9696
+	BaseURL string
 }
 
-// TorrentSearchResult — single torrent result from search
-// Magnet/Link may be empty if a separate request is needed for .torrent
-// Size — in bytes
-// IndexerName — indexer name
-// Title — release title
-// InfoHash — infohash (if present)
 type TorrentSearchResult struct {
 	Title       string
 	Size        int64
@@ -31,10 +22,9 @@ type TorrentSearchResult struct {
 	TorrentURL  string
 	IndexerName string
 	InfoHash    string
+	Peers       int
 }
 
-// TorrentSearchPage — page of search results
-// Total — total results (if known)
 type TorrentSearchPage struct {
 	Results []TorrentSearchResult
 	Total   int
@@ -42,7 +32,6 @@ type TorrentSearchPage struct {
 	Limit   int
 }
 
-// NewProwlarr creates a new client
 func NewProwlarr(baseURL, apiKey string) *Prowlarr {
 	client := resty.New().SetBaseURL(baseURL).SetHeader("X-Api-Key", apiKey)
 	logutils.Log.Infof("Initialized Prowlarr client with baseURL: %s", baseURL)
@@ -53,10 +42,6 @@ func NewProwlarr(baseURL, apiKey string) *Prowlarr {
 	}
 }
 
-// SearchTorrents searches for torrents by query
-// offset — offset, limit — how many results to return
-// indexerIDs — list of indexer ids (nil for all)
-// categories — list of categories (nil for all)
 func (p *Prowlarr) SearchTorrents(query string, offset, limit int, indexerIDs, categories []int) (TorrentSearchPage, error) {
 	params := url.Values{}
 	params.Set("query", query)
@@ -114,6 +99,16 @@ func (p *Prowlarr) SearchTorrents(query string, offset, limit int, indexerIDs, c
 		torrentURL, _ := r["downloadUrl"].(string)
 		indexerName, _ := r["indexerName"].(string)
 		infoHash, _ := r["infoHash"].(string)
+		peers := 0
+		if v, ok := r["peers"].(float64); ok {
+			peers = int(v)
+		} else {
+			seeders, _ := r["seeders"].(float64)
+			leechers, _ := r["leechers"].(float64)
+			if seeders > 0 || leechers > 0 {
+				peers = int(seeders + leechers)
+			}
+		}
 		results = append(results, TorrentSearchResult{
 			Title:       title,
 			Size:        int64(size),
@@ -121,24 +116,23 @@ func (p *Prowlarr) SearchTorrents(query string, offset, limit int, indexerIDs, c
 			TorrentURL:  torrentURL,
 			IndexerName: indexerName,
 			InfoHash:    infoHash,
+			Peers:       peers,
 		})
 	}
 	logutils.Log.Infof("Prowlarr search returned %d results", len(results))
 	return TorrentSearchPage{
 		Results: results,
-		Total:   len(results), // Prowlarr does not always return total count
+		Total:   len(results),
 		Offset:  offset,
 		Limit:   limit,
 	}, nil
 }
 
-// Indexer represents a single indexer (id and name)
 type Indexer struct {
 	ID   int
 	Name string
 }
 
-// GetIndexers returns a list of indexers (id and name)
 func (p *Prowlarr) GetIndexers() ([]Indexer, error) {
 	logutils.Log.Info("Requesting indexer list from Prowlarr")
 	resp, err := p.Client.R().SetHeader("X-Api-Key", p.ApiKey).SetResult(&[]map[string]any{}).Get("/api/v1/indexer")
@@ -167,7 +161,6 @@ func (p *Prowlarr) GetIndexers() ([]Indexer, error) {
 	return res, nil
 }
 
-// GetTorrentFile downloads .torrent by URL (usually from TorrentURL)
 func (p *Prowlarr) GetTorrentFile(torrentURL string) ([]byte, error) {
 	logutils.Log.Infof("Downloading torrent file from URL: %s", torrentURL)
 	resp, err := p.Client.R().SetHeader("X-Api-Key", p.ApiKey).Get(torrentURL)
