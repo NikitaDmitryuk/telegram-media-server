@@ -14,7 +14,7 @@
         },
         "video_downloading": "Downloading video: {{.Title}}",
         "download_stopped": "Download stopped for video: {{.Title}}",
-        "downloaded_list": "ID: {{.ID}}\nTitle: {{.Name}}\nDownload Progress: {{.Progress}}%\n",
+        "downloaded_list": "ID:{{.ID}} [{{.Progress}}%]\n{{.Name}}\n",
         "disk_space_info": "Available disk space: {{.AvailableSpaceGB}} GB",
         "video_successfully_downloaded": "Video successfully downloaded: {{.Title}}",
         "user_prompts": {
@@ -23,9 +23,26 @@
             "no_movies_to_delete": "There are no movies to delete"
         },
         "interface": {
-            "list_movies": "Movie List",
-            "delete_movie": "Delete Movie",
-            "cancel": "Cancel"
+            "list_movies": "🎬",
+            "delete_movie": "🗑️",
+            "cancel": "❌",
+            "search_torrents": "🔍",
+            "main_menu": "Main menu"
+        },
+        "torrent_search": {
+            "enter_query": "Please enter the movie name to search for torrents",
+            "empty_query": "Query cannot be empty",
+            "not_configured": "Prowlarr integration is not configured",
+            "failed": "Prowlarr is not available. Please check the settings",
+            "not_found": "No torrents found for your query",
+            "download": "Download",
+            "more": "More",
+            "choose": "Choose a torrent to download",
+            "cancel": "Cancel",
+            "invalid_choice": "Invalid choice",
+            "download_failed": "Failed to download torrent file",
+            "save_failed": "Failed to save torrent file",
+            "session_expired": "Search session expired. Please start a new search."
         }
     },
     "error": {
