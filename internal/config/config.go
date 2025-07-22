@@ -29,6 +29,8 @@ type Config struct {
 	ProxyHost       string
 	LogLevel        string
 	LangPath        string
+	ProwlarrURL     string
+	ProwlarrAPIKey  string
 }
 
 func getEnv(key, defaultValue string) string {
@@ -49,6 +51,8 @@ func NewConfig() (*Config, error) {
 		ProxyHost:       getEnv("PROXY_HOST", ""),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
 		LangPath:        getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
+		ProwlarrURL:     getEnv("PROWLARR_URL", ""),
+		ProwlarrAPIKey:  getEnv("PROWLARR_API_KEY", ""),
 	}
 
 	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
@@ -77,12 +81,19 @@ func (c *Config) validate() error {
 	if c.AdminPassword == "" {
 		missingFields = append(missingFields, "ADMIN_PASSWORD")
 	}
-
 	if c.RegularPassword == "" {
 		log.Println("REGULAR_PASSWORD not set, using ADMIN_PASSWORD as REGULAR_PASSWORD")
 		c.RegularPassword = c.AdminPassword
 	}
 
+	if (c.ProwlarrURL != "" || c.ProwlarrAPIKey != "") && (c.ProwlarrURL == "" || c.ProwlarrAPIKey == "") {
+		if c.ProwlarrURL == "" {
+			missingFields = append(missingFields, "PROWLARR_URL (required if PROWLARR_API_KEY is set)")
+		}
+		if c.ProwlarrAPIKey == "" {
+			missingFields = append(missingFields, "PROWLARR_API_KEY (required if PROWLARR_URL is set)")
+		}
+	}
 	if len(missingFields) > 0 {
 		return fmt.Errorf("missing required environment variables: %v", missingFields)
 	}
