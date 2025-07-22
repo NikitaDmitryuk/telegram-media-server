@@ -14,7 +14,7 @@
         },
         "video_downloading": "Downloading video: {{.Title}}",
         "download_stopped": "Download stopped for video: {{.Title}}",
-        "downloaded_list": "ID: {{.ID}}\nTitle: {{.Name}}\nDownload Progress: {{.Progress}}%\n",
+        "downloaded_list": "ID:{{.ID}} [{{.Progress}}%]\n{{.Name}}\n",
         "disk_space_info": "Available disk space: {{.AvailableSpaceGB}} GB",
         "video_successfully_downloaded": "Video successfully downloaded: {{.Title}}",
         "user_prompts": {
@@ -23,9 +23,9 @@
             "no_movies_to_delete": "There are no movies to delete"
         },
         "interface": {
-            "list_movies": "Movie List",
-            "delete_movie": "Delete Movie",
-            "cancel": "Cancel"
+            "list_movies": "🎬",
+            "delete_movie": "🗑️",
+            "cancel": "❌"
         }
     },
     "error": {

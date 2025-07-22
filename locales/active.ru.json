@@ -14,7 +14,7 @@
         },
         "video_downloading": "Загрузка видео: {{.Title}}",
         "download_stopped": "Загрузка видео остановлена: {{.Title}}",
-        "downloaded_list": "ID: {{.ID}}\nНазвание: {{.Name}}\nПроцент загрузки: {{.Progress}}%\n",
+        "downloaded_list": "ID:{{.ID}} [{{.Progress}}%]\n{{.Name}}\n",
         "disk_space_info": "Свободное место на диске: {{.AvailableSpaceGB}} ГБ",
         "video_successfully_downloaded": "Видео успешно загружено: {{.Title}}",
         "user_prompts": {
@@ -23,9 +23,9 @@
             "no_movies_to_delete": "Нет фильмов для удаления"
         },
         "interface": {
-            "list_movies": "Список фильмов",
-            "delete_movie": "Удалить фильм",
-            "cancel": "Отмена"
+            "list_movies": "🎬",
+            "delete_movie": "🗑️",
+            "cancel": "❌"
         }
     },
     "error": {
