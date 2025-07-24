@@ -249,6 +249,10 @@ func (s *SQLiteDatabase) createOrUpdateUser(
 func (s *SQLiteDatabase) GetUserRole(ctx context.Context, chatID int64) (UserRole, error) {
 	var user User
 	if err := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			logutils.Log.Infof("User with chat ID %d not found when fetching role", chatID)
+			return "", err
+		}
 		logutils.Log.WithError(err).Errorf("Failed to get user role for chat ID %d", chatID)
 		return "", err
 	}
@@ -260,7 +264,7 @@ func (s *SQLiteDatabase) IsUserAccessAllowed(ctx context.Context, chatID int64) 
 	var user User
 	if err := s.db.WithContext(ctx).Preload("Passwords").Where("chat_id = ?", chatID).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			logutils.Log.Warnf("Access denied for unknown user with chat ID %d: user not found", chatID)
+			logutils.Log.Infof("Access denied for unknown user with chat ID %d: user not found", chatID)
 			return false, "", nil
 		}
 		logutils.Log.WithError(err).Errorf("Failed to check access for chat ID %d", chatID)

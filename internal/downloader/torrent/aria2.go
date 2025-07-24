@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
@@ -65,11 +68,9 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan 
 		"--seed-time=0",
 		"--summary-interval=3",
 		"--enable-dht=true",
+		"--bt-enable-lpd=true",
 		fmt.Sprintf("--dht-listen-port=%d", dhtPort),
 		fmt.Sprintf("--listen-port=%d", listenPort),
-		"--bt-tracker=udp://tracker.openbittorrent.com:80,udp://tracker.opentrackr.org:1337,udp://tracker.leechers-paradise.org:6969",
-		"--bt-exclude-tracker=http://retracker.local",
-		"--disable-ipv6",
 		"--max-connection-per-server=16",
 		"--split=16",
 		"--min-split-size=1M",
@@ -82,9 +83,21 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan 
 		return nil, nil, fmt.Errorf("failed to capture stdout: %w", err)
 	}
 
+	stderr, err := d.cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to capture stderr: %w", err)
+	}
+
 	if err := d.cmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("failed to start aria2c: %w", err)
 	}
+
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			logutils.Log.Errorf("aria2c stderr: %s", scanner.Text())
+		}
+	}()
 
 	progressChan = make(chan float64)
 	errChan = make(chan error, 1)
@@ -135,7 +148,17 @@ func (d *Aria2Downloader) StopDownload() error {
 			return fmt.Errorf("failed to send SIGINT to aria2c process: %w", err)
 		}
 		logutils.Log.Info("Sent SIGINT to aria2c process")
-		if err := d.cmd.Wait(); err != nil {
+		err := d.cmd.Wait()
+		if err != nil {
+			if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "no child process") {
+				return nil
+			}
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 7 {
+					logutils.Log.Infof("aria2c exited with code 7 (unfinished downloads) after manual stop — not an error")
+					return nil
+				}
+			}
 			return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
 		}
 	}

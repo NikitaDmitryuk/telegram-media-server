@@ -9,6 +9,7 @@ import (
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -20,12 +21,12 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	movies, err := database.GlobalDB.GetMovieList(context.Background())
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to retrieve movie list")
-		bot.SendErrorMessage(chatID, lang.Translate("error.movies.fetch_error", nil))
+		bot.SendMessage(chatID, lang.Translate("error.movies.fetch_error", nil), ui.GetMainMenuKeyboard())
 		return
 	}
 
 	if len(movies) == 0 {
-		bot.SendSuccessMessage(chatID, lang.Translate("general.status_messages.empty_list", nil))
+		bot.SendMessage(chatID, lang.Translate("general.status_messages.empty_list", nil), ui.GetMainMenuKeyboard())
 		return
 	}
 
@@ -52,5 +53,5 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	}))
 
 	message := strings.Join(messages, "\n")
-	bot.SendSuccessMessage(chatID, message)
+	bot.SendMessage(chatID, message, ui.GetMainMenuKeyboard())
 }

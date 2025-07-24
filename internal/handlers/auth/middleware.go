@@ -39,7 +39,7 @@ func AuthMiddleware(update *tgbotapi.Update) (bool, database.UserRole) {
 	}
 
 	if !isAllowed {
-		logutils.Log.Warnf("Access denied for user with chat ID %d", chatID)
+		logutils.Log.Infof("Access denied for user with chat ID %d", chatID)
 		return false, userRole
 	}
 

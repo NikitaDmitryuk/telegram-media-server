@@ -17,7 +17,7 @@ func HandleTorrentFile(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 	if !strings.HasSuffix(doc.FileName, ".torrent") {
 		logutils.Log.Warnf("Unsupported file type: %s", doc.FileName)
-		bot.SendErrorMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil))
+		bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), tgbotapi.NewRemoveKeyboard(false))
 		return
 	}
 
@@ -25,7 +25,7 @@ func HandleTorrentFile(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 	if err := bot.DownloadFile(doc.FileID, doc.FileName); err != nil {
 		logutils.Log.WithError(err).Error("Failed to download torrent file")
-		bot.SendErrorMessage(chatID, lang.Translate("error.downloads.document_download_error", nil))
+		bot.SendMessage(chatID, lang.Translate("error.downloads.document_download_error", nil), tgbotapi.NewRemoveKeyboard(false))
 		return
 	}
 
@@ -33,9 +33,9 @@ func HandleTorrentFile(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 	if downloaderInstance == nil {
 		logutils.Log.Warn("Failed to initialize torrent downloader")
-		bot.SendErrorMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil))
+		bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), tgbotapi.NewRemoveKeyboard(false))
 		return
 	}
 
-	handleDownload(bot, chatID, downloaderInstance)
+	HandleDownload(bot, chatID, downloaderInstance)
 }

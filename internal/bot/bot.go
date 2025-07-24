@@ -27,29 +27,20 @@ func InitBot(config *tmsconfig.Config) (*Bot, error) {
 	return &Bot{Api: api}, nil
 }
 
-func (b *Bot) SendErrorMessage(chatID int64, message string) {
-	msg := tgbotapi.NewMessage(chatID, message)
-	if smsg, err := b.Api.Send(msg); err != nil {
-		logutils.Log.WithError(err).Errorf("Message not sent: %s", message)
-	} else {
-		logutils.Log.Infof("Error message sent successfully: %s", smsg.Text)
+func (b *Bot) SendMessage(chatID int64, text string, keyboard any) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	if keyboard != nil {
+		switch k := keyboard.(type) {
+		case tgbotapi.ReplyKeyboardMarkup:
+			msg.ReplyMarkup = k
+		case tgbotapi.ReplyKeyboardRemove:
+			msg.ReplyMarkup = k
+		case tgbotapi.InlineKeyboardMarkup:
+			msg.ReplyMarkup = k
+		}
 	}
-}
-
-func (b *Bot) SendSuccessMessage(chatID int64, message string) {
-	msg := tgbotapi.NewMessage(chatID, message)
-	if smsg, err := b.Api.Send(msg); err != nil {
-		logutils.Log.WithError(err).Errorf("Message not sent: %s", message)
-	} else {
-		logutils.Log.Infof("Success message sent successfully: %s", smsg.Text)
-	}
-}
-
-func (b *Bot) Send(msg tgbotapi.Chattable) {
-	if smsg, err := b.Api.Send(msg); err != nil {
-		logutils.Log.WithError(err).Error("Message not sent")
-	} else {
-		logutils.Log.Infof("Message sent successfully: %s", smsg.Text)
+	if _, err := b.Api.Send(msg); err != nil {
+		logutils.Log.WithError(err).Errorf("Message not sent: %s", text)
 	}
 }
 
