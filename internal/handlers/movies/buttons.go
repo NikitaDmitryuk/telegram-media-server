@@ -25,12 +25,12 @@ func CreateDeleteMovieMenuMarkup(movies []database.Movie) tgbotapi.InlineKeyboar
 
 func SendDeleteMovieMenu(bot *tmsbot.Bot, chatID int64, movies []database.Movie) {
 	if len(movies) == 0 {
-		bot.SendSuccessMessage(chatID, lang.Translate("general.user_prompts.no_movies_to_delete", nil))
+		bot.SendMessage(chatID, lang.Translate("general.user_prompts.no_movies_to_delete", nil), nil)
 		return
 	}
 
 	buttons := CreateDeleteMovieMenuMarkup(movies)
 	msg := tgbotapi.NewMessage(chatID, lang.Translate("general.user_prompts.delete_prompt", nil))
 	msg.ReplyMarkup = buttons
-	bot.Send(msg)
+	bot.SendMessage(chatID, msg.Text, msg.ReplyMarkup)
 }

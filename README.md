@@ -23,7 +23,8 @@ To build and install Telegram Media Server using `sudo make install`, the follow
 - **Go**: Необходим для сборки бота. Required for building the bot.  
 - **yt-dlp**: Необходим для загрузки потокового видео. Required for downloading streaming videos.  
 - **aria2**: Необходим для загрузки торрент-файлов. Required for downloading torrent files.  
-- **minidlna** (опционально / optional): Необходим для раздачи через DLNA. Required for DLNA distribution.  
+- **minidlna** (опционально / optional): Необходим для раздачи через DLNA. Required for DLNA distribution.
+- **prowlarr** (опционально / optional): Необходим для поиска торрентов. Required for searching torrents.
 
 **Примечание**: Если вы не планируете использовать DLNA, `minidlna` не требуется.  
 **Note**: If you don’t plan to use DLNA, `minidlna` is not required.  
@@ -34,8 +35,6 @@ Install these dependencies using your system’s package manager before proceedi
 ---
 
 ## Установка / Installation
-
-### Использование sudo make install / Using sudo make install
 
 Предпочтительный способ установки, который добавляет бота как системный сервис.  
 The preferred method, installing the bot as a system service.
@@ -54,49 +53,8 @@ The preferred method, installing the bot as a system service.
    ```
 
 3. **Настройте бота / Configure the bot**:  
-   См. раздел [Конфигурация / Configuration](#конфигурация--configuration).  
-   See the [Configuration / Configuration](#конфигурация--configuration) section.
-
----
-
-### Использование Docker Compose / Using Docker Compose
-
-Самый простой способ запуска, подходит для любой ОС и архитектуры с поддержкой Docker.  
-The easiest method, works on any OS and architecture supporting Docker.
-
-1. **Клонируйте репозиторий / Clone the repository**:
-
-   ```bash
-   git clone https://github.com/NikitaDmitryuk/telegram-media-server.git
-   cd telegram-media-server
-   ```
-
-2. **Создайте и настройте файл `.env` / Create and edit the `.env` file**:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Откройте файл `.env` в корне проекта и настройте параметры.  
-   Open the `.env` file in the project root and configure the parameters.
-
-3. **Запустите контейнер в фоновом режиме / Start the container in the background**:
-
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Проверьте логи / Check the logs**:
-
-   ```bash
-   docker-compose logs -f
-   ```
-
-5. **Остановите контейнер / Stop the container**:
-
-   ```bash
-   docker-compose down
-   ```
+   См. раздел **Конфигурация / Configuration**.  
+   See the **Configuration** section.
 
 ---
 
@@ -153,6 +111,8 @@ The configuration file is `.env`:
 | `LANG`                   | Язык сообщений (ru, en). Bot message language (ru, en).                                   |
 | `PROXY`                  | Адрес прокси для `yt-dlp`. Proxy address for `yt-dlp`.                                    |
 | `PROXY_HOST`             | Домены, для которых использовать прокси (если пусто — всегда). Domains to use proxy for (if empty, always use proxy). |
+| `PROWLARR_URL`           | Prowlarr base URL (for example: http://localhost:9696). |
+| `PROWLARR_API_KEY`       | Prowlarr API key (can be found in the Prowlarr web interface, Settings -> General -> Security) |
 
 ---
 

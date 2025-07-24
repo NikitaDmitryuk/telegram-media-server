@@ -17,9 +17,9 @@ func HandleDownloadLink(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 	if downloaderInstance == nil {
 		logutils.Log.Warn("Failed to initialize downloader for the provided link")
-		bot.SendErrorMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil))
+		bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), tgbotapi.NewRemoveKeyboard(true))
 		return
 	}
 
-	handleDownload(bot, chatID, downloaderInstance)
+	HandleDownload(bot, chatID, downloaderInstance)
 }

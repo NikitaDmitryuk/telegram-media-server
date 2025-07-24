@@ -7,34 +7,35 @@ import (
 )
 
 func SendMainMenu(bot *tmsbot.Bot, chatID int64, message string) {
-	buttons := tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton(tmslang.Translate("general.interface.list_movies", nil)),
-			tgbotapi.NewKeyboardButton(tmslang.Translate("general.interface.delete_movie", nil)),
-			tgbotapi.NewKeyboardButton(tmslang.Translate("general.interface.search_torrents", nil)),
-		),
-	)
-
-	buttons.OneTimeKeyboard = false
-	buttons.ResizeKeyboard = true
-
-	msg := tgbotapi.NewMessage(chatID, message)
-	msg.ReplyMarkup = buttons
-	bot.Send(msg)
+	bot.SendMessage(chatID, message, GetMainMenuKeyboard())
 }
 
 func SendMainMenuNoText(bot *tmsbot.Bot, chatID int64) {
-	buttons := tgbotapi.NewReplyKeyboard(
+	bot.SendMessage(chatID, tmslang.Translate("general.interface.main_menu", nil), GetMainMenuKeyboard())
+}
+
+func GetMainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton(tmslang.Translate("general.interface.list_movies", nil)),
 			tgbotapi.NewKeyboardButton(tmslang.Translate("general.interface.delete_movie", nil)),
 			tgbotapi.NewKeyboardButton(tmslang.Translate("general.interface.search_torrents", nil)),
 		),
 	)
-	buttons.OneTimeKeyboard = false
-	buttons.ResizeKeyboard = true
+}
 
-	msg := tgbotapi.NewMessage(chatID, tmslang.Translate("general.interface.main_menu", nil))
-	msg.ReplyMarkup = buttons
-	bot.Send(msg)
+func GetEmptyKeyboard() tgbotapi.ReplyKeyboardRemove {
+	return tgbotapi.NewRemoveKeyboard(true)
+}
+
+func GetTorrentSearchKeyboard(hasMore bool) tgbotapi.ReplyKeyboardMarkup {
+	var menuBtns []tgbotapi.KeyboardButton
+	if hasMore {
+		menuBtns = append(menuBtns, tgbotapi.NewKeyboardButton(tmslang.Translate("general.torrent_search.more", nil)))
+	}
+	menuBtns = append(menuBtns, tgbotapi.NewKeyboardButton(tmslang.Translate("general.torrent_search.cancel", nil)))
+	menu := tgbotapi.NewReplyKeyboard(menuBtns)
+	menu.OneTimeKeyboard = true
+	menu.ResizeKeyboard = true
+	return menu
 }

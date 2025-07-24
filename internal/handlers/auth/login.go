@@ -17,7 +17,7 @@ func LoginHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 	if len(textFields) != 2 {
 		logutils.Log.Warn("Invalid login command format")
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.commands.invalid_format", nil))
+		bot.SendMessage(update.Message.Chat.ID, lang.Translate("error.commands.invalid_format", nil), nil)
 		return
 	}
 
@@ -28,16 +28,16 @@ func LoginHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	success, err := database.GlobalDB.Login(context.Background(), password, chatID, userName)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Login failed due to an error")
-		bot.SendErrorMessage(chatID, lang.Translate("error.authentication.login", nil))
+		bot.SendMessage(chatID, lang.Translate("error.authentication.login", nil), nil)
 		return
 	}
 
 	if success {
 		logutils.Log.WithField("username", userName).Info("User logged in successfully")
-		bot.SendSuccessMessage(chatID, lang.Translate("general.status_messages.login_success", nil))
+		bot.SendMessage(chatID, lang.Translate("general.status_messages.login_success", nil), ui.GetMainMenuKeyboard())
 		ui.SendMainMenu(bot, chatID, lang.Translate("general.commands.start", nil))
 	} else {
 		logutils.Log.WithField("username", userName).Warn("Login failed due to incorrect or expired password")
-		bot.SendErrorMessage(chatID, lang.Translate("error.authentication.wrong_password", nil))
+		bot.SendMessage(chatID, lang.Translate("error.authentication.wrong_password", nil), nil)
 	}
 }

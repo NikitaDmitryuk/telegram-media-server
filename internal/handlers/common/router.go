@@ -7,8 +7,9 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/auth"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/callbacks"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
+	tmsdownloads "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/movies"
+	tmssession "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/session"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -16,7 +17,7 @@ import (
 
 func Router(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	if update.CallbackQuery != nil {
-		if downloads.HandleTorrentSearchCallback(bot, update) {
+		if tmssession.HandleTorrentSearchCallback(bot, update) {
 			return
 		}
 		callbacks.HandleCallbackQuery(bot, update)
@@ -31,7 +32,7 @@ func Router(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 	if update.Message.IsCommand() {
 		if !auth.CheckAccess(update) && update.Message.Command() != "login" {
-			bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil))
+			bot.SendMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil), nil)
 			return
 		}
 		handleCommand(bot, update)
@@ -39,7 +40,7 @@ func Router(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	}
 
 	if !auth.CheckAccess(update) {
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil))
+		bot.SendMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil), nil)
 		return
 	}
 
@@ -60,7 +61,7 @@ func handleCommand(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	case "temp":
 		auth.GenerateTempPasswordHandler(bot, update)
 	default:
-		bot.SendErrorMessage(update.Message.Chat.ID, lang.Translate("error.commands.unknown_command", nil))
+		bot.SendMessage(update.Message.Chat.ID, lang.Translate("error.commands.unknown_command", nil), nil)
 	}
 }
 
@@ -74,29 +75,30 @@ func handleMessage(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	case lang.Translate("general.interface.delete_movie", nil):
 		movieList, err := database.GlobalDB.GetMovieList(context.Background())
 		if err != nil {
-			bot.SendErrorMessage(chatID, lang.Translate("error.movies.fetch_error", nil))
+			bot.SendMessage(chatID, lang.Translate("error.movies.fetch_error", nil), nil)
 			return
 		}
 		movies.SendDeleteMovieMenu(bot, chatID, movieList)
 	case lang.Translate("general.interface.search_torrents", nil):
-		downloads.StartTorrentSearch(bot, chatID)
+		tmssession.StartTorrentSearch(bot, chatID)
 	default:
-		if s := downloads.GetSearchSession(chatID); s != nil {
-			switch s.Stage {
+		s, sess := tmssession.GetSearchSession(chatID)
+		if s != nil && sess != nil {
+			switch sess.Stage {
 			case "await_query":
-				downloads.HandleTorrentSearchQuery(bot, update)
+				tmssession.HandleTorrentSearchQuery(bot, update)
 				return
 			case "show_results":
 				switch text {
 				case lang.Translate("general.torrent_search.more", nil):
 					s.Offset += 5
-					downloads.ShowTorrentSearchResults(bot, chatID)
+					tmssession.ShowTorrentSearchResults(bot, chatID)
 					return
 				case lang.Translate("general.torrent_search.cancel", nil):
 					for _, msgID := range s.MessageIDs {
 						_ = bot.DeleteMessage(chatID, msgID)
 					}
-					downloads.DeleteSearchSession(chatID)
+					tmssession.DeleteSearchSession(chatID)
 					ui.SendMainMenu(bot, chatID, lang.Translate("general.commands.start", nil))
 					return
 				}
@@ -108,10 +110,10 @@ func handleMessage(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 func handleUnknownMessage(bot *tmsbot.Bot, update *tgbotapi.Update, text string, chatID int64) {
 	if IsValidLink(text) {
-		downloads.HandleDownloadLink(bot, update)
+		tmsdownloads.HandleDownloadLink(bot, update)
 	} else if doc := update.Message.Document; doc != nil && IsTorrentFile(doc.FileName) {
-		downloads.HandleTorrentFile(bot, update)
+		tmsdownloads.HandleTorrentFile(bot, update)
 	} else {
-		bot.SendErrorMessage(chatID, lang.Translate("error.commands.unknown_command", nil))
+		bot.SendMessage(chatID, lang.Translate("error.commands.unknown_command", nil), nil)
 	}
 }

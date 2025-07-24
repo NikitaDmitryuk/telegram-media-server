@@ -7,6 +7,7 @@ import (
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	movies "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/movies"
+	tmssession "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/session"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -19,11 +20,11 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	allowed, role, err := database.GlobalDB.IsUserAccessAllowed(context.Background(), update.CallbackQuery.From.ID)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to check user access")
-		bot.SendErrorMessage(chatID, lang.Translate("error.authentication.access_check_failed", nil))
+		bot.SendMessage(chatID, lang.Translate("error.authentication.access_check_failed", nil), nil)
 		return
 	}
 	if !allowed {
-		bot.SendErrorMessage(chatID, lang.Translate("error.authentication.access_denied", nil))
+		bot.SendMessage(chatID, lang.Translate("error.authentication.access_denied", nil), nil)
 		return
 	}
 
@@ -40,9 +41,19 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	case callbackData == "list_movies":
 		movies.ListMoviesHandler(bot, update)
 
+	case strings.HasPrefix(callbackData, "torrent_search_download:"):
+		tmssession.HandleTorrentSearchCallback(bot, update)
+		return
+	case callbackData == "torrent_search_cancel":
+		tmssession.HandleTorrentSearchCallback(bot, update)
+		return
+	case callbackData == "torrent_search_more":
+		tmssession.HandleTorrentSearchCallback(bot, update)
+		return
+
 	default:
 		logutils.Log.Warnf("Unknown callback data: %s", callbackData)
-		bot.SendErrorMessage(chatID, lang.Translate("error.commands.unknown_command", nil))
+		bot.SendMessage(chatID, lang.Translate("error.commands.unknown_command", nil), nil)
 	}
 
 	bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
@@ -50,7 +61,7 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 func handleDeleteMovieCallback(bot *tmsbot.Bot, update *tgbotapi.Update, chatID int64, role database.UserRole, callbackData string) {
 	if role != database.AdminRole && role != database.RegularRole {
-		bot.SendErrorMessage(chatID, lang.Translate("error.authentication.access_denied", nil))
+		bot.SendMessage(chatID, lang.Translate("error.authentication.access_denied", nil), nil)
 		return
 	}
 
@@ -59,7 +70,7 @@ func handleDeleteMovieCallback(bot *tmsbot.Bot, update *tgbotapi.Update, chatID 
 
 	movieList, err := database.GlobalDB.GetMovieList(context.Background())
 	if err != nil {
-		bot.SendErrorMessage(chatID, lang.Translate("error.movies.fetch_error", nil))
+		bot.SendMessage(chatID, lang.Translate("error.movies.fetch_error", nil), nil)
 		return
 	}
 
