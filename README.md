@@ -27,10 +27,10 @@ To build and install Telegram Media Server using `sudo make install`, the follow
 - **prowlarr** (опционально / optional): Необходим для поиска торрентов. Required for searching torrents.
 
 **Примечание**: Если вы не планируете использовать DLNA, `minidlna` не требуется.  
-**Note**: If you don’t plan to use DLNA, `minidlna` is not required.  
+**Note**: If you don't plan to use DLNA, `minidlna` is not required.  
 
 Установите зависимости с помощью пакетного менеджера вашей системы перед началом.  
-Install these dependencies using your system’s package manager before proceeding.
+Install these dependencies using your system's package manager before proceeding.
 
 ---
 
@@ -113,6 +113,9 @@ The configuration file is `.env`:
 | `PROXY_HOST`             | Домены, для которых использовать прокси (если пусто — всегда). Domains to use proxy for (if empty, always use proxy). |
 | `PROWLARR_URL`           | Prowlarr base URL (for example: http://localhost:9696). |
 | `PROWLARR_API_KEY`       | Prowlarr API key (can be found in the Prowlarr web interface, Settings -> General -> Security) |
+| `LOG_LEVEL`              | Уровень логирования (debug, info, warn, error). Logging level (debug, info, warn, error). |
+| `MAX_CONCURRENT_DOWNLOADS` | Максимальное количество одновременных загрузок. Maximum number of concurrent downloads. |
+| `DOWNLOAD_TIMEOUT`       | Таймаут загрузки (например: 30m). Download timeout (e.g., 30m). |
 
 ---
 

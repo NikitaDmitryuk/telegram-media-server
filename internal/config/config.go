@@ -1,9 +1,18 @@
 package config
 
 import (
-	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"time"
+
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
+)
+
+const (
+	DefaultDownloadTimeout        = 0 // 0 means no timeout (infinite)
+	DefaultProgressUpdateInterval = 5 * time.Second
+	DefaultPasswordMinLength      = 8
 )
 
 var GlobalConfig *Config
@@ -31,11 +40,42 @@ type Config struct {
 	LangPath        string
 	ProwlarrURL     string
 	ProwlarrAPIKey  string
+
+	DownloadSettings DownloadConfig
+	SecuritySettings SecurityConfig
+}
+
+type DownloadConfig struct {
+	MaxConcurrentDownloads int
+	DownloadTimeout        time.Duration
+	ProgressUpdateInterval time.Duration
+}
+
+type SecurityConfig struct {
+	PasswordMinLength int
 }
 
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	if value, exists := os.LookupEnv(key); exists {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
+		}
 	}
 	return defaultValue
 }
@@ -53,6 +93,16 @@ func NewConfig() (*Config, error) {
 		LangPath:        getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
 		ProwlarrURL:     getEnv("PROWLARR_URL", ""),
 		ProwlarrAPIKey:  getEnv("PROWLARR_API_KEY", ""),
+
+		DownloadSettings: DownloadConfig{
+			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", 3),
+			DownloadTimeout:        getEnvDuration("DOWNLOAD_TIMEOUT", DefaultDownloadTimeout),
+			ProgressUpdateInterval: getEnvDuration("PROGRESS_UPDATE_INTERVAL", DefaultProgressUpdateInterval),
+		},
+
+		SecuritySettings: SecurityConfig{
+			PasswordMinLength: getEnvInt("PASSWORD_MIN_LENGTH", DefaultPasswordMinLength),
+		},
 	}
 
 	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
@@ -63,7 +113,9 @@ func NewConfig() (*Config, error) {
 
 	if err := config.validate(); err != nil {
 		log.Printf("Configuration validation failed: %v", err)
-		return nil, err
+		return nil, utils.WrapError(err, "configuration validation failed", map[string]any{
+			"config": config,
+		})
 	}
 
 	log.Println("Configuration loaded successfully")
@@ -71,7 +123,28 @@ func NewConfig() (*Config, error) {
 }
 
 func (c *Config) validate() error {
+	if err := c.validateRequiredFields(); err != nil {
+		return err
+	}
+
+	if err := c.validatePasswords(); err != nil {
+		return err
+	}
+
+	if err := c.validateProwlarr(); err != nil {
+		return err
+	}
+
+	if err := c.validateDownloadSettings(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Config) validateRequiredFields() error {
 	var missingFields []string
+
 	if c.BotToken == "" {
 		missingFields = append(missingFields, "BOT_TOKEN")
 	}
@@ -81,21 +154,70 @@ func (c *Config) validate() error {
 	if c.AdminPassword == "" {
 		missingFields = append(missingFields, "ADMIN_PASSWORD")
 	}
+
+	if len(missingFields) > 0 {
+		return utils.WrapError(utils.ErrConfigurationError, "missing required environment variables", map[string]any{
+			"missing_fields": missingFields,
+		})
+	}
+
+	return nil
+}
+
+func (c *Config) validatePasswords() error {
+	if len(c.AdminPassword) < c.SecuritySettings.PasswordMinLength {
+		return utils.WrapError(utils.ErrConfigurationError, "admin password too short", map[string]any{
+			"min_length":    c.SecuritySettings.PasswordMinLength,
+			"actual_length": len(c.AdminPassword),
+		})
+	}
+
 	if c.RegularPassword == "" {
 		log.Println("REGULAR_PASSWORD not set, using ADMIN_PASSWORD as REGULAR_PASSWORD")
 		c.RegularPassword = c.AdminPassword
+	} else if len(c.RegularPassword) < c.SecuritySettings.PasswordMinLength {
+		return utils.WrapError(utils.ErrConfigurationError, "regular password too short", map[string]any{
+			"min_length":    c.SecuritySettings.PasswordMinLength,
+			"actual_length": len(c.RegularPassword),
+		})
 	}
 
+	return nil
+}
+
+func (c *Config) validateProwlarr() error {
 	if (c.ProwlarrURL != "" || c.ProwlarrAPIKey != "") && (c.ProwlarrURL == "" || c.ProwlarrAPIKey == "") {
+		var missingFields []string
 		if c.ProwlarrURL == "" {
 			missingFields = append(missingFields, "PROWLARR_URL (required if PROWLARR_API_KEY is set)")
 		}
 		if c.ProwlarrAPIKey == "" {
 			missingFields = append(missingFields, "PROWLARR_API_KEY (required if PROWLARR_URL is set)")
 		}
+		return utils.WrapError(utils.ErrConfigurationError, "missing required environment variables", map[string]any{
+			"missing_fields": missingFields,
+		})
 	}
-	if len(missingFields) > 0 {
-		return fmt.Errorf("missing required environment variables: %v", missingFields)
-	}
+
 	return nil
+}
+
+func (c *Config) validateDownloadSettings() error {
+	if c.DownloadSettings.MaxConcurrentDownloads <= 0 {
+		return utils.WrapError(utils.ErrConfigurationError, "max concurrent downloads must be positive", nil)
+	}
+
+	if c.DownloadSettings.DownloadTimeout < 0 {
+		return utils.WrapError(utils.ErrConfigurationError, "download timeout cannot be negative", nil)
+	}
+
+	return nil
+}
+
+func (c *Config) GetDownloadSettings() DownloadConfig {
+	return c.DownloadSettings
+}
+
+func (c *Config) GetSecuritySettings() SecurityConfig {
+	return c.SecuritySettings
 }

@@ -4,19 +4,23 @@
             "start": "<file.torrent> - download a torrent\n<URL> - stream video\n/ls - list files\n/rm <ID> - delete a movie, 'all' to delete all"
         },
         "status_messages": {
-            "empty_list": "The list is empty",
-            "login_success": "Logged in successfully",
-            "all_movies_deleted": "All movies have been deleted",
-            "deleted_movie": "Movie with ID {{.ID}} has been deleted"
+            "empty_list": "📭 The list is empty",
+            "login_success": "✅ Logged in successfully",
+            "all_movies_deleted": "🗑️ All movies have been deleted",
+            "deleted_movie": "🗑️ Movie with ID {{.ID}} has been deleted",
+            "deleting_movie": "🔄 Deleting movie with ID {{.ID}}...",
+            "deleting_all_movies": "🔄 Deleting {{.Count}} movies..."
         },
         "download": {
             "progress": "Downloading {{.Name}}: {{.Progress}}%"
         },
-        "video_downloading": "Downloading video: {{.Title}}",
-        "download_stopped": "Download stopped for video: {{.Title}}",
+        "video_downloading": "⬇️ Downloading video: {{.Title}}",
+        "download_stopped": "⏹️ Download stopped for video: {{.Title}}",
         "downloaded_list": "ID:{{.ID}} [{{.Progress}}%]\n{{.Name}}\n",
-        "disk_space_info": "Available disk space: {{.AvailableSpaceGB}} GB",
-        "video_successfully_downloaded": "Video successfully downloaded: {{.Title}}",
+        "disk_space_info": "💾 Available disk space: {{.AvailableSpaceGB}} GB",
+        "video_successfully_downloaded": "✅ Video successfully downloaded: {{.Title}}",
+        "download_queued": "📋 Movie added to download queue: {{.Title}}\nPosition in queue: {{.Position}}\nMax concurrent downloads: {{.MaxConcurrent}}",
+        "download_started_from_queue": "🚀 Download started: {{.Title}}",
         "user_prompts": {
             "unknown_user": "Please login using /login [PASSWORD]",
             "delete_prompt": "Select a movie to delete:",

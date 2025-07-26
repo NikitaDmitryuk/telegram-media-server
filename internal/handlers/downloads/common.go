@@ -60,7 +60,7 @@ func HandleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloa
 		return
 	}
 
-	movieID, progressChan, errChan, err := tmsdmanager.GlobalDownloadManager.StartDownload(downloaderInstance)
+	movieID, progressChan, errChan, err := tmsdmanager.GlobalDownloadManager.StartDownload(downloaderInstance, chatID)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to start download")
 		bot.SendMessage(chatID, tmslang.Translate("error.downloads.document_download_error", nil), nil)

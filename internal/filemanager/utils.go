@@ -61,7 +61,9 @@ func DeleteMovie(movieID uint) error {
 		return tmsutils.LogAndReturnError("Movie not found", err)
 	}
 
-	tmsdmanager.GlobalDownloadManager.StopDownload(movieID)
+	if err := tmsdmanager.GlobalDownloadManager.StopDownload(movieID); err != nil {
+		logutils.Log.WithError(err).Errorf("Failed to stop download for movieID %d", movieID)
+	}
 
 	if err := DeleteTemporaryFilesByMovieID(movieID); err != nil {
 		logutils.Log.WithError(err).Error("Failed to delete temporary files")
@@ -171,8 +173,8 @@ func deleteFiles(files []tmsdb.MovieFile) error {
 
 func deleteFileOrFolder(path string) error {
 	const (
-		maxAttempts      = 5
-		retrySleepMillis = 500
+		maxAttempts      = 3
+		retrySleepMillis = 100
 	)
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
