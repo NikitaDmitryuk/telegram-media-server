@@ -12,6 +12,11 @@ BUILD_DEPENDENCIES=go
 OPTIONAL_DEPENDENCIES=minidlna prowlarr
 OPTIONAL_DEPENDENCY_CHECK="minidlna.service prowlarr.service"
 
+# Version information
+VERSION=$(shell git describe --tags --always --dirty)
+BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
+LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
+
 .PHONY: check-deps
 check-deps:
 	@echo "Checking build dependencies..."
@@ -43,8 +48,21 @@ check-deps:
 
 .PHONY: build
 build: check-deps
-	@echo "Building $(BINARY_NAME)..."
-	go build -trimpath -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/telegram-media-server
+	@echo "Building $(BINARY_NAME) version $(VERSION)..."
+	@mkdir -p $(BUILD_DIR)
+	go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/telegram-media-server
+
+.PHONY: build-debug
+build-debug: check-deps
+	@echo "Building $(BINARY_NAME) with debug symbols..."
+	@mkdir -p $(BUILD_DIR)
+	go build $(LDFLAGS) -gcflags="all=-N -l" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-debug ./cmd/telegram-media-server
+
+.PHONY: build-release
+build-release: check-deps
+	@echo "Building $(BINARY_NAME) release version $(VERSION)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 GOOS=linux go build $(LDFLAGS) -a -installsuffix cgo -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-release ./cmd/telegram-media-server
 
 .PHONY: install
 install: build
@@ -75,17 +93,116 @@ uninstall:
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
+	go clean -cache -testcache
 
 .PHONY: format
 format:
+	@echo "Formatting code..."
 	go fmt ./...
 	go mod tidy
 	golangci-lint run --fix
 
 .PHONY: lint
 lint:
+	@echo "Running linter..."
 	golangci-lint run
+
+.PHONY: test
+test:
+	@echo "Running tests..."
+	go test -v ./...
+
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+.PHONY: test-benchmark
+test-benchmark:
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./...
+
+.PHONY: vet
+vet:
+	@echo "Running go vet..."
+	go vet ./...
+
+.PHONY: security-check
+security-check:
+	@echo "Running security checks..."
+	gosec ./...
 
 .PHONY: run
 run:
+	@echo "Running with Docker Compose..."
 	docker compose up --build
+
+.PHONY: run-detached
+run-detached:
+	@echo "Running with Docker Compose in detached mode..."
+	docker compose up --build -d
+
+.PHONY: stop
+stop:
+	@echo "Stopping Docker Compose services..."
+	docker compose down
+
+.PHONY: logs
+logs:
+	@echo "Showing Docker Compose logs..."
+	docker compose logs -f
+
+.PHONY: status
+status:
+	@echo "Checking service status..."
+	@if systemctl is-active --quiet telegram-media-server; then \
+		echo "✓ telegram-media-server is running"; \
+	else \
+		echo "✗ telegram-media-server is not running"; \
+	fi
+
+.PHONY: restart
+restart:
+	@echo "Restarting telegram-media-server..."
+	systemctl restart telegram-media-server
+
+.PHONY: check
+check: lint vet test
+	@echo "All checks passed!"
+
+.PHONY: pre-commit
+pre-commit: format lint vet test
+	@echo "Pre-commit checks completed successfully!"
+
+.PHONY: release
+release: clean build-release
+	@echo "Release build completed: $(BUILD_DIR)/$(BINARY_NAME)-release"
+
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  build          - Build the application"
+	@echo "  build-debug    - Build with debug symbols"
+	@echo "  build-release  - Build release version"
+	@echo "  install        - Install as system service"
+	@echo "  uninstall      - Uninstall system service"
+	@echo "  clean          - Clean build artifacts"
+	@echo "  format         - Format code"
+	@echo "  lint           - Run linter"
+	@echo "  test           - Run tests"
+	@echo "  test-coverage  - Run tests with coverage"
+	@echo "  test-benchmark - Run benchmarks"
+	@echo "  vet            - Run go vet"
+	@echo "  security-check - Run security checks"
+	@echo "  run            - Run with Docker Compose"
+	@echo "  run-detached   - Run with Docker Compose (detached)"
+	@echo "  stop           - Stop Docker Compose services"
+	@echo "  logs           - Show Docker Compose logs"
+	@echo "  status         - Check service status"
+	@echo "  restart        - Restart service"
+	@echo "  check          - Run all checks (lint, vet, test)"
+	@echo "  pre-commit     - Run pre-commit checks"
+	@echo "  release        - Build release version"
+	@echo "  help           - Show this help"

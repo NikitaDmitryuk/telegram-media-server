@@ -32,3 +32,5 @@ pkg/
 build/
 
 .DS_Store
+
+coverage.html

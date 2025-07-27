@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
@@ -148,18 +149,34 @@ func (d *Aria2Downloader) StopDownload() error {
 			return fmt.Errorf("failed to send SIGINT to aria2c process: %w", err)
 		}
 		logutils.Log.Info("Sent SIGINT to aria2c process")
-		err := d.cmd.Wait()
-		if err != nil {
-			if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "no child process") {
-				return nil
-			}
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 7 {
-					logutils.Log.Infof("aria2c exited with code 7 (unfinished downloads) after manual stop — not an error")
+
+		// Ждём до 3 секунд завершения процесса
+		done := make(chan error, 1)
+		go func() {
+			done <- d.cmd.Wait()
+		}()
+		select {
+		case err := <-done:
+			if err != nil {
+				if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "no child process") {
 					return nil
 				}
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 7 {
+						logutils.Log.Infof("aria2c exited with code 7 (unfinished downloads) after manual stop — not an error")
+						return nil
+					}
+				}
+				return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
 			}
-			return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
+			return nil
+		case <-time.After(3 * time.Second):
+			logutils.Log.Warn("aria2c did not exit after SIGINT, sending SIGKILL...")
+			if err := d.cmd.Process.Kill(); err != nil {
+				return fmt.Errorf("failed to send SIGKILL to aria2c process: %w", err)
+			}
+			logutils.Log.Info("Sent SIGKILL to aria2c process")
+			return <-done
 		}
 	}
 	return nil

@@ -260,7 +260,7 @@ func (s *SQLiteDatabase) GetUserRole(ctx context.Context, chatID int64) (UserRol
 	return user.Role, nil
 }
 
-func (s *SQLiteDatabase) IsUserAccessAllowed(ctx context.Context, chatID int64) (bool, UserRole, error) {
+func (s *SQLiteDatabase) IsUserAccessAllowed(ctx context.Context, chatID int64) (isAllowed bool, userRole UserRole, err error) {
 	var user User
 	if err := s.db.WithContext(ctx).Preload("Passwords").Where("chat_id = ?", chatID).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

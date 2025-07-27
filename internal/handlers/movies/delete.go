@@ -38,13 +38,19 @@ func deleteAllMovies(bot *tmsbot.Bot, chatID int64) {
 		return
 	}
 
-	for _, movie := range movies {
-		if err := filemanager.DeleteMovie(movie.ID); err != nil {
-			logutils.Log.WithError(err).Errorf("Failed to delete movie with ID %d", movie.ID)
-		}
-	}
+	bot.SendMessage(chatID, lang.Translate("general.status_messages.deleting_all_movies", map[string]any{
+		"Count": len(movies),
+	}), ui.GetMainMenuKeyboard())
 
-	bot.SendMessage(chatID, lang.Translate("general.status_messages.all_movies_deleted", nil), ui.GetMainMenuKeyboard())
+	go func() {
+		for _, movie := range movies {
+			if err := filemanager.DeleteMovie(movie.ID); err != nil {
+				logutils.Log.WithError(err).Errorf("Failed to delete movie with ID %d", movie.ID)
+			}
+		}
+
+		bot.SendMessage(chatID, lang.Translate("general.status_messages.all_movies_deleted", nil), ui.GetMainMenuKeyboard())
+	}()
 }
 
 func deleteMoviesByID(bot *tmsbot.Bot, chatID int64, ids []string) {
@@ -59,20 +65,30 @@ func deleteMoviesByID(bot *tmsbot.Bot, chatID int64, ids []string) {
 			continue
 		}
 
-		if err := filemanager.DeleteMovie(id); err != nil {
-			logutils.Log.WithError(err).Errorf("Failed to delete movie with ID %d", id)
-			bot.SendMessage(chatID, lang.Translate("error.database.delete_movie_error", map[string]any{
-				"ID": id,
-			}), ui.GetMainMenuKeyboard())
-		} else {
-			bot.SendMessage(chatID, lang.Translate("general.status_messages.deleted_movie", map[string]any{
-				"ID": id,
-			}), ui.GetMainMenuKeyboard())
-		}
+		bot.SendMessage(chatID, lang.Translate("general.status_messages.deleting_movie", map[string]any{
+			"ID": id,
+		}), ui.GetMainMenuKeyboard())
+
+		go func(movieID uint) {
+			if err := filemanager.DeleteMovie(movieID); err != nil {
+				logutils.Log.WithError(err).Errorf("Failed to delete movie with ID %d", movieID)
+				bot.SendMessage(chatID, lang.Translate("error.database.delete_movie_error", map[string]any{
+					"ID": movieID,
+				}), ui.GetMainMenuKeyboard())
+			} else {
+				bot.SendMessage(chatID, lang.Translate("general.status_messages.deleted_movie", map[string]any{
+					"ID": movieID,
+				}), ui.GetMainMenuKeyboard())
+			}
+		}(id)
 	}
 }
 
 func DeleteMovieByID(bot *tmsbot.Bot, chatID int64, movieID string) {
+	if after, ok := strings.CutPrefix(movieID, "delete_movie:"); ok {
+		movieID = after
+	}
+
 	id64, err := strconv.ParseUint(movieID, 10, 32)
 	id := uint(id64)
 	if err != nil {

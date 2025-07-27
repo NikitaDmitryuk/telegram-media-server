@@ -5,6 +5,7 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/models"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -17,7 +18,7 @@ func LoggingMiddleware(update *tgbotapi.Update) {
 	}
 }
 
-func AuthMiddleware(update *tgbotapi.Update) (bool, database.UserRole) {
+func AuthMiddleware(update *tgbotapi.Update) (bool, models.UserRole) {
 	var chatID int64
 	var userID int64
 
@@ -52,7 +53,7 @@ func CheckAccess(update *tgbotapi.Update) bool {
 	return allowed
 }
 
-func CheckAccessWithRole(update *tgbotapi.Update, allowedRoles []database.UserRole) bool {
+func CheckAccessWithRole(update *tgbotapi.Update, allowedRoles []models.UserRole) bool {
 	allowed, role := AuthMiddleware(update)
 	if !allowed {
 		return false
