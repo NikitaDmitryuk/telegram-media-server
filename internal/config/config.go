@@ -15,17 +15,46 @@ const (
 	DefaultPasswordMinLength      = 8
 )
 
-var GlobalConfig *Config
+func NewConfig() (*Config, error) {
+	config := &Config{
+		BotToken:        getEnv("BOT_TOKEN", ""),
+		MoviePath:       getEnv("MOVIE_PATH", ""),
+		AdminPassword:   getEnv("ADMIN_PASSWORD", ""),
+		RegularPassword: getEnv("REGULAR_PASSWORD", ""),
+		Lang:            getEnv("LANG", "en"),
+		Proxy:           getEnv("PROXY", ""),
+		ProxyHost:       getEnv("PROXY_HOST", ""),
+		LogLevel:        getEnv("LOG_LEVEL", "info"),
+		LangPath:        getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
+		ProwlarrURL:     getEnv("PROWLARR_URL", ""),
+		ProwlarrAPIKey:  getEnv("PROWLARR_API_KEY", ""),
 
-func InitConfig() error {
-	var err error
-	GlobalConfig, err = NewConfig()
-	if err != nil {
-		log.Fatalf("Failed to create configuration: %v", err)
-		return err
+		DownloadSettings: DownloadConfig{
+			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", 3),
+			DownloadTimeout:        getEnvDuration("DOWNLOAD_TIMEOUT", DefaultDownloadTimeout),
+			ProgressUpdateInterval: getEnvDuration("PROGRESS_UPDATE_INTERVAL", DefaultProgressUpdateInterval),
+		},
+
+		SecuritySettings: SecurityConfig{
+			PasswordMinLength: getEnvInt("PASSWORD_MIN_LENGTH", DefaultPasswordMinLength),
+		},
 	}
 
-	return nil
+	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
+		config.MoviePath = "/app/media"
+		config.LangPath = "/app/locales"
+		log.Printf("Running inside Docker, setting MOVIE_PATH to %s and LANG_PATH to %s", config.MoviePath, config.LangPath)
+	}
+
+	if err := config.validate(); err != nil {
+		log.Printf("Configuration validation failed: %v", err)
+		return nil, utils.WrapError(err, "configuration validation failed", map[string]any{
+			"config": config,
+		})
+	}
+
+	log.Println("Configuration loaded successfully")
+	return config, nil
 }
 
 type Config struct {
@@ -78,48 +107,6 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		}
 	}
 	return defaultValue
-}
-
-func NewConfig() (*Config, error) {
-	config := &Config{
-		BotToken:        getEnv("BOT_TOKEN", ""),
-		MoviePath:       getEnv("MOVIE_PATH", ""),
-		AdminPassword:   getEnv("ADMIN_PASSWORD", ""),
-		RegularPassword: getEnv("REGULAR_PASSWORD", ""),
-		Lang:            getEnv("LANG", "en"),
-		Proxy:           getEnv("PROXY", ""),
-		ProxyHost:       getEnv("PROXY_HOST", ""),
-		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		LangPath:        getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
-		ProwlarrURL:     getEnv("PROWLARR_URL", ""),
-		ProwlarrAPIKey:  getEnv("PROWLARR_API_KEY", ""),
-
-		DownloadSettings: DownloadConfig{
-			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", 3),
-			DownloadTimeout:        getEnvDuration("DOWNLOAD_TIMEOUT", DefaultDownloadTimeout),
-			ProgressUpdateInterval: getEnvDuration("PROGRESS_UPDATE_INTERVAL", DefaultProgressUpdateInterval),
-		},
-
-		SecuritySettings: SecurityConfig{
-			PasswordMinLength: getEnvInt("PASSWORD_MIN_LENGTH", DefaultPasswordMinLength),
-		},
-	}
-
-	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
-		config.MoviePath = "/app/media"
-		config.LangPath = "/app/locales"
-		log.Printf("Running inside Docker, setting MOVIE_PATH to %s and LANG_PATH to %s", config.MoviePath, config.LangPath)
-	}
-
-	if err := config.validate(); err != nil {
-		log.Printf("Configuration validation failed: %v", err)
-		return nil, utils.WrapError(err, "configuration validation failed", map[string]any{
-			"config": config,
-		})
-	}
-
-	log.Println("Configuration loaded successfully")
-	return config, nil
 }
 
 func (c *Config) validate() error {

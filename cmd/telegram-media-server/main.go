@@ -23,33 +23,35 @@ var (
 )
 
 func main() {
-	if err := tmsconfig.InitConfig(); err != nil {
+	config, err := tmsconfig.NewConfig()
+	if err != nil {
 		logutils.Log.WithError(err).Fatal("Failed to initialize configuration")
 	}
 
-	logutils.InitLogger(tmsconfig.GlobalConfig.LogLevel)
+	logutils.InitLogger(config.LogLevel)
 	logutils.Log.WithFields(map[string]any{
 		"version":    Version,
 		"build_time": BuildTime,
 	}).Info("Starting Telegram Media Server")
 
-	if err := database.InitDatabase(tmsconfig.GlobalConfig); err != nil {
-		logutils.Log.WithError(err).Fatal("Failed to initialize the database")
+	if dbErr := database.InitDatabase(config); dbErr != nil {
+		logutils.Log.WithError(dbErr).Fatal("Failed to initialize the database")
+	}
+	db := database.GlobalDB
+
+	if langErr := lang.InitLocalizer(config); langErr != nil {
+		logutils.Log.WithError(langErr).Fatal("Failed to initialize localizer")
 	}
 
-	if err := lang.InitLocalizer(); err != nil {
-		logutils.Log.WithError(err).Fatal("Failed to initialize localizer")
-	}
-
-	tmsdownloadmanager.InitDownloadManager()
+	downloadManager := tmsdownloadmanager.NewDownloadManager(config, db)
 	logutils.Log.Info("Download manager initialized")
 
-	botInstance, err := tmsbot.InitBot(tmsconfig.GlobalConfig)
+	botInstance, err := tmsbot.InitBot(config)
 	if err != nil {
 		logutils.Log.WithError(err).Fatal("Bot initialization failed")
 	}
 
-	downloads.InitNotificationHandler(botInstance)
+	downloads.InitNotificationHandler(botInstance, downloadManager)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -57,7 +59,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	go processUpdates(ctx, botInstance)
+	go processUpdates(ctx, botInstance, db, config, downloadManager)
 
 	logutils.Log.Info("Telegram Media Server started successfully")
 
@@ -66,13 +68,19 @@ func main() {
 
 	cancel()
 
-	tmsdownloadmanager.GlobalDownloadManager.StopAllDownloads()
+	downloadManager.StopAllDownloads()
 	logutils.Log.Info("All downloads stopped")
 
 	logutils.Log.Info("Telegram Media Server shutdown complete")
 }
 
-func processUpdates(ctx context.Context, bot *tmsbot.Bot) {
+func processUpdates(
+	ctx context.Context,
+	bot *tmsbot.Bot,
+	db database.Database,
+	config *tmsconfig.Config,
+	downloadManager *tmsdownloadmanager.DownloadManager,
+) {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.Api.GetUpdatesChan(u)
@@ -80,7 +88,7 @@ func processUpdates(ctx context.Context, bot *tmsbot.Bot) {
 	for {
 		select {
 		case update := <-updates:
-			common.Router(bot, &update)
+			common.Router(bot, &update, db, config, downloadManager)
 		case <-ctx.Done():
 			logutils.Log.Info("Stopping update processing")
 			return

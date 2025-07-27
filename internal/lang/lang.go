@@ -13,19 +13,19 @@ import (
 
 var localizer *i18n.Localizer
 
-func InitLocalizer() error {
+func InitLocalizer(config *tmsconfig.Config) error {
 	bundle := i18n.NewBundle(language.English)
 	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
 
-	mainLang := tmsconfig.GlobalConfig.Lang
-	mainLangFile := filepath.Join(tmsconfig.GlobalConfig.LangPath, fmt.Sprintf("active.%s.json", mainLang))
+	mainLang := config.Lang
+	mainLangFile := filepath.Join(config.LangPath, fmt.Sprintf("active.%s.json", mainLang))
 	_, err := bundle.LoadMessageFile(mainLangFile)
 	if err != nil {
 		logutils.Log.Warnf("Failed to load main language file %s: %v", mainLangFile, err)
 	}
 
 	if mainLang != "en" {
-		englishFile := filepath.Join(tmsconfig.GlobalConfig.LangPath, "active.en.json")
+		englishFile := filepath.Join(config.LangPath, "active.en.json")
 		_, err = bundle.LoadMessageFile(englishFile)
 		if err != nil {
 			logutils.Log.Warnf("Failed to load fallback language file %s: %v", englishFile, err)

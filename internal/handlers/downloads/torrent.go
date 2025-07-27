@@ -4,13 +4,22 @@ import (
 	"strings"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
+	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
+	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	torrent "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func HandleTorrentFile(bot *tmsbot.Bot, update *tgbotapi.Update) {
+func HandleTorrentFile(
+	bot *tmsbot.Bot,
+	update *tgbotapi.Update,
+	config *tmsconfig.Config,
+	db tmsdb.Database,
+	downloadManager *tmsdmanager.DownloadManager,
+) {
 	message := update.Message
 	chatID := message.Chat.ID
 	doc := message.Document
@@ -29,7 +38,7 @@ func HandleTorrentFile(bot *tmsbot.Bot, update *tgbotapi.Update) {
 		return
 	}
 
-	downloaderInstance := torrent.NewAria2Downloader(bot, doc.FileName)
+	downloaderInstance := torrent.NewAria2Downloader(bot, doc.FileName, config.MoviePath)
 
 	if downloaderInstance == nil {
 		logutils.Log.Warn("Failed to initialize torrent downloader")
@@ -37,5 +46,5 @@ func HandleTorrentFile(bot *tmsbot.Bot, update *tgbotapi.Update) {
 		return
 	}
 
-	HandleDownload(bot, chatID, downloaderInstance)
+	HandleDownload(bot, chatID, downloaderInstance, config, db, downloadManager)
 }

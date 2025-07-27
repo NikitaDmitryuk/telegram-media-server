@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	movies "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/movies"
 	tmssession "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/session"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -14,11 +16,17 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func HandleCallbackQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
+func HandleCallbackQuery(
+	bot *tmsbot.Bot,
+	update *tgbotapi.Update,
+	db database.Database,
+	cfg *config.Config,
+	downloadManager *tmsdmanager.DownloadManager,
+) {
 	callbackData := update.CallbackQuery.Data
 	chatID := update.CallbackQuery.Message.Chat.ID
 
-	allowed, role, err := database.GlobalDB.IsUserAccessAllowed(context.Background(), update.CallbackQuery.From.ID)
+	allowed, role, err := db.IsUserAccessAllowed(context.Background(), update.CallbackQuery.From.ID)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to check user access")
 		bot.SendMessage(chatID, lang.Translate("error.authentication.access_check_failed", nil), nil)
@@ -31,7 +39,7 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
 
 	switch {
 	case strings.HasPrefix(callbackData, "delete_movie:"):
-		handleDeleteMovieCallback(bot, update, chatID, role, callbackData)
+		handleDeleteMovieCallback(bot, update, chatID, role, callbackData, db, cfg.MoviePath, downloadManager)
 
 	case callbackData == "cancel_delete_menu":
 		deleteMsg := tgbotapi.NewDeleteMessage(chatID, update.CallbackQuery.Message.MessageID)
@@ -40,16 +48,16 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
 		}
 
 	case callbackData == "list_movies":
-		movies.ListMoviesHandler(bot, update)
+		movies.ListMoviesHandler(bot, update, db, cfg)
 
 	case strings.HasPrefix(callbackData, "torrent_search_download:"):
-		tmssession.HandleTorrentSearchCallback(bot, update)
+		tmssession.HandleTorrentSearchCallback(bot, update, cfg, db, downloadManager)
 		return
 	case callbackData == "torrent_search_cancel":
-		tmssession.HandleTorrentSearchCallback(bot, update)
+		tmssession.HandleTorrentSearchCallback(bot, update, cfg, db, downloadManager)
 		return
 	case callbackData == "torrent_search_more":
-		tmssession.HandleTorrentSearchCallback(bot, update)
+		tmssession.HandleTorrentSearchCallback(bot, update, cfg, db, downloadManager)
 		return
 
 	default:
@@ -60,7 +68,16 @@ func HandleCallbackQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 }
 
-func handleDeleteMovieCallback(bot *tmsbot.Bot, update *tgbotapi.Update, chatID int64, role database.UserRole, callbackData string) {
+func handleDeleteMovieCallback(
+	bot *tmsbot.Bot,
+	update *tgbotapi.Update,
+	chatID int64,
+	role database.UserRole,
+	callbackData string,
+	db database.Database,
+	moviePath string,
+	downloadManager *tmsdmanager.DownloadManager,
+) {
 	if role != database.AdminRole && role != database.RegularRole {
 		bot.SendMessage(chatID, lang.Translate("error.authentication.access_denied", nil), nil)
 		return
@@ -81,14 +98,14 @@ func handleDeleteMovieCallback(bot *tmsbot.Bot, update *tgbotapi.Update, chatID 
 		"action":        "delete_callback_started",
 	}).Info("Starting delete from callback")
 
-	movies.DeleteMovieByID(bot, chatID, callbackData)
+	movies.DeleteMovieByID(bot, chatID, callbackData, moviePath, db, downloadManager)
 
 	logutils.Log.WithFields(map[string]any{
 		"chat_id": chatID,
 		"action":  "delete_callback_completed",
 	}).Info("Delete completed, updating menu")
 
-	movieList, err := database.GlobalDB.GetMovieList(context.Background())
+	movieList, err := db.GetMovieList(context.Background())
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to get movie list for menu update")
 		return
@@ -101,10 +118,10 @@ func handleDeleteMovieCallback(bot *tmsbot.Bot, update *tgbotapi.Update, chatID 
 		}
 	}
 
-	updateDeleteMenuWithMovies(bot, chatID, update.CallbackQuery.Message.MessageID, remainingMovies)
+	updateDeleteMenuWithMovies(bot, chatID, update.CallbackQuery.Message.MessageID, remainingMovies, db)
 }
 
-func updateDeleteMenuWithMovies(bot *tmsbot.Bot, chatID int64, messageID int, movieList []database.Movie) {
+func updateDeleteMenuWithMovies(bot *tmsbot.Bot, chatID int64, messageID int, movieList []database.Movie, _ database.Database) {
 	logutils.Log.WithFields(map[string]any{
 		"chat_id":    chatID,
 		"message_id": messageID,

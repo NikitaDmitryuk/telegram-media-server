@@ -12,7 +12,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func GenerateTempPasswordHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
+func GenerateTempPasswordHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Database) {
 	args := strings.Fields(update.Message.Text)
 	if len(args) != 2 {
 		logutils.Log.Info("Invalid /temp command format")
@@ -28,7 +28,7 @@ func GenerateTempPasswordHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
 		return
 	}
 
-	password, err := database.GlobalDB.GenerateTemporaryPassword(context.Background(), duration)
+	password, err := db.GenerateTemporaryPassword(context.Background(), duration)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to generate temporary password")
 		bot.SendMessage(update.Message.Chat.ID, lang.Translate("error.security.temp_password_error", nil), nil)

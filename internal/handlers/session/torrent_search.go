@@ -9,6 +9,8 @@ import (
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	torrent "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
@@ -72,7 +74,7 @@ func StartTorrentSearch(bot *tmsbot.Bot, chatID int64) {
 	bot.SendMessage(chatID, lang.Translate("general.torrent_search.enter_query", nil), ui.GetTorrentSearchKeyboard(false))
 }
 
-func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
+func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *tmsconfig.Config) {
 	chatID := update.Message.Chat.ID
 	ss, sess := GetSearchSession(chatID)
 	if sess == nil || sess.Stage != "await_query" {
@@ -89,13 +91,13 @@ func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update) {
 		return
 	}
 
-	if tmsconfig.GlobalConfig.ProwlarrURL == "" || tmsconfig.GlobalConfig.ProwlarrAPIKey == "" {
+	if config.ProwlarrURL == "" || config.ProwlarrAPIKey == "" {
 		bot.SendMessage(chatID, lang.Translate("general.torrent_search.not_configured", nil), ui.GetEmptyKeyboard())
 		DeleteSearchSession(chatID)
 		ui.SendMainMenuNoText(bot, chatID)
 		return
 	}
-	client := prowlarr.NewProwlarr(tmsconfig.GlobalConfig.ProwlarrURL, tmsconfig.GlobalConfig.ProwlarrAPIKey)
+	client := prowlarr.NewProwlarr(config.ProwlarrURL, config.ProwlarrAPIKey)
 	page, err := client.SearchTorrents(query, 0, searchPageSize, nil, nil)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Prowlarr search failed")
@@ -164,7 +166,7 @@ func ShowTorrentSearchResults(bot *tmsbot.Bot, chatID int64) {
 	setSearchSession(chatID, ss, "show_results")
 }
 
-func handleTorrentDownloadCallback(_ *tmsbot.Bot, chatID int64, data string) (string, error) {
+func handleTorrentDownloadCallback(bot *tmsbot.Bot, chatID int64, data string, config *tmsconfig.Config) (string, error) {
 	ss, _ := GetSearchSession(chatID)
 	if ss == nil {
 		return "", errors.New(lang.Translate("general.torrent_search.session_expired", nil))
@@ -175,14 +177,14 @@ func handleTorrentDownloadCallback(_ *tmsbot.Bot, chatID int64, data string) (st
 		return "", errors.New(lang.Translate("general.torrent_search.invalid_choice", nil))
 	}
 	candidate := ss.Results[idx]
-	client := prowlarr.NewProwlarr(tmsconfig.GlobalConfig.ProwlarrURL, tmsconfig.GlobalConfig.ProwlarrAPIKey)
+	client := prowlarr.NewProwlarr(config.ProwlarrURL, config.ProwlarrAPIKey)
 	fileBytes, err := client.GetTorrentFile(candidate.TorrentURL)
 	if err != nil {
 		return "", errors.New(lang.Translate("general.torrent_search.download_failed", nil))
 	}
 
 	fileName := uuid.New().String() + ".torrent"
-	if err := tmsbot.SaveFile(fileName, fileBytes); err != nil {
+	if err := bot.SaveFile(fileName, fileBytes); err != nil {
 		return "", errors.New(lang.Translate("general.torrent_search.save_failed", nil))
 	}
 	return fileName, nil
@@ -210,7 +212,13 @@ func handleTorrentMoreCallback(bot *tmsbot.Bot, chatID int64) bool {
 	return true
 }
 
-func HandleTorrentSearchCallback(bot *tmsbot.Bot, update *tgbotapi.Update) bool {
+func HandleTorrentSearchCallback(
+	bot *tmsbot.Bot,
+	update *tgbotapi.Update,
+	config *tmsconfig.Config,
+	db database.Database,
+	downloadManager *tmsdmanager.DownloadManager,
+) bool {
 	if update.CallbackQuery == nil {
 		return false
 	}
@@ -218,7 +226,7 @@ func HandleTorrentSearchCallback(bot *tmsbot.Bot, update *tgbotapi.Update) bool 
 	chatID := update.CallbackQuery.Message.Chat.ID
 
 	if strings.HasPrefix(data, "torrent_search_download:") {
-		fileName, err := handleTorrentDownloadCallback(bot, chatID, data)
+		fileName, err := handleTorrentDownloadCallback(bot, chatID, data, config)
 		if err != nil {
 			bot.SendMessage(chatID, err.Error(), ui.GetEmptyKeyboard())
 			if update.CallbackQuery != nil {
@@ -232,7 +240,7 @@ func HandleTorrentSearchCallback(bot *tmsbot.Bot, update *tgbotapi.Update) bool 
 				_ = bot.DeleteMessage(chatID, msgID)
 			}
 		}
-		downloaderInstance := torrent.NewAria2Downloader(bot, fileName)
+		downloaderInstance := torrent.NewAria2Downloader(bot, fileName, config.MoviePath)
 		if downloaderInstance == nil {
 			bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), ui.GetEmptyKeyboard())
 			if update.CallbackQuery != nil {
@@ -241,7 +249,7 @@ func HandleTorrentSearchCallback(bot *tmsbot.Bot, update *tgbotapi.Update) bool 
 			return true
 		}
 		DeleteSearchSession(chatID)
-		downloads.HandleDownload(bot, chatID, downloaderInstance)
+		downloads.HandleDownload(bot, chatID, downloaderInstance, config, db, downloadManager)
 		ui.SendMainMenuNoText(bot, chatID)
 		if update.CallbackQuery != nil {
 			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))

@@ -28,10 +28,11 @@ type YTDLPDownloader struct {
 	cmd             *exec.Cmd
 	cancel          context.CancelFunc
 	stoppedManually bool
+	config          *tmsconfig.Config
 }
 
-func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string) downloader.Downloader {
-	videoTitle, err := getVideoTitle(botInstance, videoURL)
+func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string, config *tmsconfig.Config) downloader.Downloader {
+	videoTitle, err := getVideoTitle(botInstance, videoURL, config)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to retrieve video title, generating fallback title")
 		videoTitle, _ = extractVideoID(videoURL)
@@ -46,16 +47,17 @@ func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string) downloader.Downlo
 		url:            videoURL,
 		title:          videoTitle,
 		outputFileName: outputFileName,
+		config:         config,
 	}
 }
 
 func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
-	useProxy, err := shouldUseProxy(d.bot, d.url)
+	useProxy, err := shouldUseProxy(d.bot, d.url, d.config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error checking proxy requirement: %w", err)
 	}
 
-	outputPath := filepath.Join(tmsconfig.GlobalConfig.MoviePath, d.outputFileName)
+	outputPath := filepath.Join(d.config.MoviePath, d.outputFileName)
 	ctx, cancel := context.WithCancel(ctx)
 	d.cancel = cancel
 
@@ -69,7 +71,7 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan 
 	}
 
 	if useProxy {
-		proxy := tmsconfig.GlobalConfig.Proxy
+		proxy := d.config.Proxy
 		logutils.Log.WithField("proxy", proxy).Infof("Using proxy for URL: %s", d.url)
 		cmdArgs = append([]string{"--proxy", proxy}, cmdArgs...)
 	} else {
@@ -171,14 +173,14 @@ func (d *YTDLPDownloader) GetFiles() (mainFiles, tempFiles []string, err error) 
 }
 
 func (d *YTDLPDownloader) GetFileSize() (int64, error) {
-	useProxy, err := shouldUseProxy(d.bot, d.url)
+	useProxy, err := shouldUseProxy(d.bot, d.url, d.config)
 	if err != nil {
 		return 0, nil
 	}
 
 	cmdArgs := []string{"--skip-download", "--print-json", d.url}
 	if useProxy {
-		cmdArgs = append([]string{"--proxy", tmsconfig.GlobalConfig.Proxy}, cmdArgs...)
+		cmdArgs = append([]string{"--proxy", d.config.Proxy}, cmdArgs...)
 	}
 
 	cmd := exec.Command("yt-dlp", cmdArgs...)
@@ -206,18 +208,18 @@ func (d *YTDLPDownloader) StoppedManually() bool {
 	return d.stoppedManually
 }
 
-func shouldUseProxy(_ *bot.Bot, rawURL string) (bool, error) {
+func shouldUseProxy(_ *bot.Bot, rawURL string, config *tmsconfig.Config) (bool, error) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return false, fmt.Errorf("invalid URL: %w", err)
 	}
 
-	proxy := tmsconfig.GlobalConfig.Proxy
+	proxy := config.Proxy
 	if proxy == "" {
 		return false, nil
 	}
 
-	targetHosts := tmsconfig.GlobalConfig.ProxyHost
+	targetHosts := config.ProxyHost
 	if targetHosts == "" {
 		return true, nil
 	}
@@ -231,15 +233,15 @@ func shouldUseProxy(_ *bot.Bot, rawURL string) (bool, error) {
 	return false, nil
 }
 
-func getVideoTitle(botInstance *bot.Bot, videoURL string) (string, error) {
-	useProxy, err := shouldUseProxy(botInstance, videoURL)
+func getVideoTitle(botInstance *bot.Bot, videoURL string, config *tmsconfig.Config) (string, error) {
+	useProxy, err := shouldUseProxy(botInstance, videoURL, config)
 	if err != nil {
 		return "", fmt.Errorf("error checking proxy requirement: %w", err)
 	}
 
 	cmdArgs := []string{"--get-title", videoURL}
 	if useProxy {
-		cmdArgs = append([]string{"--proxy", tmsconfig.GlobalConfig.Proxy}, cmdArgs...)
+		cmdArgs = append([]string{"--proxy", config.Proxy}, cmdArgs...)
 	}
 
 	cmd := exec.Command("yt-dlp", cmdArgs...)

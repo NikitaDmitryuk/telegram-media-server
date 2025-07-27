@@ -100,12 +100,16 @@ format:
 	@echo "Formatting code..."
 	go fmt ./...
 	go mod tidy
+	golines --max-len=140 -w .
 	golangci-lint run --fix
+	gocritic check .
 
 .PHONY: lint
 lint:
 	@echo "Running linter..."
+	golines --max-len=140 -w .
 	golangci-lint run
+	gocritic check .
 
 .PHONY: test
 test:
@@ -206,3 +210,4 @@ help:
 	@echo "  pre-commit     - Run pre-commit checks"
 	@echo "  release        - Build release version"
 	@echo "  help           - Show this help"
+	@echo "  devtools       - Установка golines и gocritic для автоформатирования"

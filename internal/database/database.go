@@ -23,7 +23,7 @@ type Database interface {
 	RemoveFilesByMovieID(ctx context.Context, movieID uint) error
 	RemoveTempFilesByMovieID(ctx context.Context, movieID uint) error
 	MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error)
-	Login(ctx context.Context, password string, chatID int64, userName string) (bool, error)
+	Login(ctx context.Context, password string, chatID int64, userName string, config *tmsconfig.Config) (bool, error)
 	GetUserRole(ctx context.Context, chatID int64) (UserRole, error)
 	IsUserAccessAllowed(ctx context.Context, chatID int64) (bool, UserRole, error)
 	AssignTemporaryPassword(ctx context.Context, password string, chatID int64) error

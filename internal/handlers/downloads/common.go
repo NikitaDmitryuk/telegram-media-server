@@ -13,7 +13,14 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
-func HandleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloader.Downloader) {
+func HandleDownload(
+	bot *tmsbot.Bot,
+	chatID int64,
+	downloaderInstance tmsdownloader.Downloader,
+	config *tmsconfig.Config,
+	db tmsdb.Database,
+	downloadManager *tmsdmanager.DownloadManager,
+) {
 	mainFiles, tempFiles, err := downloaderInstance.GetFiles()
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to get files from downloader instance")
@@ -25,7 +32,7 @@ func HandleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloa
 	mainFiles = append(mainFiles, tempFiles...)
 	allFiles := mainFiles
 
-	exists, err := tmsdb.GlobalDB.MovieExistsFiles(context.Background(), allFiles)
+	exists, err := db.MovieExistsFiles(context.Background(), allFiles)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to check if media files exist in the database")
 		bot.SendMessage(chatID, tmslang.Translate("error.movies.check_error", map[string]any{
@@ -54,25 +61,25 @@ func HandleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloa
 		bot.SendMessage(chatID, tmslang.Translate("error.downloads.video_size_error", nil), nil)
 		return
 	}
-	if !filemanager.HasEnoughSpace(tmsconfig.GlobalConfig.MoviePath, fileSize) {
+	if !filemanager.HasEnoughSpace(config.MoviePath, fileSize) {
 		logutils.Log.Warn("Not enough space for the download")
 		bot.SendMessage(chatID, tmslang.Translate("error.storage.not_enough_space", nil), nil)
 		return
 	}
 
-	movieID, progressChan, errChan, err := tmsdmanager.GlobalDownloadManager.StartDownload(downloaderInstance, chatID)
+	movieID, progressChan, errChan, err := downloadManager.StartDownload(downloaderInstance, chatID)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to start download")
 		bot.SendMessage(chatID, tmslang.Translate("error.downloads.document_download_error", nil), nil)
 		return
 	}
 
-	user, err := tmsdb.GlobalDB.GetUserByChatID(context.Background(), chatID)
+	user, err := db.GetUserByChatID(context.Background(), chatID)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to fetch user for download history")
 	}
 
-	if err := tmsdb.GlobalDB.AddDownloadHistory(context.Background(), user.ID, movieID); err != nil {
+	if err := db.AddDownloadHistory(context.Background(), user.ID, movieID); err != nil {
 		logutils.Log.WithError(err).Error("Failed to record download history")
 	}
 
@@ -80,7 +87,7 @@ func HandleDownload(bot *tmsbot.Bot, chatID int64, downloaderInstance tmsdownloa
 		"Title": videoTitle,
 	}), nil)
 
-	go handleDownloadCompletion(bot, chatID, downloaderInstance, movieID, videoTitle, progressChan, errChan)
+	go handleDownloadCompletion(bot, chatID, downloaderInstance, movieID, videoTitle, progressChan, errChan, config, db, downloadManager)
 }
 
 func handleDownloadCompletion(
@@ -91,6 +98,9 @@ func handleDownloadCompletion(
 	videoTitle string,
 	progressChan <-chan float64,
 	errChan <-chan error,
+	config *tmsconfig.Config,
+	db tmsdb.Database,
+	downloadManager *tmsdmanager.DownloadManager,
 ) {
 	for range progressChan {
 	}
@@ -102,7 +112,7 @@ func handleDownloadCompletion(
 		}), nil)
 	} else if err != nil {
 		logutils.Log.WithError(err).Error("Download failed")
-		if deleteErr := filemanager.DeleteMovie(movieID); deleteErr != nil {
+		if deleteErr := filemanager.DeleteMovie(movieID, config.MoviePath, db, downloadManager); deleteErr != nil {
 			logutils.Log.WithError(deleteErr).Error("Failed to delete movie after download failed")
 		}
 		bot.SendMessage(chatID, tmslang.Translate("error.downloads.video_download_error", map[string]any{
@@ -113,7 +123,7 @@ func handleDownloadCompletion(
 		bot.SendMessage(chatID, tmslang.Translate("general.video_successfully_downloaded", map[string]any{
 			"Title": videoTitle,
 		}), nil)
-		if err := filemanager.DeleteTemporaryFilesByMovieID(movieID); err != nil {
+		if err := filemanager.DeleteTemporaryFilesByMovieID(movieID, config.MoviePath, db, downloadManager); err != nil {
 			logutils.Log.WithError(err).Error("Failed to delete temporary files after download")
 		}
 	}

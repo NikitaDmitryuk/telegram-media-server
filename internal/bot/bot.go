@@ -14,7 +14,8 @@ import (
 )
 
 type Bot struct {
-	Api *tgbotapi.BotAPI
+	Api    *tgbotapi.BotAPI
+	Config *tmsconfig.Config
 }
 
 func InitBot(config *tmsconfig.Config) (*Bot, error) {
@@ -24,7 +25,7 @@ func InitBot(config *tmsconfig.Config) (*Bot, error) {
 		return nil, fmt.Errorf("error creating bot: %w", err)
 	}
 	logutils.Log.Infof("Authorized on account %s", api.Self.UserName)
-	return &Bot{Api: api}, nil
+	return &Bot{Api: api, Config: config}, nil
 }
 
 func (b *Bot) SendMessage(chatID int64, text string, keyboard any) {
@@ -66,7 +67,7 @@ func (b *Bot) DownloadFile(fileID, fileName string) error {
 	}
 	defer resp.Body.Close()
 
-	out, err := os.Create(filepath.Join(tmsconfig.GlobalConfig.MoviePath, fileName))
+	out, err := os.Create(filepath.Join(b.Config.MoviePath, fileName))
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to create file")
 		return err
@@ -99,8 +100,8 @@ func (b *Bot) DeleteMessage(chatID int64, messageID int) error {
 	return err
 }
 
-func SaveFile(fileName string, data []byte) error {
-	path := filepath.Join(tmsconfig.GlobalConfig.MoviePath, fileName)
+func (b *Bot) SaveFile(fileName string, data []byte) error {
+	path := filepath.Join(b.Config.MoviePath, fileName)
 	f, err := os.Create(path)
 	if err != nil {
 		logutils.Log.WithError(err).Errorf("Failed to create file %s", path)

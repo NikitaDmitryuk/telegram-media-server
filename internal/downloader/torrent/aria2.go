@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/jackpal/bencode-go"
@@ -42,11 +41,11 @@ type Aria2Downloader struct {
 	stoppedManually bool
 }
 
-func NewAria2Downloader(botInstance *bot.Bot, torrentFileName string) downloader.Downloader {
+func NewAria2Downloader(botInstance *bot.Bot, torrentFileName, moviePath string) downloader.Downloader {
 	return &Aria2Downloader{
 		bot:             botInstance,
 		torrentFileName: torrentFileName,
-		downloadDir:     tmsconfig.GlobalConfig.MoviePath,
+		downloadDir:     moviePath,
 	}
 }
 
