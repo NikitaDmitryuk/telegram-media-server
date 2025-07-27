@@ -21,8 +21,8 @@ const (
 
 var GlobalDownloadManager *DownloadManager
 
-func InitDownloadManager() {
-	GlobalDownloadManager = NewDownloadManager()
+func InitDownloadManager(cfg *config.Config) {
+	GlobalDownloadManager = NewDownloadManager(cfg, database.GlobalDB)
 }
 
 type DownloadManager struct {
@@ -33,6 +33,7 @@ type DownloadManager struct {
 	downloadSettings config.DownloadConfig
 	queueMutex       sync.Mutex
 	notificationChan chan QueueNotification
+	db               database.Database
 }
 
 type downloadJob struct {
@@ -62,14 +63,15 @@ type QueueNotification struct {
 	MaxConcurrent int
 }
 
-func NewDownloadManager() *DownloadManager {
-	settings := config.GlobalConfig.GetDownloadSettings()
+func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManager {
+	settings := cfg.GetDownloadSettings()
 	dm := &DownloadManager{
 		jobs:             make(map[uint]downloadJob),
 		queue:            make([]queuedDownload, 0),
 		semaphore:        make(chan struct{}, settings.MaxConcurrentDownloads),
 		downloadSettings: settings,
 		notificationChan: make(chan QueueNotification, NotificationChannelSize),
+		db:               db,
 	}
 
 	go dm.processQueue()
@@ -192,7 +194,7 @@ func (dm *DownloadManager) StartDownload(
 		return 0, nil, nil, utils.WrapError(err, "failed to get files", nil)
 	}
 
-	movieID, err = database.GlobalDB.AddMovie(context.Background(), movieTitle, mainFiles, tempFiles)
+	movieID, err = dm.db.AddMovie(context.Background(), movieTitle, mainFiles, tempFiles)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to add movie to database")
 		return 0, nil, nil, utils.WrapError(err, "failed to add movie to database", nil)
@@ -353,7 +355,7 @@ func (dm *DownloadManager) monitorDownload(
 			}
 
 			if time.Since(lastUpdate) >= updateInterval {
-				err := database.GlobalDB.UpdateDownloadedPercentage(context.Background(), movieID, int(math.Floor(progress)))
+				err := dm.db.UpdateDownloadedPercentage(context.Background(), movieID, int(math.Floor(progress)))
 				if err != nil {
 					logutils.Log.WithError(err).Warnf("Failed to update downloaded percentage for movieID %d", movieID)
 				} else {
@@ -403,7 +405,7 @@ func (dm *DownloadManager) monitorDownload(
 					"action":   "download_complete",
 				}).Info("Download completed successfully")
 
-				err = database.GlobalDB.SetLoaded(context.Background(), movieID)
+				err = dm.db.SetLoaded(context.Background(), movieID)
 				if err != nil {
 					logutils.Log.WithError(err).Warnf("Failed to set movie as loaded for movieID %d", movieID)
 				}
@@ -497,7 +499,7 @@ func (dm *DownloadManager) GetDownloadStatus(movieID uint) (isActive bool, progr
 	defer dm.mu.RUnlock()
 
 	if _, exists := dm.jobs[movieID]; exists {
-		movie, err := database.GlobalDB.GetMovieByID(context.Background(), movieID)
+		movie, err := dm.db.GetMovieByID(context.Background(), movieID)
 		if err != nil {
 			return true, 0, err
 		}

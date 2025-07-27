@@ -15,10 +15,10 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
+func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Database, config *tmsconfig.Config) {
 	chatID := update.Message.Chat.ID
 
-	movies, err := database.GlobalDB.GetMovieList(context.Background())
+	movies, err := db.GetMovieList(context.Background())
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to retrieve movie list")
 		bot.SendMessage(chatID, lang.Translate("error.movies.fetch_error", nil), ui.GetMainMenuKeyboard())
@@ -39,8 +39,7 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
 		}))
 	}
 
-	moviePath := tmsconfig.GlobalConfig.MoviePath
-	availableSpaceGB, err := filemanager.GetAvailableSpaceGB(moviePath)
+	availableSpaceGB, err := filemanager.GetAvailableSpaceGB(config.MoviePath)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to get available disk space")
 		availableSpaceGB = 0

@@ -185,12 +185,18 @@ func (s *SQLiteDatabase) GetTempFilesByMovieID(ctx context.Context, movieID uint
 	return tempFiles, nil
 }
 
-func (s *SQLiteDatabase) Login(ctx context.Context, password string, chatID int64, userName string) (bool, error) {
+func (s *SQLiteDatabase) Login(
+	ctx context.Context,
+	password string,
+	chatID int64,
+	userName string,
+	config *tmsconfig.Config,
+) (bool, error) {
 	var role UserRole
 	switch password {
-	case tmsconfig.GlobalConfig.AdminPassword:
+	case config.AdminPassword:
 		role = AdminRole
-	case tmsconfig.GlobalConfig.RegularPassword:
+	case config.RegularPassword:
 		role = RegularRole
 	default:
 		return s.handleTemporaryPassword(ctx, password, chatID, userName)

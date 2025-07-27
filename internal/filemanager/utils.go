@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
@@ -46,34 +45,34 @@ func IsEmptyDirectory(dir string) bool {
 	return len(entries) == 0
 }
 
-func DeleteTemporaryFilesByMovieID(movieID uint) error {
-	return deleteFilesByType(movieID, true)
+func DeleteTemporaryFilesByMovieID(movieID uint, moviePath string, db tmsdb.Database, downloadManager *tmsdmanager.DownloadManager) error {
+	return deleteFilesByType(movieID, true, moviePath, db, downloadManager)
 }
 
-func DeleteMainFilesByMovieID(movieID uint) error {
-	return deleteFilesByType(movieID, false)
+func DeleteMainFilesByMovieID(movieID uint, moviePath string, db tmsdb.Database, downloadManager *tmsdmanager.DownloadManager) error {
+	return deleteFilesByType(movieID, false, moviePath, db, downloadManager)
 }
 
-func DeleteMovie(movieID uint) error {
-	exist, err := tmsdb.GlobalDB.MovieExistsId(context.Background(), movieID)
+func DeleteMovie(movieID uint, moviePath string, db tmsdb.Database, downloadManager *tmsdmanager.DownloadManager) error {
+	exist, err := db.MovieExistsId(context.Background(), movieID)
 	if !exist {
 		logutils.Log.WithError(err).Warn("Movie not found")
 		return tmsutils.LogAndReturnError("Movie not found", err)
 	}
 
-	if err := tmsdmanager.GlobalDownloadManager.StopDownload(movieID); err != nil {
+	if err := downloadManager.StopDownload(movieID); err != nil {
 		logutils.Log.WithError(err).Errorf("Failed to stop download for movieID %d", movieID)
 	}
 
-	if err := DeleteTemporaryFilesByMovieID(movieID); err != nil {
+	if err := DeleteTemporaryFilesByMovieID(movieID, moviePath, db, downloadManager); err != nil {
 		logutils.Log.WithError(err).Error("Failed to delete temporary files")
 	}
 
-	if err := DeleteMainFilesByMovieID(movieID); err != nil {
+	if err := DeleteMainFilesByMovieID(movieID, moviePath, db, downloadManager); err != nil {
 		logutils.Log.WithError(err).Error("Failed to delete main files")
 	}
 
-	if err := tmsdb.GlobalDB.RemoveMovie(context.Background(), movieID); err != nil {
+	if err := db.RemoveMovie(context.Background(), movieID); err != nil {
 		logutils.Log.WithError(err).Error("Failed to remove movie from database")
 		return tmsutils.LogAndReturnError("Failed to remove movie from database", err)
 	}
@@ -82,14 +81,14 @@ func DeleteMovie(movieID uint) error {
 	return nil
 }
 
-func deleteFilesByType(movieID uint, isTemp bool) error {
+func deleteFilesByType(movieID uint, isTemp bool, moviePath string, db tmsdb.Database, _ *tmsdmanager.DownloadManager) error {
 	var files []tmsdb.MovieFile
 	var err error
 
 	if isTemp {
-		files, err = tmsdb.GlobalDB.GetTempFilesByMovieID(context.Background(), movieID)
+		files, err = db.GetTempFilesByMovieID(context.Background(), movieID)
 	} else {
-		files, err = tmsdb.GlobalDB.GetFilesByMovieID(context.Background(), movieID)
+		files, err = db.GetFilesByMovieID(context.Background(), movieID)
 	}
 
 	if err != nil {
@@ -101,7 +100,7 @@ func deleteFilesByType(movieID uint, isTemp bool) error {
 
 	var expandedFiles []tmsdb.MovieFile
 	for _, file := range files {
-		absPath := filepath.Join(tmsconfig.GlobalConfig.MoviePath, file.FilePath)
+		absPath := filepath.Join(moviePath, file.FilePath)
 		if isTemp && strings.Contains(file.FilePath, "*") {
 			matches, globErr := filepath.Glob(absPath)
 			if globErr != nil {
@@ -109,7 +108,7 @@ func deleteFilesByType(movieID uint, isTemp bool) error {
 				continue
 			}
 			for _, match := range matches {
-				rel, relErr := filepath.Rel(tmsconfig.GlobalConfig.MoviePath, match)
+				rel, relErr := filepath.Rel(moviePath, match)
 				if relErr != nil {
 					logutils.Log.WithError(relErr).Warnf("Error while getting relative path for %s", match)
 					continue
@@ -125,15 +124,15 @@ func deleteFilesByType(movieID uint, isTemp bool) error {
 		logutils.Log.Debugf("Deleting file (relative): %s", file.FilePath)
 	}
 
-	if deleteErr := deleteFiles(expandedFiles); deleteErr != nil {
+	if deleteErr := deleteFiles(expandedFiles, moviePath); deleteErr != nil {
 		logutils.Log.WithError(deleteErr).Error("Failed to delete files")
 		return deleteErr
 	}
 
 	if isTemp {
-		err = tmsdb.GlobalDB.RemoveTempFilesByMovieID(context.Background(), movieID)
+		err = db.RemoveTempFilesByMovieID(context.Background(), movieID)
 	} else {
-		err = tmsdb.GlobalDB.RemoveFilesByMovieID(context.Background(), movieID)
+		err = db.RemoveFilesByMovieID(context.Background(), movieID)
 	}
 
 	if err != nil {
@@ -145,11 +144,11 @@ func deleteFilesByType(movieID uint, isTemp bool) error {
 	return nil
 }
 
-func deleteFiles(files []tmsdb.MovieFile) error {
+func deleteFiles(files []tmsdb.MovieFile, moviePath string) error {
 	foldersToDelete := make(map[string]struct{})
 
 	for _, file := range files {
-		filePath := filepath.Join(tmsconfig.GlobalConfig.MoviePath, file.FilePath)
+		filePath := filepath.Join(moviePath, file.FilePath)
 		folderPath := filepath.Dir(filePath)
 		foldersToDelete[folderPath] = struct{}{}
 

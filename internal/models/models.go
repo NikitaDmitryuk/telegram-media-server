@@ -3,19 +3,19 @@ package models
 import "time"
 
 type Movie struct {
-	ID                   uint        `json:"id" gorm:"primaryKey"`
-	Name                 string      `json:"name" gorm:"not null"`
+	ID                   uint        `json:"id"                    gorm:"primaryKey"`
+	Name                 string      `json:"name"                  gorm:"not null"`
 	DownloadedPercentage int         `json:"downloaded_percentage" gorm:"not null;default:0"`
-	Files                []MovieFile `json:"files" gorm:"foreignKey:MovieID"`
-	CreatedAt            time.Time   `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt            time.Time   `json:"updated_at" gorm:"autoUpdateTime"`
+	Files                []MovieFile `json:"files"                 gorm:"foreignKey:MovieID"`
+	CreatedAt            time.Time   `json:"created_at"            gorm:"autoCreateTime"`
+	UpdatedAt            time.Time   `json:"updated_at"            gorm:"autoUpdateTime"`
 }
 
 type MovieFile struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	MovieID   uint      `json:"movie_id" gorm:"not null;constraint:OnDelete:CASCADE;"`
-	FilePath  string    `json:"file_path" gorm:"not null"`
-	TempFile  bool      `json:"temp_file" gorm:"not null"`
+	ID        uint      `json:"id"         gorm:"primaryKey"`
+	MovieID   uint      `json:"movie_id"   gorm:"not null;constraint:OnDelete:CASCADE;"`
+	FilePath  string    `json:"file_path"  gorm:"not null"`
+	TempFile  bool      `json:"temp_file"  gorm:"not null"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
@@ -56,10 +56,10 @@ func (r UserRole) HasPermission(action string) bool {
 }
 
 type TemporaryPassword struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	Password  string    `json:"password" gorm:"not null;unique"`
+	ID        uint      `json:"id"         gorm:"primaryKey"`
+	Password  string    `json:"password"   gorm:"not null;unique"`
 	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
-	Users     []User    `json:"users" gorm:"many2many:user_temporary_passwords;"`
+	Users     []User    `json:"users"      gorm:"many2many:user_temporary_passwords;"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
@@ -68,12 +68,12 @@ func (tp *TemporaryPassword) IsExpired() bool {
 }
 
 type User struct {
-	ID        uint                `json:"id" gorm:"primaryKey"`
-	Name      string              `json:"name" gorm:"not null"`
-	ChatID    int64               `json:"chat_id" gorm:"not null"`
-	Role      UserRole            `json:"role" gorm:"not null;default:'regular'"`
+	ID        uint                `json:"id"         gorm:"primaryKey"`
+	Name      string              `json:"name"       gorm:"not null"`
+	ChatID    int64               `json:"chat_id"    gorm:"not null"`
+	Role      UserRole            `json:"role"       gorm:"not null;default:'regular'"`
 	ExpiresAt *time.Time          `json:"expires_at" gorm:""`
-	Passwords []TemporaryPassword `json:"passwords" gorm:"many2many:user_temporary_passwords;"`
+	Passwords []TemporaryPassword `json:"passwords"  gorm:"many2many:user_temporary_passwords;"`
 	CreatedAt time.Time           `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time           `json:"updated_at" gorm:"autoUpdateTime"`
 }
@@ -90,12 +90,12 @@ func (u *User) IsActive() bool {
 }
 
 type DownloadHistory struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	UserID    uint      `json:"user_id" gorm:"not null"`
-	MovieID   uint      `json:"movie_id" gorm:"not null"`
+	ID        uint      `json:"id"        gorm:"primaryKey"`
+	UserID    uint      `json:"user_id"   gorm:"not null"`
+	MovieID   uint      `json:"movie_id"  gorm:"not null"`
 	Timestamp time.Time `json:"timestamp" gorm:"not null;autoCreateTime"`
-	User      User      `json:"user" gorm:"foreignKey:UserID"`
-	Movie     Movie     `json:"movie" gorm:"foreignKey:MovieID"`
+	User      User      `json:"user"      gorm:"foreignKey:UserID"`
+	Movie     Movie     `json:"movie"     gorm:"foreignKey:MovieID"`
 }
 
 type DownloadStatus struct {

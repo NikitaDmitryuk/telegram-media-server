@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -12,7 +13,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func LoginHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
+func LoginHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Database, cfg *config.Config) {
 	textFields := strings.Fields(update.Message.Text)
 
 	if len(textFields) != 2 {
@@ -25,7 +26,7 @@ func LoginHandler(bot *tmsbot.Bot, update *tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userName := update.Message.From.UserName
 
-	success, err := database.GlobalDB.Login(context.Background(), password, chatID, userName)
+	success, err := db.Login(context.Background(), password, chatID, userName, cfg)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Login failed due to an error")
 		bot.SendMessage(chatID, lang.Translate("error.authentication.login", nil), nil)

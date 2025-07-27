@@ -9,13 +9,13 @@ import (
 
 var notificationBot *tmsbot.Bot
 
-func InitNotificationHandler(bot *tmsbot.Bot) {
+func InitNotificationHandler(bot *tmsbot.Bot, downloadManager *tmsdmanager.DownloadManager) {
 	notificationBot = bot
-	go handleQueueNotifications()
+	go handleQueueNotifications(downloadManager)
 }
 
-func handleQueueNotifications() {
-	notificationChan := tmsdmanager.GlobalDownloadManager.GetNotificationChan()
+func handleQueueNotifications(downloadManager *tmsdmanager.DownloadManager) {
+	notificationChan := downloadManager.GetNotificationChan()
 
 	for notification := range notificationChan {
 		switch notification.Type {

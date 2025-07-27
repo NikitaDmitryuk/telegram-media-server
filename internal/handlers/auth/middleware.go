@@ -18,7 +18,7 @@ func LoggingMiddleware(update *tgbotapi.Update) {
 	}
 }
 
-func AuthMiddleware(update *tgbotapi.Update) (bool, models.UserRole) {
+func AuthMiddleware(update *tgbotapi.Update, db database.Database) (bool, models.UserRole) {
 	var chatID int64
 	var userID int64
 
@@ -33,7 +33,7 @@ func AuthMiddleware(update *tgbotapi.Update) (bool, models.UserRole) {
 		return false, ""
 	}
 
-	isAllowed, userRole, err := database.GlobalDB.IsUserAccessAllowed(context.Background(), userID)
+	isAllowed, userRole, err := db.IsUserAccessAllowed(context.Background(), userID)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to check user access")
 		return false, ""
@@ -48,13 +48,13 @@ func AuthMiddleware(update *tgbotapi.Update) (bool, models.UserRole) {
 	return true, userRole
 }
 
-func CheckAccess(update *tgbotapi.Update) bool {
-	allowed, _ := AuthMiddleware(update)
+func CheckAccess(update *tgbotapi.Update, db database.Database) bool {
+	allowed, _ := AuthMiddleware(update, db)
 	return allowed
 }
 
-func CheckAccessWithRole(update *tgbotapi.Update, allowedRoles []models.UserRole) bool {
-	allowed, role := AuthMiddleware(update)
+func CheckAccessWithRole(update *tgbotapi.Update, allowedRoles []models.UserRole, db database.Database) bool {
+	allowed, role := AuthMiddleware(update, db)
 	if !allowed {
 		return false
 	}
