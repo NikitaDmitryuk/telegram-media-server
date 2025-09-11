@@ -219,7 +219,7 @@ func GetAvailableSpaceGB(path string) (float64, error) {
 		return 0, err
 	}
 
-	availableBytes := stat.Bavail * uint64(stat.Bsize)
+	availableBytes := stat.Bavail * uint64(stat.Bsize) // #nosec G115
 	availableSpaceGB := float64(availableBytes) / (1024 * 1024 * 1024)
 	return availableSpaceGB, nil
 }
