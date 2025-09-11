@@ -218,6 +218,8 @@ func GetAvailableSpaceGB(path string) (float64, error) {
 		logutils.Log.WithError(err).Error("Failed to get filesystem stats")
 		return 0, err
 	}
-	availableSpaceGB := float64(int64(stat.Bavail)*stat.Bsize) / (1024 * 1024 * 1024) // #nosec G115
+
+	availableBytes := stat.Bavail * uint64(stat.Bsize)
+	availableSpaceGB := float64(availableBytes) / (1024 * 1024 * 1024)
 	return availableSpaceGB, nil
 }

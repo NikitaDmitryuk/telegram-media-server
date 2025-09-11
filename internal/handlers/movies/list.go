@@ -32,10 +32,13 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Dat
 
 	var messages []string
 	for _, movie := range movies {
+		sizeGB := float64(movie.FileSize) / (1024 * 1024 * 1024) // #nosec G115
+		formattedSize := fmt.Sprintf("%.2f", sizeGB)
 		messages = append(messages, lang.Translate("general.downloaded_list", map[string]any{
 			"ID":       movie.ID,
 			"Name":     movie.Name,
 			"Progress": movie.DownloadedPercentage,
+			"SizeGB":   formattedSize,
 		}))
 	}
 

@@ -7,7 +7,6 @@ type MovieFile = models.MovieFile
 type UserRole = models.UserRole
 type TemporaryPassword = models.TemporaryPassword
 type User = models.User
-type DownloadHistory = models.DownloadHistory
 
 const (
 	AdminRole     = models.AdminRole

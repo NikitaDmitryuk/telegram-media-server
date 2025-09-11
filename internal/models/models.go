@@ -6,6 +6,7 @@ type Movie struct {
 	ID                   uint        `json:"id"                    gorm:"primaryKey"`
 	Name                 string      `json:"name"                  gorm:"not null"`
 	DownloadedPercentage int         `json:"downloaded_percentage" gorm:"not null;default:0"`
+	FileSize             int64       `json:"file_size"             gorm:"not null;default:0"`
 	Files                []MovieFile `json:"files"                 gorm:"foreignKey:MovieID"`
 	CreatedAt            time.Time   `json:"created_at"            gorm:"autoCreateTime"`
 	UpdatedAt            time.Time   `json:"updated_at"            gorm:"autoUpdateTime"`
@@ -87,15 +88,6 @@ func (u *User) IsExpired() bool {
 
 func (u *User) IsActive() bool {
 	return !u.IsExpired()
-}
-
-type DownloadHistory struct {
-	ID        uint      `json:"id"        gorm:"primaryKey"`
-	UserID    uint      `json:"user_id"   gorm:"not null"`
-	MovieID   uint      `json:"movie_id"  gorm:"not null"`
-	Timestamp time.Time `json:"timestamp" gorm:"not null;autoCreateTime"`
-	User      User      `json:"user"      gorm:"foreignKey:UserID"`
-	Movie     Movie     `json:"movie"     gorm:"foreignKey:MovieID"`
 }
 
 type DownloadStatus struct {

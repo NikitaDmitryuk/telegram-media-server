@@ -21,6 +21,17 @@ func HandleDownload(
 	db tmsdb.Database,
 	downloadManager *tmsdmanager.DownloadManager,
 ) {
+	go handleDownloadAsync(bot, chatID, downloaderInstance, config, db, downloadManager)
+}
+
+func handleDownloadAsync(
+	bot *tmsbot.Bot,
+	chatID int64,
+	downloaderInstance tmsdownloader.Downloader,
+	config *tmsconfig.Config,
+	db tmsdb.Database,
+	downloadManager *tmsdmanager.DownloadManager,
+) {
 	mainFiles, tempFiles, err := downloaderInstance.GetFiles()
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to get files from downloader instance")
@@ -72,15 +83,6 @@ func HandleDownload(
 		logutils.Log.WithError(err).Error("Failed to start download")
 		bot.SendMessage(chatID, tmslang.Translate("error.downloads.document_download_error", nil), nil)
 		return
-	}
-
-	user, err := db.GetUserByChatID(context.Background(), chatID)
-	if err != nil {
-		logutils.Log.WithError(err).Error("Failed to fetch user for download history")
-	}
-
-	if err := db.AddDownloadHistory(context.Background(), user.ID, movieID); err != nil {
-		logutils.Log.WithError(err).Error("Failed to record download history")
 	}
 
 	bot.SendMessage(chatID, tmslang.Translate("general.video_downloading", map[string]any{
