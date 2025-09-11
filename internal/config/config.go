@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	DefaultDownloadTimeout        = 10 * time.Minute
-	DefaultProgressUpdateInterval = 5 * time.Second
+	DefaultDownloadTimeout        = 0 // 0 means no timeout (infinite)
+	DefaultProgressUpdateInterval = 3 * time.Second
 	DefaultPasswordMinLength      = 8
 )
 
