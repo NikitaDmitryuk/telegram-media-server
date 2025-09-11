@@ -32,16 +32,22 @@ func (s *SQLiteDatabase) Init(config *tmsconfig.Config) error {
 	}
 	s.db = db
 
-	if err := s.db.AutoMigrate(&Movie{}, &MovieFile{}, &User{}, &DownloadHistory{}, &TemporaryPassword{}); err != nil {
+	if err := s.db.AutoMigrate(&Movie{}, &MovieFile{}, &User{}, &TemporaryPassword{}); err != nil {
 		logutils.Log.WithError(err).Error("Failed to perform migration")
 		return fmt.Errorf("failed to perform migration: %w", err)
 	}
+
+	if err := s.MigrateToFileSize(); err != nil {
+		logutils.Log.WithError(err).Error("Failed to perform custom migration")
+		return fmt.Errorf("failed to perform custom migration: %w", err)
+	}
+
 	logutils.Log.Info("Database initialized successfully")
 	return nil
 }
 
-func (s *SQLiteDatabase) AddMovie(ctx context.Context, name string, mainFiles, tempFiles []string) (uint, error) {
-	movie := Movie{Name: name}
+func (s *SQLiteDatabase) AddMovie(ctx context.Context, name string, fileSize int64, mainFiles, tempFiles []string) (uint, error) {
+	movie := Movie{Name: name, FileSize: fileSize}
 	if err := s.db.WithContext(ctx).Create(&movie).Error; err != nil {
 		logutils.Log.WithError(err).Error("Failed to add movie")
 		return 0, err
@@ -367,21 +373,6 @@ func (s *SQLiteDatabase) GenerateTemporaryPassword(ctx context.Context, duration
 
 	logutils.Log.Debugf("Temporary password generated and saved: %s, expires at: %s", password, expiresAt)
 	return password, nil
-}
-
-func (s *SQLiteDatabase) AddDownloadHistory(ctx context.Context, userID, movieID uint) error {
-	downloadHistory := DownloadHistory{
-		UserID:  userID,
-		MovieID: movieID,
-	}
-
-	if err := s.db.WithContext(ctx).Create(&downloadHistory).Error; err != nil {
-		logutils.Log.WithError(err).Errorf("Failed to add download history for user ID %d and movie ID %d", userID, movieID)
-		return err
-	}
-
-	logutils.Log.Debugf("Download history added successfully for user ID %d and movie ID %d", userID, movieID)
-	return nil
 }
 
 func (s *SQLiteDatabase) GetUserByChatID(ctx context.Context, chatID int64) (User, error) {

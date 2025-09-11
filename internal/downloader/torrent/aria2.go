@@ -227,9 +227,26 @@ func (d *Aria2Downloader) GetFileSize() (int64, error) {
 		logutils.Log.WithError(err).Warn("Failed to parse torrent metadata for file size, returning 0")
 		return 0, nil
 	}
+
+	if len(meta.Info.Files) > 0 {
+		var totalSize int64
+		for _, file := range meta.Info.Files {
+			totalSize += file.Length
+		}
+		if logutils.Log != nil {
+			logutils.Log.Debugf("Calculated total size for multi-file torrent: %d bytes", totalSize)
+		}
+		return totalSize, nil
+	}
+
 	if meta.Info.Length == 0 {
-		logutils.Log.Warn("Torrent metadata does not indicate file size, returning 0")
+		if logutils.Log != nil {
+			logutils.Log.Warn("Torrent metadata does not indicate file size, returning 0")
+		}
 		return 0, nil
+	}
+	if logutils.Log != nil {
+		logutils.Log.Debugf("Single file torrent size: %d bytes", meta.Info.Length)
 	}
 	return meta.Info.Length, nil
 }

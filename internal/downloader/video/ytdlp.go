@@ -12,12 +12,17 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
+)
+
+const (
+	ytdlpTimeout = 30 * time.Second
 )
 
 type YTDLPDownloader struct {
@@ -98,16 +103,22 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan 
 	progressChan = make(chan float64)
 	errChan = make(chan error, 1)
 
-	go d.monitorDownload(stdout, stderr, progressChan, errChan)
+	go d.monitorDownload(ctx, stdout, stderr, progressChan, errChan)
 
 	return progressChan, errChan, nil
 }
 
-func (d *YTDLPDownloader) monitorDownload(stdout, stderr io.ReadCloser, progressChan chan float64, errChan chan error) {
+func (d *YTDLPDownloader) monitorDownload(
+	ctx context.Context,
+	stdout, stderr io.ReadCloser,
+	progressChan chan float64,
+	errChan chan error,
+) {
 	defer close(progressChan)
-	errorOutput := make(chan string)
+	errorOutput := make(chan string, 1)
 
 	go func() {
+		defer close(errorOutput)
 		scanner := bufio.NewScanner(stderr)
 		var output strings.Builder
 		for scanner.Scan() {
@@ -130,14 +141,38 @@ func (d *YTDLPDownloader) monitorDownload(stdout, stderr io.ReadCloser, progress
 		}
 	}
 
-	if err := d.cmd.Wait(); err != nil {
-		stderrOutput := <-errorOutput
-		if d.stoppedManually {
-			logutils.Log.Info("yt-dlp process stopped manually")
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- d.cmd.Wait()
+	}()
+
+	var processErr error
+	select {
+	case processErr = <-waitDone:
+	case <-ctx.Done():
+		logutils.Log.Info("yt-dlp process canceled due to context cancellation")
+		if d.cmd.Process != nil {
+			if killErr := d.cmd.Process.Kill(); killErr != nil {
+				logutils.Log.WithError(killErr).Warn("Failed to kill yt-dlp process")
+			}
+		}
+		processErr = ctx.Err()
+	}
+
+	stderrOutput := <-errorOutput
+
+	if processErr != nil {
+		if d.stoppedManually || errors.Is(processErr, context.Canceled) || errors.Is(processErr, context.DeadlineExceeded) {
+			if errors.Is(processErr, context.DeadlineExceeded) {
+				logutils.Log.Info("yt-dlp process timed out")
+			} else {
+				logutils.Log.Info("yt-dlp process stopped manually")
+			}
 			errChan <- nil
 		} else {
-			logutils.Log.WithError(err).Errorf("yt-dlp exited with error: %s", stderrOutput)
-			errChan <- err
+			logutils.Log.WithError(processErr).Errorf("yt-dlp exited with error: %s", stderrOutput)
+			detailedErr := fmt.Errorf("yt-dlp failed (exit code: %w):\n%s", processErr, stderrOutput)
+			errChan <- detailedErr
 		}
 	} else {
 		errChan <- nil
@@ -183,7 +218,10 @@ func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 		cmdArgs = append([]string{"--proxy", d.config.Proxy}, cmdArgs...)
 	}
 
-	cmd := exec.Command("yt-dlp", cmdArgs...)
+	ctx, cancel := context.WithTimeout(context.Background(), ytdlpTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, nil
@@ -244,7 +282,10 @@ func getVideoTitle(botInstance *bot.Bot, videoURL string, config *tmsconfig.Conf
 		cmdArgs = append([]string{"--proxy", config.Proxy}, cmdArgs...)
 	}
 
-	cmd := exec.Command("yt-dlp", cmdArgs...)
+	ctx, cancel := context.WithTimeout(context.Background(), ytdlpTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("yt-dlp failed: %w", err)

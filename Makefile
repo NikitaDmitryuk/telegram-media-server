@@ -141,22 +141,22 @@ security-check:
 .PHONY: run
 run:
 	@echo "Running with Docker Compose..."
-	docker compose up --build
+	docker-compose up --build
 
 .PHONY: run-detached
 run-detached:
 	@echo "Running with Docker Compose in detached mode..."
-	docker compose up --build -d
+	docker-compose up --build -d
 
 .PHONY: stop
 stop:
 	@echo "Stopping Docker Compose services..."
-	docker compose down
+	docker-compose down
 
 .PHONY: logs
 logs:
 	@echo "Showing Docker Compose logs..."
-	docker compose logs -f
+	docker-compose logs -f
 
 .PHONY: status
 status:

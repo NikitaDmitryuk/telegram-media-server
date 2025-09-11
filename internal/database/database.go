@@ -10,7 +10,7 @@ import (
 
 type Database interface {
 	Init(config *tmsconfig.Config) error
-	AddMovie(ctx context.Context, name string, mainFiles, tempFiles []string) (uint, error)
+	AddMovie(ctx context.Context, name string, fileSize int64, mainFiles, tempFiles []string) (uint, error)
 	RemoveMovie(ctx context.Context, movieID uint) error
 	GetMovieList(ctx context.Context) ([]Movie, error)
 	GetTempFilesByMovieID(ctx context.Context, movieID uint) ([]MovieFile, error)
@@ -29,7 +29,6 @@ type Database interface {
 	AssignTemporaryPassword(ctx context.Context, password string, chatID int64) error
 	ExtendTemporaryUser(ctx context.Context, chatID int64, newExpiration time.Time) error
 	GenerateTemporaryPassword(ctx context.Context, duration time.Duration) (string, error)
-	AddDownloadHistory(ctx context.Context, userID, movieID uint) error
 	GetUserByChatID(ctx context.Context, chatID int64) (User, error)
 }
 

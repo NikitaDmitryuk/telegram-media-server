@@ -194,7 +194,13 @@ func (dm *DownloadManager) StartDownload(
 		return 0, nil, nil, utils.WrapError(err, "failed to get files", nil)
 	}
 
-	movieID, err = dm.db.AddMovie(context.Background(), movieTitle, mainFiles, tempFiles)
+	fileSize, err := dl.GetFileSize()
+	if err != nil {
+		logutils.Log.WithError(err).Warn("Failed to get file size, using 0")
+		fileSize = 0
+	}
+
+	movieID, err = dm.db.AddMovie(context.Background(), movieTitle, fileSize, mainFiles, tempFiles)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to add movie to database")
 		return 0, nil, nil, utils.WrapError(err, "failed to add movie to database", nil)
