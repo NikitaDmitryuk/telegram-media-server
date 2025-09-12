@@ -1,12 +1,56 @@
 BINARY_NAME=telegram-media-server
 BUILD_DIR=build
+INSTALL_DIR=/usr/local/bin
+CONFIG_DIR=/etc/telegram-media-server
+SERVICE_DIR=/usr/lib/systemd/system
+LOCALES_SRC=locales
+LOCALES_DEST=/usr/local/share/telegram-media-server/locales
+
+# Dependencies
+DEPENDENCIES=yt-dlp aria2 ffmpeg
+DEPENDENCY_BINARIES=yt-dlp aria2c ffmpeg
+BUILD_DEPENDENCIES=go
+OPTIONAL_DEPENDENCIES=minidlna prowlarr
+OPTIONAL_DEPENDENCY_CHECK="minidlna.service prowlarr.service"
+
+# Version information
 VERSION=$(shell git describe --tags --always --dirty)
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
 
+# Dependency checks
+.PHONY: check-deps
+check-deps:
+	@echo "Checking build dependencies..."
+	@for dep in $(BUILD_DEPENDENCIES); do \
+		if ! command -v $$dep >/dev/null 2>&1; then \
+			echo "Error: Build dependency $$dep is not installed. Please install it."; \
+			exit 1; \
+		fi; \
+	done
+	@echo "Checking runtime dependencies..."
+	@i=0; \
+	for dep in $(DEPENDENCIES); do \
+		binary=$$(echo $(DEPENDENCY_BINARIES) | cut -d' ' -f$$((i+1))); \
+		if ! command -v $$binary >/dev/null 2>&1; then \
+			echo "Error: $$dep is not installed. Please install it."; \
+			exit 1; \
+		fi; \
+		i=$$((i+1)); \
+	done
+	@echo "Checking optional dependencies..."
+	@for dep in $(OPTIONAL_DEPENDENCY_CHECK); do \
+		if ! systemctl list-units --type=service --all | grep -q $$dep; then \
+			echo "Warning: Optional dependency $$dep is not installed or not enabled."; \
+		else \
+			echo "Optional dependency $$dep is installed and enabled."; \
+		fi; \
+	done
+	@echo "All required dependencies are installed."
+
 # Core build commands
 .PHONY: build
-build:
+build: check-deps
 	@echo "Building $(BINARY_NAME) version $(VERSION)..."
 	@mkdir -p $(BUILD_DIR)
 	go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/telegram-media-server
@@ -21,6 +65,31 @@ clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR) $(BINARY_NAME)
 	go clean -cache -testcache
+
+.PHONY: install
+install: build
+	@echo "Installing $(BINARY_NAME)..."
+	install -Dm755 $(BUILD_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
+	install -Dm644 .env.example $(CONFIG_DIR)/.env.example
+	install -Dm644 telegram-media-server.service $(SERVICE_DIR)/telegram-media-server.service
+	install -d $(LOCALES_DEST)
+	install -Dm644 $(LOCALES_SRC)/* $(LOCALES_DEST)/
+	systemctl daemon-reload
+	systemctl enable --now telegram-media-server
+	systemctl restart telegram-media-server
+	@echo "Installation complete"
+	@echo "Please configure the service by creating a .env file in $(CONFIG_DIR) based on the provided $(CONFIG_DIR)/.env.example and then restarting the service."
+
+.PHONY: uninstall
+uninstall:
+	@echo "Uninstalling $(BINARY_NAME)..."
+	systemctl stop telegram-media-server
+	systemctl disable telegram-media-server
+	rm -f $(INSTALL_DIR)/$(BINARY_NAME)
+	rm -f $(CONFIG_DIR)/.env.example
+	rm -f $(SERVICE_DIR)/telegram-media-server.service
+	rm -rf $(LOCALES_DEST)
+	@echo "Uninstallation complete."
 
 # Code quality
 .PHONY: format
@@ -101,6 +170,20 @@ stop:
 	@echo "Stopping Docker Compose services..."
 	docker-compose down
 
+.PHONY: status
+status:
+	@echo "Checking service status..."
+	@if systemctl is-active --quiet telegram-media-server; then \
+		echo "✓ telegram-media-server is running"; \
+	else \
+		echo "✗ telegram-media-server is not running"; \
+	fi
+
+.PHONY: restart
+restart:
+	@echo "Restarting telegram-media-server..."
+	systemctl restart telegram-media-server
+
 # Docker test commands
 .PHONY: docker-test-build
 docker-test-build:
@@ -129,9 +212,14 @@ pre-commit: format check
 help:
 	@echo "Available targets:"
 	@echo ""
+	@echo "Dependencies:"
+	@echo "  check-deps     - Check all required dependencies"
+	@echo ""
 	@echo "Build:"
-	@echo "  build          - Build the application"
+	@echo "  build          - Build the application (with dependency check)"
 	@echo "  build-simple   - Build for CI (no dependencies check)"
+	@echo "  install        - Install as system service"
+	@echo "  uninstall      - Uninstall system service"
 	@echo "  clean          - Clean build artifacts"
 	@echo ""
 	@echo "Code Quality:"
@@ -148,6 +236,10 @@ help:
 	@echo "  test-config    - Run config tests"
 	@echo "  test-torrent   - Run torrent tests"
 	@echo "  test-video     - Run video tests"
+	@echo ""
+	@echo "Service Management:"
+	@echo "  status         - Check service status"
+	@echo "  restart        - Restart service"
 	@echo ""
 	@echo "Docker:"
 	@echo "  run            - Run with Docker Compose"
