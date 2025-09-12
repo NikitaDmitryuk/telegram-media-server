@@ -2,6 +2,7 @@ package aria2
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -94,4 +95,14 @@ func hasValidBencodeStructure(data []byte, length int) bool {
 
 	// At least one torrent-specific pattern should be found
 	return foundPatterns >= 1
+}
+
+// ValidateTorrentFile validates a torrent file at the given path
+func ValidateTorrentFile(filePath string) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("cannot open file: %w", err)
+	}
+
+	return ValidateContent(data, len(data))
 }

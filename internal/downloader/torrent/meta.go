@@ -8,7 +8,8 @@ import (
 )
 
 type Meta struct {
-	Info struct {
+	Announce string `bencode:"announce"`
+	Info     struct {
 		Name   string `bencode:"name"`
 		Length int64  `bencode:"length"`
 		Files  []struct {

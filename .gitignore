@@ -40,3 +40,7 @@ coverage.txt
 test-results/
 test-output/
 *.test.log
+
+# Security and CI reports
+gosec-report.json
+*.sarif

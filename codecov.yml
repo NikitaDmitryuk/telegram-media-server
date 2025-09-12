@@ -1,0 +1,27 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+        threshold: 1%
+        informational: true
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+ignore:
+  - "**/*_test.go"
+  - "**/testutils/**"
+  - "**/artifacts/**"
+  - "**/images/**"
+  - "**/locales/**"
+  - "cmd/telegram-media-server/main.go"
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+
+github_checks:
+  annotations: true

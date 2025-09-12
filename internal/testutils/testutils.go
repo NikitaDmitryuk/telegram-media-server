@@ -14,6 +14,7 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	"github.com/jackpal/bencode-go"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -23,6 +24,7 @@ const (
 	testFileSize   = 1024
 	tickerInterval = 10 * time.Millisecond
 	testFileMode   = 0600
+	byteRange      = 256
 )
 
 // TestConfig creates a configuration suitable for testing
@@ -261,6 +263,69 @@ func CreateTestTorrent(t *testing.T, dir, name string) string {
 	filePath := filepath.Join(dir, name+".torrent")
 	if err := os.WriteFile(filePath, []byte(torrentContent), testFileMode); err != nil {
 		t.Fatalf("Failed to create test torrent: %v", err)
+	}
+
+	return filePath
+}
+
+// CreateRealTestTorrent creates a more realistic torrent file using bencode library
+func CreateRealTestTorrent(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	// Create actual test file content
+	testFilePath := filepath.Join(dir, name+".txt")
+	testContent := []byte("This is a test file for torrent creation")
+	if err := os.WriteFile(testFilePath, testContent, testFileMode); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Create torrent metadata
+	torrentMeta := map[string]any{
+		"announce":      "http://tracker.example.com:8080/announce",
+		"creation date": time.Now().Unix(),
+		"comment":       "Test torrent created for integration testing",
+		"created by":    "telegram-media-server-test",
+		"info": map[string]any{
+			"name":         name + ".txt",
+			"length":       int64(len(testContent)),
+			"piece length": 16384,
+			"pieces":       "12345678901234567890", // 20-byte SHA1 hash placeholder
+		},
+	}
+
+	torrentPath := filepath.Join(dir, name+".torrent")
+	f, err := os.Create(torrentPath)
+	if err != nil {
+		t.Fatalf("Failed to create torrent file: %v", err)
+	}
+	defer f.Close()
+
+	if err := bencode.Marshal(f, torrentMeta); err != nil {
+		t.Fatalf("Failed to encode torrent: %v", err)
+	}
+
+	return torrentPath
+}
+
+// CreateTestDataFile creates a test data file with specified size
+func CreateTestDataFile(t *testing.T, dir, name string, size int64) string {
+	t.Helper()
+
+	filePath := filepath.Join(dir, name)
+	f, err := os.Create(filePath)
+	if err != nil {
+		t.Fatalf("Failed to create test data file: %v", err)
+	}
+	defer f.Close()
+
+	// Write test data
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(i % byteRange)
+	}
+
+	if _, err := f.Write(data); err != nil {
+		t.Fatalf("Failed to write test data: %v", err)
 	}
 
 	return filePath
