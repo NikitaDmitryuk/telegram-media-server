@@ -240,7 +240,7 @@ func HandleTorrentSearchCallback(
 				_ = bot.DeleteMessage(chatID, msgID)
 			}
 		}
-		downloaderInstance := torrent.NewAria2Downloader(bot, fileName, config.MoviePath)
+		downloaderInstance := torrent.NewAria2Downloader(bot, fileName, config.MoviePath, config)
 		if downloaderInstance == nil {
 			bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), ui.GetEmptyKeyboard())
 			if update.CallbackQuery != nil {

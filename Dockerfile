@@ -20,7 +20,12 @@ RUN apt-get update && \
     python3-pip \
     aria2 \
     ffmpeg \
-    ca-certificates
+    ca-certificates \
+    dnsutils \
+    net-tools \
+    iputils-ping \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN update-ca-certificates
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
