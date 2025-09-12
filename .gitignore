@@ -44,3 +44,5 @@ test-output/
 # Security and CI reports
 gosec-report.json
 *.sarif
+
+#telegram-media-server
