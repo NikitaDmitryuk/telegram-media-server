@@ -10,6 +10,8 @@
 
 # Test binary, built with `go test -c`
 *.test
+# But keep Docker test files
+!Dockerfile.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
@@ -34,3 +36,16 @@ build/
 .DS_Store
 
 coverage.html
+coverage.out
+coverage.txt
+*.cover
+test-results/
+test-output/
+*.test.log
+
+# Security and CI reports
+gosec-report.json
+*.sarif
+
+# Binary files
+telegram-media-server

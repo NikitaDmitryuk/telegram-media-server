@@ -19,19 +19,15 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
-	"github.com/jackpal/bencode-go"
 )
 
-type TorrentMeta struct {
-	Info struct {
-		Name   string `bencode:"name"`
-		Length int64  `bencode:"length"`
-		Files  []struct {
-			Length int64    `bencode:"length"`
-			Path   []string `bencode:"path"`
-		} `bencode:"files"`
-	} `bencode:"info"`
-}
+const (
+	sigintTimeout       = 3 * time.Second
+	sigkillTimeout      = 5 * time.Second
+	aria2ExitUnfinished = 7  // aria2c exit code for unfinished downloads
+	signalExitTerm      = 15 // SIGTERM exit code
+	signalExitKill      = 9  // SIGKILL exit code
+)
 
 type Aria2Downloader struct {
 	bot             *bot.Bot
@@ -141,26 +137,9 @@ func (d *Aria2Downloader) StopDownload() error {
 		}()
 		select {
 		case err := <-done:
-			if err != nil {
-				if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "no child process") {
-					return nil
-				}
-				if exitErr, ok := err.(*exec.ExitError); ok {
-					if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 7 {
-						logutils.Log.Infof("aria2c exited with code 7 (unfinished downloads) after manual stop — not an error")
-						return nil
-					}
-				}
-				return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
-			}
-			return nil
-		case <-time.After(3 * time.Second):
-			logutils.Log.Warn("aria2c did not exit after SIGINT, sending SIGKILL...")
-			if err := d.cmd.Process.Kill(); err != nil {
-				return fmt.Errorf("failed to send SIGKILL to aria2c process: %w", err)
-			}
-			logutils.Log.Info("Sent SIGKILL to aria2c process")
-			return <-done
+			return d.handleProcessExit(err)
+		case <-time.After(sigintTimeout):
+			return d.handleSigkill(done)
 		}
 	}
 	return nil
@@ -168,6 +147,66 @@ func (d *Aria2Downloader) StopDownload() error {
 
 func (d *Aria2Downloader) StoppedManually() bool {
 	return d.stoppedManually
+}
+
+// handleProcessExit handles the exit of aria2c process after SIGINT
+func (d *Aria2Downloader) handleProcessExit(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "no child process") {
+		return nil
+	}
+
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			exitCode := status.ExitStatus()
+			if d.isExpectedExitCode(exitCode) {
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
+}
+
+// handleSigkill handles the SIGKILL scenario when SIGINT didn't work
+func (d *Aria2Downloader) handleSigkill(done chan error) error {
+	logutils.Log.Warn("aria2c did not exit after SIGINT, sending SIGKILL...")
+	if err := d.cmd.Process.Kill(); err != nil {
+		return fmt.Errorf("failed to send SIGKILL to aria2c process: %w", err)
+	}
+	logutils.Log.Info("Sent SIGKILL to aria2c process")
+
+	// Wait for process with timeout to avoid infinite blocking
+	select {
+	case err := <-done:
+		// After SIGKILL, any exit error is expected and not a real error
+		if err != nil {
+			logutils.Log.WithError(err).Debug("aria2c process exited with error after SIGKILL (expected)")
+		} else {
+			logutils.Log.Debug("aria2c process stopped gracefully after SIGKILL")
+		}
+		return nil
+	case <-time.After(sigkillTimeout):
+		logutils.Log.Info("aria2c process did not exit within timeout, considering it stopped")
+		return nil
+	}
+}
+
+// isExpectedExitCode checks if the exit code is expected for a manually stopped process
+func (*Aria2Downloader) isExpectedExitCode(exitCode int) bool {
+	switch exitCode {
+	case aria2ExitUnfinished:
+		logutils.Log.Debug("aria2c exited with code for unfinished downloads after manual stop")
+		return true
+	case signalExitTerm, signalExitKill:
+		logutils.Log.Debug("aria2c exited due to signal after manual stop")
+		return true
+	default:
+		return false
+	}
 }
 
 func (d *Aria2Downloader) GetTitle() (string, error) {
@@ -236,38 +275,15 @@ func (d *Aria2Downloader) GetFileSize() (int64, error) {
 	return meta.Info.Length, nil
 }
 
-func (d *Aria2Downloader) parseTorrentMeta() (*TorrentMeta, error) {
+func (d *Aria2Downloader) parseTorrentMeta() (*Meta, error) {
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
 
 	if err := d.validateTorrentFile(torrentPath); err != nil {
 		return nil, fmt.Errorf("torrent file validation failed: %w", err)
 	}
 
-	f, err := os.Open(torrentPath)
-	if err != nil {
-		return nil, fmt.Errorf("cannot open torrent file: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			logutils.Log.WithError(cerr).Error("Failed to close torrent file")
-		}
-	}()
-
-	var meta TorrentMeta
-	if err := bencode.Unmarshal(f, &meta); err != nil {
-		return nil, fmt.Errorf("failed to decode torrent meta: %w", err)
-	}
-	if meta.Info.Name == "" {
-		return nil, fmt.Errorf("torrent meta does not contain a file name")
-	}
-	return &meta, nil
+	return ParseMeta(torrentPath)
 }
-
-const (
-	torrentHeaderSize = 16
-	minTorrentSize    = 20
-	maxTorrentSize    = 10 * 1024 * 1024
-)
 
 func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 	file, err := os.Open(filePath)
@@ -276,7 +292,25 @@ func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 	}
 	defer file.Close()
 
-	header := make([]byte, torrentHeaderSize)
+	stat, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("cannot get file stats: %w", err)
+	}
+
+	if stat.Size() < MinTorrentSize {
+		return fmt.Errorf("file too small to be a valid torrent (%d bytes)", stat.Size())
+	}
+
+	if stat.Size() > MaxTorrentSize {
+		return fmt.Errorf("file too large to be a torrent (%d bytes)", stat.Size())
+	}
+
+	headerSize := HeaderSize
+	if stat.Size() < int64(headerSize) {
+		headerSize = int(stat.Size())
+	}
+
+	header := make([]byte, headerSize)
 	n, err := file.Read(header)
 	if err != nil {
 		return fmt.Errorf("cannot read file header: %w", err)
@@ -286,27 +320,7 @@ func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 		return fmt.Errorf("file is empty")
 	}
 
-	if header[0] != 'd' {
-		if header[0] == '<' {
-			return fmt.Errorf("file appears to be HTML, not a torrent file")
-		}
-		return fmt.Errorf("invalid torrent file format (expected bencode dictionary)")
-	}
-
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("cannot get file stats: %w", err)
-	}
-
-	if stat.Size() < minTorrentSize {
-		return fmt.Errorf("file too small to be a valid torrent (%d bytes)", stat.Size())
-	}
-
-	if stat.Size() > maxTorrentSize {
-		return fmt.Errorf("file too large to be a torrent (%d bytes)", stat.Size())
-	}
-
-	return nil
+	return ValidateContent(header, n)
 }
 
 func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Config) []string {

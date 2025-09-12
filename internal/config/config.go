@@ -2,19 +2,12 @@ package config
 
 import (
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
 const (
-	DefaultDownloadTimeout        = 0 // 0 means no timeout (infinite)
-	DefaultProgressUpdateInterval = 3 * time.Second
-	DefaultPasswordMinLength      = 8
-
-	// Aria2 default values
 	DefaultAria2MaxPeers                = 200
 	DefaultAria2MaxConnectionsPerServer = 16
 	DefaultAria2Split                   = 16
@@ -23,6 +16,9 @@ const (
 	DefaultAria2BTTrackerTimeout        = 60
 	DefaultAria2Timeout                 = 60
 	DefaultAria2MaxTries                = 5
+	DefaultPasswordMinLength            = 8
+	DefaultMaxConcurrentDownloads       = 3
+	DefaultProgressUpdateInterval       = 3 * time.Second
 )
 
 func NewConfig() (*Config, error) {
@@ -40,13 +36,13 @@ func NewConfig() (*Config, error) {
 		ProwlarrAPIKey:  getEnv("PROWLARR_API_KEY", ""),
 
 		DownloadSettings: DownloadConfig{
-			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", 3),
-			DownloadTimeout:        getEnvDuration("DOWNLOAD_TIMEOUT", DefaultDownloadTimeout),
+			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", DefaultMaxConcurrentDownloads),
+			DownloadTimeout:        getEnvDuration("DOWNLOAD_TIMEOUT", 0),
 			ProgressUpdateInterval: getEnvDuration("PROGRESS_UPDATE_INTERVAL", DefaultProgressUpdateInterval),
 		},
 
 		SecuritySettings: SecurityConfig{
-			PasswordMinLength: getEnvInt("PASSWORD_MIN_LENGTH", DefaultPasswordMinLength),
+			PasswordMinLength: DefaultPasswordMinLength,
 		},
 
 		Aria2Settings: Aria2Config{
@@ -188,139 +184,6 @@ type VideoConfig struct {
 	FFmpegExtraArgs   string
 	QualitySelector   string
 	CompatibilityMode bool
-}
-
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvInt(key string, defaultValue int) int {
-	if value, exists := os.LookupEnv(key); exists {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}
-
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	if value, exists := os.LookupEnv(key); exists {
-		if duration, err := time.ParseDuration(value); err == nil {
-			return duration
-		}
-	}
-	return defaultValue
-}
-
-func getEnvBool(key string, defaultValue bool) bool {
-	if value, exists := os.LookupEnv(key); exists {
-		return value == "true" || value == "1" || value == "yes"
-	}
-	return defaultValue
-}
-
-func getEnvFloat(key string, defaultValue float64) float64 {
-	if value, exists := os.LookupEnv(key); exists {
-		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
-			return floatValue
-		}
-	}
-	return defaultValue
-}
-
-func (c *Config) validate() error {
-	if err := c.validateRequiredFields(); err != nil {
-		return err
-	}
-
-	if err := c.validatePasswords(); err != nil {
-		return err
-	}
-
-	if err := c.validateProwlarr(); err != nil {
-		return err
-	}
-
-	if err := c.validateDownloadSettings(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Config) validateRequiredFields() error {
-	var missingFields []string
-
-	if c.BotToken == "" {
-		missingFields = append(missingFields, "BOT_TOKEN")
-	}
-	if c.MoviePath == "" {
-		missingFields = append(missingFields, "MOVIE_PATH")
-	}
-	if c.AdminPassword == "" {
-		missingFields = append(missingFields, "ADMIN_PASSWORD")
-	}
-
-	if len(missingFields) > 0 {
-		return utils.WrapError(utils.ErrConfigurationError, "missing required environment variables", map[string]any{
-			"missing_fields": missingFields,
-		})
-	}
-
-	return nil
-}
-
-func (c *Config) validatePasswords() error {
-	if len(c.AdminPassword) < c.SecuritySettings.PasswordMinLength {
-		return utils.WrapError(utils.ErrConfigurationError, "admin password too short", map[string]any{
-			"min_length":    c.SecuritySettings.PasswordMinLength,
-			"actual_length": len(c.AdminPassword),
-		})
-	}
-
-	if c.RegularPassword == "" {
-		log.Println("REGULAR_PASSWORD not set, using ADMIN_PASSWORD as REGULAR_PASSWORD")
-		c.RegularPassword = c.AdminPassword
-	} else if len(c.RegularPassword) < c.SecuritySettings.PasswordMinLength {
-		return utils.WrapError(utils.ErrConfigurationError, "regular password too short", map[string]any{
-			"min_length":    c.SecuritySettings.PasswordMinLength,
-			"actual_length": len(c.RegularPassword),
-		})
-	}
-
-	return nil
-}
-
-func (c *Config) validateProwlarr() error {
-	if (c.ProwlarrURL != "" || c.ProwlarrAPIKey != "") && (c.ProwlarrURL == "" || c.ProwlarrAPIKey == "") {
-		var missingFields []string
-		if c.ProwlarrURL == "" {
-			missingFields = append(missingFields, "PROWLARR_URL (required if PROWLARR_API_KEY is set)")
-		}
-		if c.ProwlarrAPIKey == "" {
-			missingFields = append(missingFields, "PROWLARR_API_KEY (required if PROWLARR_URL is set)")
-		}
-		return utils.WrapError(utils.ErrConfigurationError, "missing required environment variables", map[string]any{
-			"missing_fields": missingFields,
-		})
-	}
-
-	return nil
-}
-
-func (c *Config) validateDownloadSettings() error {
-	if c.DownloadSettings.MaxConcurrentDownloads <= 0 {
-		return utils.WrapError(utils.ErrConfigurationError, "max concurrent downloads must be positive", nil)
-	}
-
-	if c.DownloadSettings.DownloadTimeout < 0 {
-		return utils.WrapError(utils.ErrConfigurationError, "download timeout cannot be negative", nil)
-	}
-
-	return nil
 }
 
 func (c *Config) GetDownloadSettings() DownloadConfig {

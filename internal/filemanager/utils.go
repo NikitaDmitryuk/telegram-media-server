@@ -61,7 +61,9 @@ func DeleteMovie(movieID uint, moviePath string, db tmsdb.Database, downloadMana
 	}
 
 	if err := downloadManager.StopDownload(movieID); err != nil {
-		logutils.Log.WithError(err).Errorf("Failed to stop download for movieID %d", movieID)
+		// Only log as error if it's not a "download not found" situation
+		// It's normal for completed downloads to not be found in active downloads
+		logutils.Log.WithError(err).Debugf("Attempted to stop download for movieID %d (may already be completed)", movieID)
 	}
 
 	if err := DeleteTemporaryFilesByMovieID(movieID, moviePath, db, downloadManager); err != nil {

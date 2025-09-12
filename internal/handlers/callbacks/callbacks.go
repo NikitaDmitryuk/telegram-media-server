@@ -98,27 +98,30 @@ func handleDeleteMovieCallback(
 		"action":        "delete_callback_started",
 	}).Info("Starting delete from callback")
 
-	movies.DeleteMovieByID(bot, chatID, callbackData, moviePath, db, downloadManager)
+	// Run deletion asynchronously to avoid blocking the callback handler
+	go func() {
+		movies.DeleteMovieByID(bot, chatID, callbackData, moviePath, db, downloadManager)
 
-	logutils.Log.WithFields(map[string]any{
-		"chat_id": chatID,
-		"action":  "delete_callback_completed",
-	}).Info("Delete completed, updating menu")
+		logutils.Log.WithFields(map[string]any{
+			"chat_id": chatID,
+			"action":  "delete_callback_completed",
+		}).Info("Delete completed, updating menu")
 
-	movieList, err := db.GetMovieList(context.Background())
-	if err != nil {
-		logutils.Log.WithError(err).Error("Failed to get movie list for menu update")
-		return
-	}
-
-	var remainingMovies []database.Movie
-	for _, movie := range movieList {
-		if movie.ID != uint(movieID) {
-			remainingMovies = append(remainingMovies, movie)
+		movieList, err := db.GetMovieList(context.Background())
+		if err != nil {
+			logutils.Log.WithError(err).Error("Failed to get movie list for menu update")
+			return
 		}
-	}
 
-	updateDeleteMenuWithMovies(bot, chatID, update.CallbackQuery.Message.MessageID, remainingMovies, db)
+		var remainingMovies []database.Movie
+		for _, movie := range movieList {
+			if movie.ID != uint(movieID) {
+				remainingMovies = append(remainingMovies, movie)
+			}
+		}
+
+		updateDeleteMenuWithMovies(bot, chatID, update.CallbackQuery.Message.MessageID, remainingMovies, db)
+	}()
 }
 
 func updateDeleteMenuWithMovies(bot *tmsbot.Bot, chatID int64, messageID int, movieList []database.Movie, _ database.Database) {

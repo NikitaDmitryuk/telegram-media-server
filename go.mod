@@ -1,8 +1,6 @@
 module github.com/NikitaDmitryuk/telegram-media-server
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24.0
 
 require (
 	github.com/go-resty/resty/v2 v2.16.5
@@ -10,14 +8,14 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackpal/bencode-go v1.0.2
 	github.com/nicksnyder/go-i18n/v2 v2.6.0
-	golang.org/x/text v0.27.0
-	gorm.io/driver/sqlite v1.5.7
-	gorm.io/gorm v1.25.12
+	golang.org/x/text v0.29.0
+	gorm.io/driver/sqlite v1.6.0
+	gorm.io/gorm v1.31.0
 )
 
 require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/mattn/go-sqlite3 v1.14.24 // indirect
-	golang.org/x/net v0.42.0 // indirect
+	github.com/mattn/go-sqlite3 v1.14.32 // indirect
+	golang.org/x/net v0.44.0 // indirect
 )

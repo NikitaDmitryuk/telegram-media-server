@@ -198,7 +198,7 @@ func (l *Logger) Debugf(format string, args ...any) {
 }
 
 func (l *Logger) Debug(message string) {
-	l.logMessage(LevelDebug, message)
+	l.logMessage(LevelDebug, "%s", message)
 }
 
 func (l *Logger) Infof(format string, args ...any) {
@@ -206,7 +206,7 @@ func (l *Logger) Infof(format string, args ...any) {
 }
 
 func (l *Logger) Info(message string) {
-	l.logMessage(LevelInfo, message)
+	l.logMessage(LevelInfo, "%s", message)
 }
 
 func (l *Logger) Warnf(format string, args ...any) {
@@ -214,7 +214,7 @@ func (l *Logger) Warnf(format string, args ...any) {
 }
 
 func (l *Logger) Warn(message string) {
-	l.logMessage(LevelWarn, message)
+	l.logMessage(LevelWarn, "%s", message)
 }
 
 func (l *Logger) Errorf(format string, args ...any) {
@@ -222,7 +222,7 @@ func (l *Logger) Errorf(format string, args ...any) {
 }
 
 func (l *Logger) Error(message string) {
-	l.logMessage(LevelError, message)
+	l.logMessage(LevelError, "%s", message)
 }
 
 func (l *Logger) Fatalf(format string, args ...any) {
@@ -230,5 +230,5 @@ func (l *Logger) Fatalf(format string, args ...any) {
 }
 
 func (l *Logger) Fatal(message string) {
-	l.logMessage(LevelFatal, message)
+	l.logMessage(LevelFatal, "%s", message)
 }
