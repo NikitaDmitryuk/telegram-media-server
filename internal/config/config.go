@@ -21,6 +21,8 @@ const (
 	DefaultAria2BTMaxPeers              = 200
 	DefaultAria2BTMaxOpenFiles          = 100
 	DefaultAria2BTTrackerTimeout        = 60
+	DefaultAria2Timeout                 = 60
+	DefaultAria2MaxTries                = 5
 )
 
 func NewConfig() (*Config, error) {
@@ -75,6 +77,12 @@ func NewConfig() (*Config, error) {
 			ContinueDownload:         getEnvBool("ARIA2_CONTINUE_DOWNLOAD", true),
 			RemoteTime:               getEnvBool("ARIA2_REMOTE_TIME", true),
 			FileAllocation:           getEnv("ARIA2_FILE_ALLOCATION", "none"),
+			HTTPProxy:                getEnv("ARIA2_HTTP_PROXY", ""),
+			AllProxy:                 getEnv("ARIA2_ALL_PROXY", ""),
+			UserAgent:                getEnv("ARIA2_USER_AGENT", ""),
+			Timeout:                  getEnvInt("ARIA2_TIMEOUT", DefaultAria2Timeout),
+			MaxTries:                 getEnvInt("ARIA2_MAX_TRIES", DefaultAria2MaxTries),
+			RetryWait:                getEnvInt("ARIA2_RETRY_WAIT", 0),
 		},
 
 		VideoSettings: VideoConfig{
@@ -159,6 +167,12 @@ type Aria2Config struct {
 	ContinueDownload         bool
 	RemoteTime               bool
 	FileAllocation           string
+	HTTPProxy                string
+	AllProxy                 string
+	UserAgent                string
+	Timeout                  int
+	MaxTries                 int
+	RetryWait                int
 }
 
 type SecurityConfig struct {

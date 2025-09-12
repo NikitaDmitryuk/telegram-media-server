@@ -393,13 +393,33 @@ func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Co
 		args = append(args, "--remote-time=true")
 	}
 
-	// Add fallback trackers for better connectivity
+	// Network and proxy settings
+	if cfg.HTTPProxy != "" {
+		args = append(args, fmt.Sprintf("--http-proxy=%s", cfg.HTTPProxy))
+	}
+
+	if cfg.AllProxy != "" {
+		args = append(args, fmt.Sprintf("--all-proxy=%s", cfg.AllProxy))
+	}
+
+	if cfg.UserAgent != "" {
+		args = append(args, fmt.Sprintf("--user-agent=%s", cfg.UserAgent))
+	}
+
+	// Timeout and retry settings, plus fallback trackers for better connectivity
 	args = append(args,
+		fmt.Sprintf("--timeout=%d", cfg.Timeout),
+		fmt.Sprintf("--max-tries=%d", cfg.MaxTries),
+		fmt.Sprintf("--retry-wait=%d", cfg.RetryWait),
 		"--bt-tracker=udp://tracker.opentrackr.org:1337/announce",
 		"--bt-tracker=udp://9.rarbg.to:2920/announce",
 		"--bt-tracker=udp://tracker.openbittorrent.com:80/announce",
 		"--bt-tracker=udp://exodus.desync.com:6969/announce",
 		"--bt-tracker=udp://tracker.torrent.eu.org:451/announce",
+		"--bt-tracker=udp://tracker.coppersurfer.tk:6969/announce",
+		"--bt-tracker=udp://tracker.leechers-paradise.org:6969/announce",
+		"--bt-tracker=udp://zer0day.ch:1337/announce",
+		"--bt-tracker=udp://open.demonii.si:1337/announce",
 	)
 
 	// Follow torrent setting
