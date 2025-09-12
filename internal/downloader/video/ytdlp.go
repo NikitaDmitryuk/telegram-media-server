@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +23,8 @@ import (
 )
 
 const (
-	ytdlpTimeout = 30 * time.Second
+	ytdlpTimeout   = 30 * time.Second
+	DefaultQuality = "best[height<=1080]"
 )
 
 type YTDLPDownloader struct {
@@ -57,7 +59,7 @@ func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string, config *tmsconfig
 }
 
 func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
-	useProxy, err := shouldUseProxy(d.bot, d.url, d.config)
+	useProxy, err := shouldUseProxy(d.url, d.config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error checking proxy requirement: %w", err)
 	}
@@ -201,7 +203,7 @@ func (d *YTDLPDownloader) GetFiles() (mainFiles, tempFiles []string, err error) 
 }
 
 func (d *YTDLPDownloader) GetFileSize() (int64, error) {
-	useProxy, err := shouldUseProxy(d.bot, d.url, d.config)
+	useProxy, err := shouldUseProxy(d.url, d.config)
 	if err != nil {
 		return 0, nil
 	}
@@ -239,82 +241,6 @@ func (d *YTDLPDownloader) StoppedManually() bool {
 	return d.stoppedManually
 }
 
-func shouldUseProxy(_ *bot.Bot, rawURL string, config *tmsconfig.Config) (bool, error) {
-	parsedURL, err := url.Parse(rawURL)
-	if err != nil {
-		return false, fmt.Errorf("invalid URL: %w", err)
-	}
-
-	proxy := config.Proxy
-	if proxy == "" {
-		return false, nil
-	}
-
-	targetDomains := config.ProxyDomains
-	if targetDomains == "" {
-		return true, nil
-	}
-
-	for _, host := range strings.Split(targetDomains, ",") {
-		if parsedURL.Host == strings.TrimSpace(host) {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func getVideoTitle(botInstance *bot.Bot, videoURL string, config *tmsconfig.Config) (string, error) {
-	useProxy, err := shouldUseProxy(botInstance, videoURL, config)
-	if err != nil {
-		return "", fmt.Errorf("error checking proxy requirement: %w", err)
-	}
-
-	cmdArgs := []string{"--get-title", videoURL}
-	if useProxy {
-		cmdArgs = append([]string{"--proxy", config.Proxy}, cmdArgs...)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), ytdlpTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("yt-dlp failed: %w", err)
-	}
-
-	videoTitle := strings.TrimSpace(string(output))
-	if videoTitle == "" {
-		videoID, err := extractVideoID(videoURL)
-		if err != nil {
-			return "unknown_video", nil
-		}
-		return videoID, nil
-	}
-
-	return videoTitle, nil
-}
-
-func extractVideoID(rawURL string) (string, error) {
-	parsedURL, err := url.Parse(rawURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL: %w", err)
-	}
-
-	queryParams := parsedURL.Query()
-	if videoID := queryParams.Get("v"); videoID != "" {
-		return videoID, nil
-	}
-
-	pathSegments := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
-	if len(pathSegments) > 0 {
-		return pathSegments[len(pathSegments)-1], nil
-	}
-
-	return "", errors.New("unable to extract video ID")
-}
-
 func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 	videoSettings := d.config.GetVideoSettings()
 
@@ -350,4 +276,83 @@ func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 	}
 
 	return args
+}
+
+// Video utility functions
+
+func shouldUseProxy(rawURL string, cfg *tmsconfig.Config) (bool, error) {
+	if cfg.Proxy == "" {
+		return false, nil
+	}
+
+	if cfg.ProxyDomains == "" {
+		return true, nil
+	}
+
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	hostname := parsedURL.Hostname()
+	domains := strings.Split(cfg.ProxyDomains, ",")
+	for _, domain := range domains {
+		if strings.Contains(hostname, strings.TrimSpace(domain)) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func getVideoTitle(_ *bot.Bot, videoURL string, cfg *tmsconfig.Config) (string, error) {
+	useProxy, err := shouldUseProxy(videoURL, cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine proxy usage: %w", err)
+	}
+
+	args := []string{"--get-title", "--no-playlist"}
+	if useProxy && cfg.Proxy != "" {
+		args = append(args, "--proxy", cfg.Proxy)
+	}
+	args = append(args, videoURL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), ytdlpTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get video title: %w", err)
+	}
+
+	title := strings.TrimSpace(string(output))
+	if title == "" {
+		return "Unknown Title", nil
+	}
+
+	return title, nil
+}
+
+func extractVideoID(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	hostname := parsedURL.Hostname()
+	re := regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+	cleanHostname := re.ReplaceAllString(hostname, "_")
+
+	query := parsedURL.Query()
+	if v := query.Get("v"); v != "" {
+		return fmt.Sprintf("%s_%s", cleanHostname, v), nil
+	}
+
+	path := strings.Trim(parsedURL.Path, "/")
+	if path != "" {
+		cleanPath := re.ReplaceAllString(path, "_")
+		return fmt.Sprintf("%s_%s", cleanHostname, cleanPath), nil
+	}
+
+	return cleanHostname, nil
 }

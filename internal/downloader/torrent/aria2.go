@@ -19,19 +19,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
-	"github.com/jackpal/bencode-go"
 )
-
-type TorrentMeta struct {
-	Info struct {
-		Name   string `bencode:"name"`
-		Length int64  `bencode:"length"`
-		Files  []struct {
-			Length int64    `bencode:"length"`
-			Path   []string `bencode:"path"`
-		} `bencode:"files"`
-	} `bencode:"info"`
-}
 
 type Aria2Downloader struct {
 	bot             *bot.Bot
@@ -236,38 +224,15 @@ func (d *Aria2Downloader) GetFileSize() (int64, error) {
 	return meta.Info.Length, nil
 }
 
-func (d *Aria2Downloader) parseTorrentMeta() (*TorrentMeta, error) {
+func (d *Aria2Downloader) parseTorrentMeta() (*Meta, error) {
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
 
 	if err := d.validateTorrentFile(torrentPath); err != nil {
 		return nil, fmt.Errorf("torrent file validation failed: %w", err)
 	}
 
-	f, err := os.Open(torrentPath)
-	if err != nil {
-		return nil, fmt.Errorf("cannot open torrent file: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			logutils.Log.WithError(cerr).Error("Failed to close torrent file")
-		}
-	}()
-
-	var meta TorrentMeta
-	if err := bencode.Unmarshal(f, &meta); err != nil {
-		return nil, fmt.Errorf("failed to decode torrent meta: %w", err)
-	}
-	if meta.Info.Name == "" {
-		return nil, fmt.Errorf("torrent meta does not contain a file name")
-	}
-	return &meta, nil
+	return ParseMeta(torrentPath)
 }
-
-const (
-	torrentHeaderSize = 16
-	minTorrentSize    = 20
-	maxTorrentSize    = 10 * 1024 * 1024
-)
 
 func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 	file, err := os.Open(filePath)
@@ -276,7 +241,25 @@ func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 	}
 	defer file.Close()
 
-	header := make([]byte, torrentHeaderSize)
+	stat, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("cannot get file stats: %w", err)
+	}
+
+	if stat.Size() < MinTorrentSize {
+		return fmt.Errorf("file too small to be a valid torrent (%d bytes)", stat.Size())
+	}
+
+	if stat.Size() > MaxTorrentSize {
+		return fmt.Errorf("file too large to be a torrent (%d bytes)", stat.Size())
+	}
+
+	headerSize := HeaderSize
+	if stat.Size() < int64(headerSize) {
+		headerSize = int(stat.Size())
+	}
+
+	header := make([]byte, headerSize)
 	n, err := file.Read(header)
 	if err != nil {
 		return fmt.Errorf("cannot read file header: %w", err)
@@ -286,27 +269,7 @@ func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 		return fmt.Errorf("file is empty")
 	}
 
-	if header[0] != 'd' {
-		if header[0] == '<' {
-			return fmt.Errorf("file appears to be HTML, not a torrent file")
-		}
-		return fmt.Errorf("invalid torrent file format (expected bencode dictionary)")
-	}
-
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("cannot get file stats: %w", err)
-	}
-
-	if stat.Size() < minTorrentSize {
-		return fmt.Errorf("file too small to be a valid torrent (%d bytes)", stat.Size())
-	}
-
-	if stat.Size() > maxTorrentSize {
-		return fmt.Errorf("file too large to be a torrent (%d bytes)", stat.Size())
-	}
-
-	return nil
+	return ValidateContent(header, n)
 }
 
 func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Config) []string {
