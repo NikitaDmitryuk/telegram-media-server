@@ -36,12 +36,11 @@ jobs:
     - name: Verify dependencies
       run: go mod verify
 
-    - name: Install Go tools
-      run: |
-        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
     - name: Lint
-      run: make lint
+      uses: golangci/golangci-lint-action@v8
+      with:
+        version: latest
+        args: --timeout 5m
 
     - name: Vet
       run: make vet
