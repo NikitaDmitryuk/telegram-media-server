@@ -101,6 +101,21 @@ stop:
 	@echo "Stopping Docker Compose services..."
 	docker-compose down
 
+# Docker test commands
+.PHONY: docker-test-build
+docker-test-build:
+	@echo "Building Docker test image..."
+	docker build -f Dockerfile.test -t telegram-media-server:test .
+
+.PHONY: test-integration-docker
+test-integration-docker: docker-test-build
+	@echo "Running integration tests in Docker..."
+	docker run --rm \
+		-v $(PWD):/workspace \
+		-w /workspace \
+		telegram-media-server:test \
+		go test -v -tags=integration ./internal/downloader/...
+
 # Utility commands
 .PHONY: check
 check: lint vet test-unit
@@ -126,6 +141,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  test           - Run all tests"
+	@echo "  test-integration-docker - Run integration tests in Docker"
 	@echo "  test-unit      - Run unit tests only (fast)"
 	@echo "  test-integration - Run integration tests (slow)"
 	@echo "  test-coverage  - Run tests with coverage report"

@@ -108,9 +108,7 @@ func TestDownloadManagerStopNonBlocking(t *testing.T) {
 
 // TestDownloadManagerRobustness tests the download manager under stress
 func TestDownloadManagerRobustness(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping robustness test in short mode")
-	}
+	t.Skip("Skipping robustness test - requires network connectivity")
 
 	logutils.InitLogger("debug")
 
