@@ -10,6 +10,8 @@
 
 # Test binary, built with `go test -c`
 *.test
+# But keep Docker test files
+!Dockerfile.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out

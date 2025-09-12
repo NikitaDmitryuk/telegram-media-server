@@ -1,0 +1,28 @@
+# Test Dockerfile that includes Go SDK and all dependencies
+FROM golang:1.24
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    aria2 \
+    ffmpeg \
+    ca-certificates \
+    dnsutils \
+    net-tools \
+    iputils-ping \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-ca-certificates
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+# Install yt-dlp
+RUN python3 -m pip install --no-cache-dir --break-system-packages yt-dlp
+RUN yt-dlp --update-to stable
+
+WORKDIR /workspace
+
+# Default command for running tests
+CMD ["go", "test", "-v", "./..."]
