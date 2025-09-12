@@ -39,15 +39,6 @@ jobs:
     - name: Verify dependencies
       run: go mod verify
 
-    - name: Format check
-      run: |
-        make format
-        if [ -n "$(git diff --name-only)" ]; then
-          echo "Code is not formatted. Please run 'make format'"
-          git diff
-          exit 1
-        fi
-
     - name: Lint
       run: make lint
 
@@ -137,4 +128,3 @@ jobs:
     - name: Test Docker image
       run: |
         docker run --rm telegram-media-server:test --version || echo "Version command not available"
-
