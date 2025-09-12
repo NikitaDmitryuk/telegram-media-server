@@ -116,12 +116,51 @@ test:
 	@echo "Running tests..."
 	go test -v ./...
 
+.PHONY: test-unit
+test-unit:
+	@echo "Running unit tests..."
+	go test -v -short ./...
+
+.PHONY: test-integration
+test-integration:
+	@echo "Running integration tests..."
+	go test -v -run Integration ./...
+
+.PHONY: test-torrent
+test-torrent:
+	@echo "Running torrent tests..."
+	go test -v ./internal/downloader/torrent/...
+
+.PHONY: test-video
+test-video:
+	@echo "Running video tests..."
+	go test -v ./internal/downloader/video/...
+
+.PHONY: test-config
+test-config:
+	@echo "Running config tests..."
+	go test -v ./internal/config/...
+
+.PHONY: test-database
+test-database:
+	@echo "Running database tests..."
+	go test -v ./internal/database/...
+
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage..."
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
+	go tool cover -func=coverage.out
 	@echo "Coverage report generated: coverage.html"
+
+.PHONY: test-coverage-detailed
+test-coverage-detailed:
+	@echo "Running tests with detailed coverage..."
+	go test -v -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -html=coverage.out -o coverage.html
+	go tool cover -func=coverage.out | grep -E "(total|TOTAL)"
+	@echo "Detailed coverage report generated: coverage.html"
 
 .PHONY: test-benchmark
 test-benchmark:
@@ -195,8 +234,15 @@ help:
 	@echo "  clean          - Clean build artifacts"
 	@echo "  format         - Format code"
 	@echo "  lint           - Run linter"
-	@echo "  test           - Run tests"
-	@echo "  test-coverage  - Run tests with coverage"
+	@echo "  test           - Run all tests"
+	@echo "  test-unit      - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  test-torrent   - Run torrent-specific tests"
+	@echo "  test-video     - Run video-specific tests"
+	@echo "  test-config    - Run config tests"
+	@echo "  test-database  - Run database tests"
+	@echo "  test-coverage  - Run tests with coverage report"
+	@echo "  test-coverage-detailed - Run tests with detailed coverage"
 	@echo "  test-benchmark - Run benchmarks"
 	@echo "  vet            - Run go vet"
 	@echo "  security-check - Run security checks"

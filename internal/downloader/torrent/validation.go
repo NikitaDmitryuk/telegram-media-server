@@ -51,7 +51,7 @@ func isClearlyHTML(content string) bool {
 		}
 	}
 
-	if content[0] == '<' && htmlCount > 0 {
+	if content != "" && content[0] == '<' && htmlCount > 0 {
 		return true
 	}
 
@@ -75,72 +75,23 @@ func isMagnetLink(content string) bool {
 func hasValidBencodeStructure(data []byte, length int) bool {
 	content := string(data[:length])
 
-	requiredFields := []string{"announce", "info"}
-	optionalFields := []string{"piece length", "pieces", "name", "length", "files"}
+	// Look for bencode-specific torrent field patterns like "8:announce" or "4:info"
+	torrentPatterns := []string{
+		"8:announce", "9:announce", // announce field
+		"4:info",          // info field
+		"12:piece length", // piece length field
+		"6:pieces",        // pieces field
+		"4:name",          // name field in info
+		"5:files",         // files field in info
+	}
 
-	foundRequired := 0
-	foundOptional := 0
-
-	for _, field := range requiredFields {
-		if strings.Contains(content, field) {
-			foundRequired++
+	foundPatterns := 0
+	for _, pattern := range torrentPatterns {
+		if strings.Contains(content, pattern) {
+			foundPatterns++
 		}
 	}
 
-	for _, field := range optionalFields {
-		if strings.Contains(content, field) {
-			foundOptional++
-		}
-	}
-
-	if foundRequired >= 1 && foundOptional >= 1 {
-		return true
-	}
-
-	for i := range length {
-		if data[i] == 'd' {
-			remaining := data[i:]
-			if seemsLikeBencode(remaining) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func seemsLikeBencode(data []byte) bool {
-	if len(data) < MinBencodeDataLength {
-		return false
-	}
-
-	if data[0] != 'd' {
-		return false
-	}
-
-	bencodePatterns := 0
-	dataStr := string(data)
-
-	if strings.Contains(dataStr, ":") {
-		bencodePatterns++
-	}
-
-	if hasNumberPattern(dataStr) {
-		bencodePatterns++
-	}
-
-	if strings.Contains(dataStr, "e") {
-		bencodePatterns++
-	}
-
-	return bencodePatterns >= 2
-}
-
-func hasNumberPattern(s string) bool {
-	for i := range len(s) - 1 {
-		if s[i] >= '0' && s[i] <= '9' && s[i+1] == ':' {
-			return true
-		}
-	}
-	return false
+	// At least one torrent-specific pattern should be found
+	return foundPatterns >= 1
 }

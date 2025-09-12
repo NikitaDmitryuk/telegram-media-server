@@ -1,7 +1,10 @@
 package config
 
 import (
+	"log"
 	"time"
+
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
 const (
@@ -90,10 +93,20 @@ func NewConfig() (*Config, error) {
 		},
 	}
 
-	if err := config.validate(); err != nil {
-		return nil, err
+	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
+		config.MoviePath = "/app/media"
+		config.LangPath = "/app/locales"
+		log.Printf("Running inside Docker, setting MOVIE_PATH to %s and LANG_PATH to %s", config.MoviePath, config.LangPath)
 	}
 
+	if err := config.validate(); err != nil {
+		log.Printf("Configuration validation failed: %v", err)
+		return nil, utils.WrapError(err, "configuration validation failed", map[string]any{
+			"config": config,
+		})
+	}
+
+	log.Println("Configuration loaded successfully")
 	return config, nil
 }
 
