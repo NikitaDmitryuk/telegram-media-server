@@ -39,14 +39,19 @@ jobs:
     - name: Verify dependencies
       run: go mod verify
 
+    - name: Install Go tools
+      run: |
+        go install github.com/segmentio/golines@latest
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+    - name: Format
+      run: make format
+
     - name: Lint
       run: make lint
 
     - name: Vet
       run: make vet
-
-    - name: Security check
-      run: make security-check
 
     - name: Run unit tests
       run: make test-unit

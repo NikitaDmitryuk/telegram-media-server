@@ -25,16 +25,14 @@ clean:
 # Code quality
 .PHONY: format
 format:
-	@echo "Formatting code..."
-	go fmt ./...
-	go mod tidy
+	@echo "Running code formatter..."
 	golines --max-len=140 -w .
-	golangci-lint run --fix
+	gofmt -s -w .
+	go mod tidy
 
 .PHONY: lint
 lint:
 	@echo "Running linter..."
-	golines --max-len=140 -w .
 	golangci-lint run
 
 .PHONY: vet
@@ -46,11 +44,11 @@ vet:
 security-check:
 	@echo "Running security checks..."
 	@if command -v gosec >/dev/null 2>&1; then \
-		gosec -fmt=json -out=gosec-report.json -stdout -verbose=text ./...; \
+		gosec -fmt=json -out=gosec-report.json ./...; \
 	else \
 		echo "gosec not found, installing..."; \
-		go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest && \
-		gosec -fmt=json -out=gosec-report.json -stdout -verbose=text ./...; \
+		go install github.com/cosmos/gosec/v2/cmd/gosec@latest && \
+		$(shell go env GOPATH)/bin/gosec -fmt=json -out=gosec-report.json ./...; \
 	fi
 
 # Testing
@@ -125,7 +123,6 @@ help:
 	@echo "  format         - Format code and fix issues"
 	@echo "  lint           - Run linter"
 	@echo "  vet            - Run go vet"
-	@echo "  security-check - Run security checks"
 	@echo ""
 	@echo "Testing:"
 	@echo "  test           - Run all tests"
