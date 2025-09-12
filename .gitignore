@@ -45,4 +45,4 @@ test-output/
 gosec-report.json
 *.sarif
 
-#telegram-media-server
+telegram-media-server
