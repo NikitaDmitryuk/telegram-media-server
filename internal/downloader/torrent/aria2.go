@@ -3,7 +3,6 @@ package aria2
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/jackpal/bencode-go"
@@ -39,43 +39,29 @@ type Aria2Downloader struct {
 	downloadDir     string
 	cmd             *exec.Cmd
 	stoppedManually bool
+	config          *config.Config
 }
 
-func NewAria2Downloader(botInstance *bot.Bot, torrentFileName, moviePath string) downloader.Downloader {
+func NewAria2Downloader(botInstance *bot.Bot, torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
 	return &Aria2Downloader{
 		bot:             botInstance,
 		torrentFileName: torrentFileName,
 		downloadDir:     moviePath,
+		config:          cfg,
 	}
 }
 
 func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
-	const dhtPortBase, listenPortBase, portRange = 6881, 7881, 1000
-
-	dhtPort, err := generateRandomPort(dhtPortBase, portRange)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate DHT port: %w", err)
-	}
-
-	listenPort, err := generateRandomPort(listenPortBase, portRange)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate listen port: %w", err)
-	}
-
+	aria2Cfg := d.config.GetAria2Settings()
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
-	cmdArgs := []string{
-		"--dir", d.downloadDir,
-		"--seed-time=0",
-		"--summary-interval=3",
-		"--enable-dht=true",
-		"--bt-enable-lpd=true",
-		fmt.Sprintf("--dht-listen-port=%d", dhtPort),
-		fmt.Sprintf("--listen-port=%d", listenPort),
-		"--max-connection-per-server=16",
-		"--split=16",
-		"--min-split-size=1M",
-		torrentPath,
-	}
+
+	logutils.Log.WithFields(map[string]any{
+		"torrent_file": d.torrentFileName,
+		"download_dir": d.downloadDir,
+		"aria2_config": aria2Cfg,
+	}).Info("Starting aria2c download with optimized configuration")
+
+	cmdArgs := d.buildAria2Args(torrentPath, &aria2Cfg)
 	d.cmd = exec.CommandContext(ctx, "aria2c", cmdArgs...)
 
 	stdout, err := d.cmd.StdoutPipe()
@@ -106,7 +92,7 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan 
 		defer close(progressChan)
 		defer close(errChan)
 
-		d.parseProgress(stdout, progressChan)
+		go d.parseProgress(stdout, progressChan)
 
 		if err := d.cmd.Wait(); err != nil && !d.stoppedManually {
 			logutils.Log.WithError(err).Warn("aria2c exited with error")
@@ -149,7 +135,6 @@ func (d *Aria2Downloader) StopDownload() error {
 		}
 		logutils.Log.Info("Sent SIGINT to aria2c process")
 
-		// Ждём до 3 секунд завершения процесса
 		done := make(chan error, 1)
 		go func() {
 			done <- d.cmd.Wait()
@@ -273,14 +258,107 @@ func (d *Aria2Downloader) parseTorrentMeta() (*TorrentMeta, error) {
 	return &meta, nil
 }
 
-func generateRandomPort(base, rangeSize int) (int, error) {
-	if rangeSize <= 0 {
-		return 0, fmt.Errorf("invalid range size: %d", rangeSize)
+func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Config) []string {
+	args := []string{
+		"--dir", d.downloadDir,
+		"--summary-interval=3",
+		"--console-log-level=info",
+		fmt.Sprintf("--file-allocation=%s", cfg.FileAllocation),
+		"--allow-overwrite=false",
+		"--auto-file-renaming=true",
+		"--parameterized-uri=true",
 	}
 
-	b := make([]byte, 2)
-	if _, err := rand.Read(b); err != nil {
-		return 0, fmt.Errorf("failed to generate random port: %w", err)
+	args = append(args,
+		fmt.Sprintf("--max-connection-per-server=%d", cfg.MaxConnectionsPerServer),
+		fmt.Sprintf("--split=%d", cfg.Split),
+		fmt.Sprintf("--min-split-size=%s", cfg.MinSplitSize),
+		fmt.Sprintf("--max-concurrent-downloads=%d", 1), // Per torrent
+		"--max-overall-download-limit=0",                // No global limit
+		fmt.Sprintf("--bt-max-peers=%d", cfg.BTMaxPeers),
+		fmt.Sprintf("--bt-request-peer-speed-limit=%s", cfg.BTRequestPeerSpeedLimit),
+		fmt.Sprintf("--bt-max-open-files=%d", cfg.BTMaxOpenFiles),
+		fmt.Sprintf("--max-overall-upload-limit=%s", cfg.MaxOverallUploadLimit),
+		fmt.Sprintf("--max-upload-limit=%s", cfg.MaxUploadLimit),
+		fmt.Sprintf("--seed-ratio=%.1f", cfg.SeedRatio),
+		fmt.Sprintf("--seed-time=%d", cfg.SeedTime),
+		fmt.Sprintf("--bt-tracker-timeout=%d", cfg.BTTrackerTimeout),
+		fmt.Sprintf("--bt-tracker-interval=%d", cfg.BTTrackerInterval),
+	)
+
+	if cfg.EnableDHT {
+		args = append(args,
+			"--enable-dht=true",
+			fmt.Sprintf("--dht-listen-port=%s", cfg.DHTPorts),
+			"--dht-entry-point=dht.transmissionbt.com:6881",
+			"--dht-entry-point6=dht.transmissionbt.com:6881",
+		)
+	} else {
+		args = append(args, "--enable-dht=false")
 	}
-	return base + int(b[0])%rangeSize, nil
+
+	if cfg.EnablePeerExchange {
+		args = append(args, "--enable-peer-exchange=true")
+	} else {
+		args = append(args, "--enable-peer-exchange=false")
+	}
+
+	if cfg.EnableLocalPeerDiscovery {
+		args = append(args, "--bt-enable-lpd=true")
+	} else {
+		args = append(args, "--bt-enable-lpd=false")
+	}
+
+	// Listen port settings
+	args = append(args, fmt.Sprintf("--listen-port=%s", cfg.ListenPort))
+
+	// Additional torrent settings
+	if cfg.BTSaveMetadata {
+		args = append(args, "--bt-save-metadata=true")
+	}
+
+	if cfg.BTHashCheckSeed {
+		args = append(args, "--bt-hash-check-seed=true")
+	}
+
+	if cfg.BTRequireCrypto {
+		args = append(args,
+			"--bt-require-crypto=true",
+			fmt.Sprintf("--bt-min-crypto-level=%s", cfg.BTMinCryptoLevel),
+		)
+	} else {
+		args = append(args, "--bt-require-crypto=false")
+	}
+
+	if cfg.CheckIntegrity {
+		args = append(args, "--check-integrity=true")
+	}
+
+	if cfg.ContinueDownload {
+		args = append(args, "--continue=true")
+	}
+
+	if cfg.RemoteTime {
+		args = append(args, "--remote-time=true")
+	}
+
+	// Add fallback trackers for better connectivity
+	args = append(args,
+		"--bt-tracker=udp://tracker.opentrackr.org:1337/announce",
+		"--bt-tracker=udp://9.rarbg.to:2920/announce",
+		"--bt-tracker=udp://tracker.openbittorrent.com:80/announce",
+		"--bt-tracker=udp://exodus.desync.com:6969/announce",
+		"--bt-tracker=udp://tracker.torrent.eu.org:451/announce",
+	)
+
+	// Follow torrent setting
+	if cfg.FollowTorrent {
+		args = append(args, "--follow-torrent=true")
+	}
+
+	// Add the torrent file path at the end
+	args = append(args, torrentPath)
+
+	logutils.Log.WithField("aria2_args", args).Debug("Built aria2c command arguments")
+	return args
 }

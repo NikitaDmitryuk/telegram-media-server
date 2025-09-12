@@ -66,14 +66,7 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan 
 	ctx, cancel := context.WithCancel(ctx)
 	d.cancel = cancel
 
-	cmdArgs := []string{
-		"--newline",
-		"-S", "vcodec:h264,acodec:mp3",
-		"-f", "bv*+ba/b",
-		"--recode-video", "mp4",
-		"--postprocessor-args", "ffmpeg:-pix_fmt yuv420p",
-		"-o", outputPath, d.url,
-	}
+	cmdArgs := d.buildYTDLPArgs(outputPath)
 
 	if useProxy {
 		proxy := d.config.Proxy
@@ -257,12 +250,12 @@ func shouldUseProxy(_ *bot.Bot, rawURL string, config *tmsconfig.Config) (bool, 
 		return false, nil
 	}
 
-	targetHosts := config.ProxyHost
-	if targetHosts == "" {
+	targetDomains := config.ProxyDomains
+	if targetDomains == "" {
 		return true, nil
 	}
 
-	for _, host := range strings.Split(targetHosts, ",") {
+	for _, host := range strings.Split(targetDomains, ",") {
 		if parsedURL.Host == strings.TrimSpace(host) {
 			return true, nil
 		}
@@ -320,4 +313,41 @@ func extractVideoID(rawURL string) (string, error) {
 	}
 
 	return "", errors.New("unable to extract video ID")
+}
+
+func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
+	videoSettings := d.config.GetVideoSettings()
+
+	args := []string{
+		"--newline",
+		"-f", videoSettings.QualitySelector,
+		"-o", outputPath,
+		d.url,
+	}
+
+	if videoSettings.CompatibilityMode {
+		args = append(args, "-S", "vcodec:h264,acodec:mp3")
+		videoSettings.EnableReencoding = true
+		videoSettings.VideoCodec = "h264"
+		videoSettings.AudioCodec = "mp3"
+		videoSettings.OutputFormat = "mp4"
+	}
+
+	if videoSettings.EnableReencoding {
+		if !videoSettings.ForceReencoding {
+			args = append(args, "--recode-video", videoSettings.OutputFormat)
+		} else {
+			args = append(args, "--recode-video", videoSettings.OutputFormat)
+			postprocessorArgs := fmt.Sprintf("ffmpeg:-c:v %s -c:a %s",
+				videoSettings.VideoCodec, videoSettings.AudioCodec)
+
+			if videoSettings.FFmpegExtraArgs != "" {
+				postprocessorArgs += " " + videoSettings.FFmpegExtraArgs
+			}
+
+			args = append(args, "--postprocessor-args", postprocessorArgs)
+		}
+	}
+
+	return args
 }

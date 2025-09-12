@@ -38,7 +38,7 @@ func HandleTorrentFile(
 		return
 	}
 
-	downloaderInstance := torrent.NewAria2Downloader(bot, doc.FileName, config.MoviePath)
+	downloaderInstance := torrent.NewAria2Downloader(bot, doc.FileName, config.MoviePath, config)
 
 	if downloaderInstance == nil {
 		logutils.Log.Warn("Failed to initialize torrent downloader")
