@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -23,8 +24,11 @@ import (
 )
 
 const (
-	ytdlpTimeout   = 30 * time.Second
-	DefaultQuality = "best[height<=1080]"
+	ytdlpTimeout        = 30 * time.Second
+	DefaultQuality      = "best[height<=1080]"
+	secondsPerMinute    = 60
+	gracefulStopTimeout = 5 * time.Second
+	forceKillTimeout    = 2 * time.Second
 )
 
 type YTDLPDownloader struct {
@@ -176,11 +180,58 @@ func (d *YTDLPDownloader) monitorDownload(
 }
 
 func (d *YTDLPDownloader) StopDownload() error {
+	d.stoppedManually = true
+
 	if d.cancel != nil {
+		logutils.Log.Info("Canceling yt-dlp download context")
 		d.cancel()
 	}
-	d.stoppedManually = true
-	logutils.Log.Info("Download process canceled")
+
+	if d.cmd != nil && d.cmd.Process != nil {
+		logutils.Log.Info("Stopping yt-dlp process gracefully")
+
+		// First try graceful termination (SIGTERM on Unix systems)
+		if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
+			logutils.Log.WithError(err).Warn("Failed to send interrupt signal, trying kill")
+			// If interrupt fails, use kill immediately
+			if killErr := d.cmd.Process.Kill(); killErr != nil {
+				logutils.Log.WithError(killErr).Warn("Failed to kill yt-dlp process")
+				return killErr
+			}
+		}
+
+		// Wait for process to exit with timeout
+		done := make(chan error, 1)
+		go func() {
+			done <- d.cmd.Wait()
+		}()
+
+		select {
+		case <-done:
+			logutils.Log.Info("yt-dlp process exited gracefully")
+		case <-time.After(gracefulStopTimeout):
+			// If graceful termination didn't work, force kill
+			logutils.Log.Warn("yt-dlp did not exit gracefully, force killing")
+			if killErr := d.cmd.Process.Kill(); killErr != nil {
+				logutils.Log.WithError(killErr).Warn("Failed to force kill yt-dlp process")
+			}
+
+			// Wait a bit more for force kill to take effect
+			select {
+			case <-done:
+				logutils.Log.Info("yt-dlp process exited after force kill")
+			case <-time.After(forceKillTimeout):
+				logutils.Log.Warn("yt-dlp process did not exit even after force kill, considering it stopped")
+			}
+		}
+	}
+
+	// Additional cleanup: try to remove any remaining temp files
+	if err := d.cleanupTempFiles(); err != nil {
+		logutils.Log.WithError(err).Warn("Failed to cleanup temporary files after stop")
+	}
+
+	logutils.Log.Info("yt-dlp process stopped manually")
 	return nil
 }
 
@@ -191,20 +242,85 @@ func (d *YTDLPDownloader) GetTitle() (string, error) {
 func (d *YTDLPDownloader) GetFiles() (mainFiles, tempFiles []string, err error) {
 	baseName := strings.TrimSuffix(d.outputFileName, ".mp4")
 	mainFiles = []string{d.outputFileName}
+
+	// Comprehensive list of temporary files that yt-dlp can create
 	tempFiles = []string{
+		// Basic temp files
 		baseName + ".part*",
 		baseName + ".ytdl",
+		baseName + ".ytdlp",
+		// Video-specific temp files
+		d.outputFileName + ".part*", // e.g., video.mp4.part
+		d.outputFileName + ".ytdl",  // e.g., video.mp4.ytdl
+		d.outputFileName + ".ytdlp", // e.g., video.mp4.ytdlp
+		// Format-specific temp files (yt-dlp uses f-codes for different formats)
 		baseName + ".f*.mp4",
 		baseName + ".f*.mp4.part*",
 		baseName + ".f*.mp4.ytdlp",
 		baseName + ".f*.mp4.ytdl",
+		baseName + ".f*.webm",
+		baseName + ".f*.webm.part*",
+		baseName + ".f*.webm.ytdlp",
+		baseName + ".f*.webm.ytdl",
+		// Additional common patterns
+		baseName + ".temp",
+		baseName + ".tmp",
+		d.outputFileName + ".temp",
+		d.outputFileName + ".tmp",
 	}
 	return mainFiles, tempFiles, nil
+}
+
+// cleanupTempFiles attempts to remove temporary files that might be left behind
+func (d *YTDLPDownloader) cleanupTempFiles() error {
+	if d.config == nil || d.config.MoviePath == "" {
+		return nil
+	}
+
+	_, tempFiles, err := d.GetFiles()
+	if err != nil {
+		return err
+	}
+
+	var errorList []string
+	for _, tempFile := range tempFiles {
+		fullPath := filepath.Join(d.config.MoviePath, tempFile)
+
+		// Use glob to handle patterns with *
+		if strings.Contains(tempFile, "*") {
+			matches, globErr := filepath.Glob(fullPath)
+			if globErr != nil {
+				continue
+			}
+			for _, match := range matches {
+				if removeErr := os.Remove(match); removeErr != nil && !os.IsNotExist(removeErr) {
+					logutils.Log.WithError(removeErr).Debugf("Failed to cleanup temp file: %s", match)
+					errorList = append(errorList, removeErr.Error())
+				} else if removeErr == nil {
+					logutils.Log.Infof("Cleaned up temp file: %s", match)
+				}
+			}
+		} else {
+			if removeErr := os.Remove(fullPath); removeErr != nil && !os.IsNotExist(removeErr) {
+				logutils.Log.WithError(removeErr).Debugf("Failed to cleanup temp file: %s", fullPath)
+				errorList = append(errorList, removeErr.Error())
+			} else if removeErr == nil {
+				logutils.Log.Infof("Cleaned up temp file: %s", fullPath)
+			}
+		}
+	}
+
+	if len(errorList) > 0 {
+		return fmt.Errorf("failed to cleanup some temp files: %s", strings.Join(errorList, "; "))
+	}
+
+	return nil
 }
 
 func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 	useProxy, err := shouldUseProxy(d.url, d.config)
 	if err != nil {
+		logutils.Log.WithError(err).Warn("Failed to determine proxy usage for file size check")
 		return 0, nil
 	}
 
@@ -219,22 +335,64 @@ func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
 	output, err := cmd.Output()
 	if err != nil {
+		logutils.Log.WithError(err).Warn("Failed to get video metadata for file size")
 		return 0, nil
 	}
 
 	var info map[string]any
 	if err := json.Unmarshal(output, &info); err != nil {
+		logutils.Log.WithError(err).Warn("Failed to parse video metadata JSON")
 		return 0, nil
 	}
 
-	if size, ok := info["filesize"].(float64); ok {
-		return int64(size), nil
-	}
-	if size, ok := info["filesize_approx"].(float64); ok {
-		return int64(size), nil
+	// Try different filesize fields in order of preference
+	sizeFields := []string{
+		"filesize",        // Exact file size (if known)
+		"filesize_approx", // Approximate file size
+		"duration",        // For fallback calculation (duration * estimated bitrate)
 	}
 
+	for _, field := range sizeFields {
+		if field == "duration" {
+			// Fallback: estimate size based on duration
+			if duration, ok := info["duration"].(float64); ok && duration > 0 {
+				// Estimate ~1MB per minute for standard quality video
+				estimatedSize := int64(duration * 1024 * 1024 / secondsPerMinute)
+				logutils.Log.WithFields(map[string]any{
+					"duration":       duration,
+					"estimated_size": estimatedSize,
+					"url":            d.url,
+				}).Debug("Estimating file size based on duration")
+				return estimatedSize, nil
+			}
+		} else {
+			if size, ok := info[field].(float64); ok && size > 0 {
+				logutils.Log.WithFields(map[string]any{
+					"size_field": field,
+					"size":       int64(size),
+					"url":        d.url,
+				}).Debug("Got file size from video metadata")
+				return int64(size), nil
+			}
+		}
+	}
+
+	// If no size information is available, log the available fields for debugging
+	logutils.Log.WithFields(map[string]any{
+		"available_fields": getMapKeys(info),
+		"url":              d.url,
+	}).Warn("No file size information available in video metadata")
+
 	return 0, nil
+}
+
+// Helper function to get map keys for debugging
+func getMapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (d *YTDLPDownloader) StoppedManually() bool {

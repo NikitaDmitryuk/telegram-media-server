@@ -21,6 +21,14 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
+const (
+	sigintTimeout       = 3 * time.Second
+	sigkillTimeout      = 5 * time.Second
+	aria2ExitUnfinished = 7  // aria2c exit code for unfinished downloads
+	signalExitTerm      = 15 // SIGTERM exit code
+	signalExitKill      = 9  // SIGKILL exit code
+)
+
 type Aria2Downloader struct {
 	bot             *bot.Bot
 	torrentFileName string
@@ -129,26 +137,9 @@ func (d *Aria2Downloader) StopDownload() error {
 		}()
 		select {
 		case err := <-done:
-			if err != nil {
-				if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "no child process") {
-					return nil
-				}
-				if exitErr, ok := err.(*exec.ExitError); ok {
-					if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 7 {
-						logutils.Log.Infof("aria2c exited with code 7 (unfinished downloads) after manual stop — not an error")
-						return nil
-					}
-				}
-				return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
-			}
-			return nil
-		case <-time.After(3 * time.Second):
-			logutils.Log.Warn("aria2c did not exit after SIGINT, sending SIGKILL...")
-			if err := d.cmd.Process.Kill(); err != nil {
-				return fmt.Errorf("failed to send SIGKILL to aria2c process: %w", err)
-			}
-			logutils.Log.Info("Sent SIGKILL to aria2c process")
-			return <-done
+			return d.handleProcessExit(err)
+		case <-time.After(sigintTimeout):
+			return d.handleSigkill(done)
 		}
 	}
 	return nil
@@ -156,6 +147,66 @@ func (d *Aria2Downloader) StopDownload() error {
 
 func (d *Aria2Downloader) StoppedManually() bool {
 	return d.stoppedManually
+}
+
+// handleProcessExit handles the exit of aria2c process after SIGINT
+func (d *Aria2Downloader) handleProcessExit(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "no child process") {
+		return nil
+	}
+
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			exitCode := status.ExitStatus()
+			if d.isExpectedExitCode(exitCode) {
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("failed to wait for aria2c process to exit: %w", err)
+}
+
+// handleSigkill handles the SIGKILL scenario when SIGINT didn't work
+func (d *Aria2Downloader) handleSigkill(done chan error) error {
+	logutils.Log.Warn("aria2c did not exit after SIGINT, sending SIGKILL...")
+	if err := d.cmd.Process.Kill(); err != nil {
+		return fmt.Errorf("failed to send SIGKILL to aria2c process: %w", err)
+	}
+	logutils.Log.Info("Sent SIGKILL to aria2c process")
+
+	// Wait for process with timeout to avoid infinite blocking
+	select {
+	case err := <-done:
+		// After SIGKILL, any exit error is expected and not a real error
+		if err != nil {
+			logutils.Log.WithError(err).Debug("aria2c process exited with error after SIGKILL (expected)")
+		} else {
+			logutils.Log.Debug("aria2c process stopped gracefully after SIGKILL")
+		}
+		return nil
+	case <-time.After(sigkillTimeout):
+		logutils.Log.Info("aria2c process did not exit within timeout, considering it stopped")
+		return nil
+	}
+}
+
+// isExpectedExitCode checks if the exit code is expected for a manually stopped process
+func (*Aria2Downloader) isExpectedExitCode(exitCode int) bool {
+	switch exitCode {
+	case aria2ExitUnfinished:
+		logutils.Log.Debug("aria2c exited with code for unfinished downloads after manual stop")
+		return true
+	case signalExitTerm, signalExitKill:
+		logutils.Log.Debug("aria2c exited due to signal after manual stop")
+		return true
+	default:
+		return false
+	}
 }
 
 func (d *Aria2Downloader) GetTitle() (string, error) {

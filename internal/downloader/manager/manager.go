@@ -124,7 +124,7 @@ func (dm *DownloadManager) StopDownload(movieID uint) error {
 	if exists {
 		logutils.Log.WithField("movie_id", movieID).Info("Stopping active download")
 		if err := job.downloader.StopDownload(); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to stop downloader")
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader (may have stopped anyway)")
 		}
 		job.cancel()
 		return nil
@@ -135,9 +135,9 @@ func (dm *DownloadManager) StopDownload(movieID uint) error {
 		return nil
 	}
 
-	return utils.WrapError(nil, "Download not found", map[string]any{
-		"movie_id": movieID,
-	})
+	// It's normal for completed downloads to not be found in active downloads or queue
+	logutils.Log.WithField("movie_id", movieID).Debug("Download not found in active downloads or queue (likely already completed)")
+	return nil
 }
 
 func (dm *DownloadManager) StopAllDownloads() {
@@ -151,7 +151,7 @@ func (dm *DownloadManager) StopAllDownloads() {
 	for movieID, job := range jobs {
 		logutils.Log.WithField("movie_id", movieID).Info("Stopping download")
 		if err := job.downloader.StopDownload(); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to stop downloader")
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader (may have stopped anyway)")
 		}
 		job.cancel()
 	}
