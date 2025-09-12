@@ -100,22 +100,13 @@ The configuration file is `.env`:
 - При использовании Docker Compose: находится в корне проекта.  
 - When using Docker Compose: located in the project root.
 
-**Доступные параметры / Available parameters**:
+**Настройка параметров / Parameter Configuration**:
 
-| **Параметр / Parameter** | **Описание / Description**                                                                 |
-|---------------------------|-------------------------------------------------------------------------------------------|
-| `BOT_TOKEN`              | Токен бота от BotFather. Your Telegram bot token from BotFather.                          |
-| `MOVIE_PATH`             | Путь к директории для базы данных и файлов. Path to the directory for the database and files. |
-| `ADMIN_PASSWORD`         | Пароль для администратора. Password for admin authorization.                              |
-| `REGULAR_PASSWORD`       | Пароль для обычных пользователей. Password for regular users.                             |
-| `LANG`                   | Язык сообщений (ru, en). Bot message language (ru, en).                                   |
-| `PROXY`                  | Адрес прокси для `yt-dlp`. Proxy address for `yt-dlp`.                                    |
-| `PROXY_HOST`             | Домены, для которых использовать прокси (если пусто — всегда). Domains to use proxy for (if empty, always use proxy). |
-| `PROWLARR_URL`           | Prowlarr base URL (for example: http://localhost:9696). |
-| `PROWLARR_API_KEY`       | Prowlarr API key (can be found in the Prowlarr web interface, Settings -> General -> Security) |
-| `LOG_LEVEL`              | Уровень логирования (debug, info, warn, error). Logging level (debug, info, warn, error). |
-| `MAX_CONCURRENT_DOWNLOADS` | Максимальное количество одновременных загрузок. Maximum number of concurrent downloads. |
-| `DOWNLOAD_TIMEOUT`       | Таймаут загрузки (например: 30m). Download timeout (e.g., 30m). |
+Все доступные параметры конфигурации подробно описаны в файле [`.env.example`](.env.example).  
+All available configuration parameters are thoroughly documented in the [`.env.example`](.env.example) file.
+
+Создайте файл `.env` на основе `.env.example` и настройте необходимые параметры.  
+Create a `.env` file based on `.env.example` and configure the required parameters.
 
 ---
 
