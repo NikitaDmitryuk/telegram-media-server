@@ -10,6 +10,11 @@ import (
 )
 
 func LoggingMiddleware(update *tgbotapi.Update) {
+	if update == nil {
+		logutils.Log.Error("Update is nil in LoggingMiddleware")
+		return
+	}
+
 	if update.Message != nil {
 		logutils.Log.WithFields(map[string]any{
 			"username": update.Message.From.UserName,
@@ -19,6 +24,11 @@ func LoggingMiddleware(update *tgbotapi.Update) {
 }
 
 func AuthMiddleware(update *tgbotapi.Update, db database.Database) (bool, models.UserRole) {
+	if update == nil {
+		logutils.Log.Error("Update is nil")
+		return false, ""
+	}
+
 	var chatID int64
 	var userID int64
 

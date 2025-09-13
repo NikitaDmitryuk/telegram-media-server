@@ -48,16 +48,11 @@ jobs:
     - name: Run unit tests
       run: make test-unit
 
-    - name: Build Docker test image
-      run: docker build -f Dockerfile.test -t telegram-media-server:test .
+    - name: Run integration tests
+      run: make test-integration
 
-    - name: Run integration tests in Docker
-      run: |
-        docker run --rm \
-          -v $(pwd):/workspace \
-          -w /workspace \
-          telegram-media-server:test \
-          go test -v -tags=integration ./internal/downloader/...
+    - name: Run Docker tests
+      run: make test-docker
 
     - name: Generate coverage report
       run: make test-coverage
