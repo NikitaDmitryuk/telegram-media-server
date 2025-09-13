@@ -165,7 +165,7 @@ test-integration:
 test-docker: docker-test-build
 	@echo "Running tests that require external tools (yt-dlp, aria2, ffmpeg)..."
 	docker run --rm \
-		-v $(pwd):/workspace \
+		-v $${GITHUB_WORKSPACE:-$(PWD)}:/workspace \
 		-w /workspace \
 		telegram-media-server:test \
 		go test -v ./internal/downloader/torrent ./internal/downloader/video -run "Integration|TestTorrentDownload|TestVideo.*Integration"
