@@ -11,7 +11,7 @@ DEPENDENCIES=yt-dlp aria2 ffmpeg
 DEPENDENCY_BINARIES=yt-dlp aria2c ffmpeg
 BUILD_DEPENDENCIES=go
 OPTIONAL_DEPENDENCIES=minidlna prowlarr
-OPTIONAL_DEPENDENCY_CHECK="minidlna.service prowlarr.service"
+OPTIONAL_SERVICES=minidlna.service prowlarr.service
 
 # Version information
 VERSION=$(shell git describe --tags --always --dirty)
@@ -21,6 +21,12 @@ LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
 # Dependency checks
 .PHONY: check-deps
 check-deps:
+	@$(MAKE) check-build-deps
+	@$(MAKE) check-runtime-deps
+	@$(MAKE) check-optional-deps
+
+.PHONY: check-build-deps
+check-build-deps:
 	@echo "Checking build dependencies..."
 	@for dep in $(BUILD_DEPENDENCIES); do \
 		if ! command -v $$dep >/dev/null 2>&1; then \
@@ -28,6 +34,10 @@ check-deps:
 			exit 1; \
 		fi; \
 	done
+	@echo "Build dependencies: OK"
+
+.PHONY: check-runtime-deps
+check-runtime-deps:
 	@echo "Checking runtime dependencies..."
 	@i=0; \
 	for dep in $(DEPENDENCIES); do \
@@ -38,15 +48,29 @@ check-deps:
 		fi; \
 		i=$$((i+1)); \
 	done
+	@echo "Runtime dependencies: OK"
+
+.PHONY: check-optional-deps
+check-optional-deps:
 	@echo "Checking optional dependencies..."
-	@for dep in $(OPTIONAL_DEPENDENCY_CHECK); do \
-		if ! systemctl list-units --type=service --all | grep -q $$dep; then \
-			echo "Warning: Optional dependency $$dep is not installed or not enabled."; \
-		else \
-			echo "Optional dependency $$dep is installed and enabled."; \
-		fi; \
-	done
-	@echo "All required dependencies are installed."
+	@if ! command -v systemctl >/dev/null 2>&1; then \
+		echo "ℹ systemctl not available (not a systemd system)"; \
+		for service in $(OPTIONAL_SERVICES); do \
+			echo "ℹ Optional dependency $$service - status unknown"; \
+		done; \
+	else \
+		for service in $(OPTIONAL_SERVICES); do \
+			if systemctl is-active --quiet $$service 2>/dev/null; then \
+				echo "✓ Optional dependency $$service is running"; \
+			elif systemctl is-enabled --quiet $$service 2>/dev/null; then \
+				echo "⚠ Optional dependency $$service is installed but not running"; \
+			elif systemctl list-unit-files --type=service 2>/dev/null | grep -q "^$$service"; then \
+				echo "⚠ Optional dependency $$service is installed but disabled"; \
+			else \
+				echo "ℹ Optional dependency $$service is not installed"; \
+			fi; \
+		done; \
+	fi
 
 # Core build commands
 .PHONY: build
@@ -208,12 +232,61 @@ check: lint vet test-unit
 pre-commit: format check
 	@echo "Pre-commit checks completed successfully!"
 
+.PHONY: pre-commit-install
+pre-commit-install:
+	@echo "Installing pre-commit hooks..."
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit install; \
+		echo "✅ Pre-commit hooks installed successfully!"; \
+	else \
+		echo "⚠️  pre-commit not found. Installing..."; \
+		if command -v brew >/dev/null 2>&1; then \
+			echo "Installing via Homebrew..."; \
+			brew install pre-commit; \
+		elif command -v pip3 >/dev/null 2>&1; then \
+			echo "Installing via pip3..."; \
+			pip3 install pre-commit; \
+		elif command -v pip >/dev/null 2>&1; then \
+			echo "Installing via pip..."; \
+			pip install pre-commit; \
+		else \
+			echo "❌ No package manager found. Please install pre-commit manually."; \
+			exit 1; \
+		fi; \
+		pre-commit install; \
+		echo "✅ Pre-commit installed and hooks configured!"; \
+	fi
+
+.PHONY: pre-commit-run
+pre-commit-run:
+	@echo "Running pre-commit on all files..."
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit run --all-files; \
+	else \
+		echo "❌ pre-commit not installed. Run 'make pre-commit-install' first."; \
+		exit 1; \
+	fi
+
+.PHONY: pre-commit-update
+pre-commit-update:
+	@echo "Updating pre-commit hooks..."
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit autoupdate; \
+		echo "✅ Pre-commit hooks updated!"; \
+	else \
+		echo "❌ pre-commit not installed. Run 'make pre-commit-install' first."; \
+		exit 1; \
+	fi
+
 .PHONY: help
 help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Dependencies:"
-	@echo "  check-deps     - Check all required dependencies"
+	@echo "  check-deps     - Check all dependencies (build + runtime + optional)"
+	@echo "  check-build-deps - Check build dependencies only"
+	@echo "  check-runtime-deps - Check runtime dependencies only"
+	@echo "  check-optional-deps - Check optional dependencies only"
 	@echo ""
 	@echo "Build:"
 	@echo "  build          - Build the application (with dependency check)"
@@ -248,4 +321,7 @@ help:
 	@echo "Utility:"
 	@echo "  check          - Run all checks (lint + vet + test-unit)"
 	@echo "  pre-commit     - Run pre-commit checks (format + check)"
+	@echo "  pre-commit-install - Install pre-commit hooks"
+	@echo "  pre-commit-run - Run pre-commit on all files"
+	@echo "  pre-commit-update - Update pre-commit hooks"
 	@echo "  help           - Show this help"

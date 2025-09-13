@@ -1,0 +1,47 @@
+# Pre-commit configuration for telegram-media-server
+# See https://pre-commit.com for more information
+
+repos:
+  # Built-in hooks (read-only checks only)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+
+  # Go specific hooks
+  - repo: local
+    hooks:
+      # Go linting (read-only check)
+      - id: go-lint
+        name: Go Lint
+        entry: make lint
+        language: system
+        files: '\.go$'
+        pass_filenames: false
+
+      # Go vet (read-only check)
+      - id: go-vet
+        name: Go Vet
+        entry: make vet
+        language: system
+        files: '\.go$'
+        pass_filenames: false
+
+      # Go unit tests (read-only check)
+      - id: go-test-unit
+        name: Go Unit Tests
+        entry: make test-unit
+        language: system
+        files: '\.go$'
+        pass_filenames: false
+
+# Global settings
+default_stages: [pre-commit]
+fail_fast: false
+minimum_pre_commit_version: '2.20.0'
