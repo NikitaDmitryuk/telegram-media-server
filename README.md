@@ -1,5 +1,10 @@
 ![](images/logo.jpg)
 
+[![CI](https://github.com/NikitaDmitryuk/telegram-media-server/workflows/CI/badge.svg)](https://github.com/NikitaDmitryuk/telegram-media-server/actions)
+[![codecov](https://codecov.io/gh/NikitaDmitryuk/telegram-media-server/branch/main/graph/badge.svg)](https://codecov.io/gh/NikitaDmitryuk/telegram-media-server)
+[![Go Report Card](https://goreportcard.com/badge/github.com/NikitaDmitryuk/telegram-media-server)](https://goreportcard.com/report/github.com/NikitaDmitryuk/telegram-media-server)
+[![License](https://img.shields.io/github/license/NikitaDmitryuk/telegram-media-server)](LICENSE)
+
 **Telegram Media Server** — это Telegram-бот, который принимает ссылки на стриминговое видео или торрент-файлы, загружает их и раздает во внутренней сети через DLNA-сервер (например, `minidlna`).  
 **Telegram Media Server** is a Telegram bot that accepts links to streaming videos or torrent files, downloads them, and distributes them on the internal network via a DLNA server (e.g., `minidlna`).
 
@@ -215,3 +220,15 @@ See the full list in the [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp
    PROWLARR_API_KEY=your_prowlarr_api_key
    ```
    If variables are not set, integration will be disabled.
+
+### Pre-commit hooks
+
+Установка pre-commit hooks для автоматических проверок:
+```bash
+make pre-commit-install
+```
+
+Install pre-commit hooks for automatic checks:
+```bash
+make pre-commit-install
+```
