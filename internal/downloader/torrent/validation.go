@@ -79,11 +79,12 @@ func hasValidBencodeStructure(data []byte, length int) bool {
 	// Look for bencode-specific torrent field patterns like "8:announce" or "4:info"
 	torrentPatterns := []string{
 		"8:announce", "9:announce", // announce field
-		"4:info",          // info field
-		"12:piece length", // piece length field
-		"6:pieces",        // pieces field
-		"4:name",          // name field in info
-		"5:files",         // files field in info
+		"13:announce-list", // announce-list field (alternative to announce)
+		"4:info",           // info field
+		"12:piece length",  // piece length field
+		"6:pieces",         // pieces field
+		"4:name",           // name field in info
+		"5:files",          // files field in info
 	}
 
 	foundPatterns := 0

@@ -208,6 +208,52 @@ check: lint vet test-unit
 pre-commit: format check
 	@echo "Pre-commit checks completed successfully!"
 
+.PHONY: pre-commit-install
+pre-commit-install:
+	@echo "Installing pre-commit hooks..."
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit install; \
+		echo "✅ Pre-commit hooks installed successfully!"; \
+	else \
+		echo "⚠️  pre-commit not found. Installing..."; \
+		if command -v brew >/dev/null 2>&1; then \
+			echo "Installing via Homebrew..."; \
+			brew install pre-commit; \
+		elif command -v pip3 >/dev/null 2>&1; then \
+			echo "Installing via pip3..."; \
+			pip3 install pre-commit; \
+		elif command -v pip >/dev/null 2>&1; then \
+			echo "Installing via pip..."; \
+			pip install pre-commit; \
+		else \
+			echo "❌ No package manager found. Please install pre-commit manually."; \
+			exit 1; \
+		fi; \
+		pre-commit install; \
+		echo "✅ Pre-commit installed and hooks configured!"; \
+	fi
+
+.PHONY: pre-commit-run
+pre-commit-run:
+	@echo "Running pre-commit on all files..."
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit run --all-files; \
+	else \
+		echo "❌ pre-commit not installed. Run 'make pre-commit-install' first."; \
+		exit 1; \
+	fi
+
+.PHONY: pre-commit-update
+pre-commit-update:
+	@echo "Updating pre-commit hooks..."
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit autoupdate; \
+		echo "✅ Pre-commit hooks updated!"; \
+	else \
+		echo "❌ pre-commit not installed. Run 'make pre-commit-install' first."; \
+		exit 1; \
+	fi
+
 .PHONY: help
 help:
 	@echo "Available targets:"
@@ -248,4 +294,7 @@ help:
 	@echo "Utility:"
 	@echo "  check          - Run all checks (lint + vet + test-unit)"
 	@echo "  pre-commit     - Run pre-commit checks (format + check)"
+	@echo "  pre-commit-install - Install pre-commit hooks"
+	@echo "  pre-commit-run - Run pre-commit on all files"
+	@echo "  pre-commit-update - Update pre-commit hooks"
 	@echo "  help           - Show this help"
