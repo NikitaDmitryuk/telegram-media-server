@@ -147,18 +147,28 @@ security-check:
 # Testing
 .PHONY: test
 test:
-	@echo "Running tests..."
+	@echo "Running all tests..."
 	go test -v ./...
 
 .PHONY: test-unit
 test-unit:
-	@echo "Running unit tests..."
+	@echo "Running unit tests (fast, no external dependencies)..."
 	go test -v -short ./...
 
 .PHONY: test-integration
 test-integration:
-	@echo "Running integration tests..."
-	go test -v -run Integration ./...
+	@echo "Running integration tests (without external tools)..."
+	go test -v -run Integration ./internal/handlers/auth
+	go test -v -run "TestValidateContentIntegration" ./internal/downloader/torrent
+
+.PHONY: test-docker
+test-docker: docker-test-build
+	@echo "Running tests that require external tools (yt-dlp, aria2, ffmpeg)..."
+	docker run --rm \
+		-v $(pwd):/workspace \
+		-w /workspace \
+		telegram-media-server:test \
+		go test -v ./internal/downloader/torrent ./internal/downloader/video -run "Integration|TestTorrentDownload|TestVideo.*Integration"
 
 .PHONY: test-coverage
 test-coverage:
@@ -166,22 +176,6 @@ test-coverage:
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	go tool cover -func=coverage.out
-
-# Specific module tests (used by CI)
-.PHONY: test-config
-test-config:
-	@echo "Running config tests..."
-	go test -v ./internal/config/...
-
-.PHONY: test-torrent
-test-torrent:
-	@echo "Running torrent tests..."
-	go test -v ./internal/downloader/torrent/...
-
-.PHONY: test-video
-test-video:
-	@echo "Running video tests..."
-	go test -v ./internal/downloader/video/...
 
 # Docker commands
 .PHONY: run
@@ -214,14 +208,6 @@ docker-test-build:
 	@echo "Building Docker test image..."
 	docker build -f Dockerfile.test -t telegram-media-server:test .
 
-.PHONY: test-integration-docker
-test-integration-docker: docker-test-build
-	@echo "Running integration tests in Docker..."
-	docker run --rm \
-		-v $(PWD):/workspace \
-		-w /workspace \
-		telegram-media-server:test \
-		go test -v -tags=integration ./internal/downloader/...
 
 # Utility commands
 .PHONY: check
@@ -302,13 +288,10 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  test           - Run all tests"
-	@echo "  test-integration-docker - Run integration tests in Docker"
-	@echo "  test-unit      - Run unit tests only (fast)"
-	@echo "  test-integration - Run integration tests (slow)"
+	@echo "  test-unit      - Run unit tests (fast, no external dependencies)"
+	@echo "  test-integration - Run integration tests (without external tools)"
+	@echo "  test-docker    - Run tests requiring external tools (yt-dlp, aria2, ffmpeg)"
 	@echo "  test-coverage  - Run tests with coverage report"
-	@echo "  test-config    - Run config tests"
-	@echo "  test-torrent   - Run torrent tests"
-	@echo "  test-video     - Run video tests"
 	@echo ""
 	@echo "Service Management:"
 	@echo "  status         - Check service status"
