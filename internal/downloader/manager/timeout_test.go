@@ -14,7 +14,6 @@ func TestMonitorDownloadWithoutTimeout(t *testing.T) {
 	}
 
 	cfg := testutils.TestConfig("/tmp")
-	// Устанавливаем таймаут в 0 (без таймаута)
 	cfg.DownloadSettings.DownloadTimeout = 0
 	cfg.DownloadSettings.ProgressUpdateInterval = 100 * time.Millisecond
 
@@ -22,7 +21,6 @@ func TestMonitorDownloadWithoutTimeout(t *testing.T) {
 
 	manager := NewDownloadManager(cfg, db)
 
-	// Создаем фейковый downloader, который не завершается
 	fakeDownloader := &testutils.MockDownloader{
 		ShouldBlock: true,
 	}
@@ -40,17 +38,14 @@ func TestMonitorDownloadWithoutTimeout(t *testing.T) {
 		cancel:       func() {},
 	}
 
-	// Запускаем мониторинг в горутине
 	go manager.monitorDownload(movieID, &job, outerErrChan)
 
-	// Проверяем, что за разумное время не происходит таймаут
 	select {
 	case err := <-outerErrChan:
 		if err != nil && err.Error() == "download timeout after 0s" {
 			t.Errorf("Unexpected timeout error when timeout is disabled: %v", err)
 		}
 	case <-time.After(300 * time.Millisecond):
-		// Ожидаемо - никакого таймаута не должно быть
 	}
 }
 
@@ -60,7 +55,6 @@ func TestMonitorDownloadWithTimeout(t *testing.T) {
 	}
 
 	cfg := testutils.TestConfig("/tmp")
-	// Устанавливаем короткий таймаут
 	cfg.DownloadSettings.DownloadTimeout = 200 * time.Millisecond
 	cfg.DownloadSettings.ProgressUpdateInterval = 50 * time.Millisecond
 
@@ -68,7 +62,6 @@ func TestMonitorDownloadWithTimeout(t *testing.T) {
 
 	manager := NewDownloadManager(cfg, db)
 
-	// Создаем фейковый downloader, который будет блокироваться
 	fakeDownloader := &testutils.MockDownloader{
 		ShouldBlock: true,
 	}
@@ -86,10 +79,8 @@ func TestMonitorDownloadWithTimeout(t *testing.T) {
 		cancel:       func() {},
 	}
 
-	// Запускаем мониторинг
 	go manager.monitorDownload(movieID, &job, outerErrChan)
 
-	// Ожидаем таймаут
 	select {
 	case err := <-outerErrChan:
 		if err == nil {
@@ -106,7 +97,6 @@ func TestMonitorDownloadWithTimeout(t *testing.T) {
 }
 
 func TestConfigurationTimeoutInheritance(t *testing.T) {
-	// Проверяем, что конфигурация правильно передается в менеджер
 	cfg := testutils.TestConfig("/tmp")
 	cfg.DownloadSettings.DownloadTimeout = 42 * time.Minute
 
@@ -120,7 +110,6 @@ func TestConfigurationTimeoutInheritance(t *testing.T) {
 }
 
 func TestZeroTimeoutConfiguration(t *testing.T) {
-	// Проверяем, что нулевой таймаут правильно обрабатывается
 	cfg := testutils.TestConfig("/tmp")
 	cfg.DownloadSettings.DownloadTimeout = 0
 

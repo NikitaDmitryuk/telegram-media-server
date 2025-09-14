@@ -40,16 +40,12 @@ func TestDownloadTimeoutValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Очистить переменную окружения
 			os.Unsetenv("DOWNLOAD_TIMEOUT")
-
-			// Установить тестовое значение если нужно
 			if tt.envValue != "" {
 				os.Setenv("DOWNLOAD_TIMEOUT", tt.envValue)
 				defer os.Unsetenv("DOWNLOAD_TIMEOUT")
 			}
 
-			// Установить обязательные переменные
 			os.Setenv("BOT_TOKEN", "test_token")
 			os.Setenv("ADMIN_PASSWORD", "test_password_123")
 			os.Setenv("MOVIE_PATH", "/tmp")
@@ -81,7 +77,6 @@ func TestDownloadTimeoutValidation(t *testing.T) {
 }
 
 func TestDownloadTimeoutFromEnvExample(t *testing.T) {
-	// Тест проверяет, что значение из .env.example корректно обрабатывается
 	os.Setenv("DOWNLOAD_TIMEOUT", "60m")
 	os.Setenv("BOT_TOKEN", "test_token")
 	os.Setenv("ADMIN_PASSWORD", "test_password_123")

@@ -542,15 +542,13 @@ func (m *MockDownloader) StartDownload(ctx context.Context) (progressChan chan f
 		}
 
 		if m.ShouldBlock {
-			// Блокируемся до отмены контекста для тестирования таймаутов
 			<-ctx.Done()
 			errChan <- ctx.Err()
 			return
 		}
 
-		// Симулируем быструю загрузку
 		progressChan <- 100.0
-		errChan <- nil // Успешное завершение
+		errChan <- nil
 	}()
 
 	return progressChan, errChan, nil

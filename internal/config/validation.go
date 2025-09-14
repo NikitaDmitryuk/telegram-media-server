@@ -80,7 +80,6 @@ func (c *Config) validateDownloadSettings() error {
 		return errors.New("MAX_CONCURRENT_DOWNLOADS must be greater than 0")
 	}
 
-	// DownloadTimeout может быть 0 (без таймаута) или положительным значением
 	if c.DownloadSettings.DownloadTimeout < 0 {
 		return errors.New("DOWNLOAD_TIMEOUT cannot be negative")
 	}
