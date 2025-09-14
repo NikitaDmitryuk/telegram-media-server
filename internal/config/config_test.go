@@ -149,7 +149,6 @@ func TestConfigValidation(t *testing.T) {
 	}
 }
 
-//nolint:gocyclo // Test function validating many default values
 func TestConfigDefaults(t *testing.T) {
 	// Clear all environment variables
 	envVars := []string{
@@ -194,8 +193,8 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("Expected default max concurrent downloads 3, got %d", config.DownloadSettings.MaxConcurrentDownloads)
 	}
 
-	if config.DownloadSettings.DownloadTimeout != 0 && config.DownloadSettings.DownloadTimeout != 30*time.Minute {
-		t.Errorf("Expected default download timeout 0 or 30m, got %v", config.DownloadSettings.DownloadTimeout)
+	if config.DownloadSettings.DownloadTimeout != 0 {
+		t.Errorf("Expected default download timeout 0 (no timeout), got %v", config.DownloadSettings.DownloadTimeout)
 	}
 
 	if config.DownloadSettings.ProgressUpdateInterval != 3*time.Second {

@@ -4,12 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 )
 
 const (
 	MinPasswordLength = 8
-	DefaultTimeout    = 30 * time.Minute
 )
 
 func (c *Config) validate() error {
@@ -82,8 +80,9 @@ func (c *Config) validateDownloadSettings() error {
 		return errors.New("MAX_CONCURRENT_DOWNLOADS must be greater than 0")
 	}
 
-	if c.DownloadSettings.DownloadTimeout <= 0 {
-		c.DownloadSettings.DownloadTimeout = DefaultTimeout
+	// DownloadTimeout может быть 0 (без таймаута) или положительным значением
+	if c.DownloadSettings.DownloadTimeout < 0 {
+		return errors.New("DOWNLOAD_TIMEOUT cannot be negative")
 	}
 
 	return nil
