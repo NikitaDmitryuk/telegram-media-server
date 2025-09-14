@@ -471,3 +471,90 @@ func WaitForCondition(t *testing.T, condition func() bool, timeout time.Duration
 		}
 	}
 }
+
+// MockDownloader implements the downloader interface for testing
+type MockDownloader struct {
+	ShouldBlock     bool
+	ShouldError     bool
+	ErrorMessage    string
+	Title           string
+	Files           []string
+	TempFiles       []string
+	FileSize        int64
+	stoppedManually bool
+}
+
+func (m *MockDownloader) GetTitle() (string, error) {
+	if m.ShouldError {
+		return "", fmt.Errorf("mock title error")
+	}
+	if m.Title != "" {
+		return m.Title, nil
+	}
+	return "Mock Download", nil
+}
+
+func (m *MockDownloader) GetFiles() (mainFiles, tempFiles []string, err error) {
+	if m.ShouldError {
+		return nil, nil, fmt.Errorf("mock files error")
+	}
+	mainFiles = m.Files
+	if len(mainFiles) == 0 {
+		mainFiles = []string{"/tmp/mock_file.mp4"}
+	}
+	tempFiles = m.TempFiles
+	if len(tempFiles) == 0 {
+		tempFiles = []string{"/tmp/mock_temp.torrent"}
+	}
+	return mainFiles, tempFiles, nil
+}
+
+func (m *MockDownloader) GetFileSize() (int64, error) {
+	if m.ShouldError {
+		return 0, fmt.Errorf("mock filesize error")
+	}
+	if m.FileSize > 0 {
+		return m.FileSize, nil
+	}
+	const defaultFileSize = 1024
+	return defaultFileSize, nil
+}
+
+func (m *MockDownloader) StoppedManually() bool {
+	return m.stoppedManually
+}
+
+func (m *MockDownloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
+	progressChan = make(chan float64, 1)
+	errChan = make(chan error, 1)
+
+	if m.ShouldError && m.ErrorMessage != "" {
+		return nil, nil, fmt.Errorf("%s", m.ErrorMessage)
+	}
+
+	go func() {
+		defer close(progressChan)
+		defer close(errChan)
+
+		if m.ShouldError {
+			errChan <- fmt.Errorf("mock download error")
+			return
+		}
+
+		if m.ShouldBlock {
+			<-ctx.Done()
+			errChan <- ctx.Err()
+			return
+		}
+
+		progressChan <- 100.0
+		errChan <- nil
+	}()
+
+	return progressChan, errChan, nil
+}
+
+func (m *MockDownloader) StopDownload() error {
+	m.stoppedManually = true
+	return nil
+}

@@ -33,8 +33,13 @@ func (dm *DownloadManager) monitorDownload(
 	updateTicker := time.NewTicker(dm.downloadSettings.ProgressUpdateInterval)
 	defer updateTicker.Stop()
 
-	timeoutTimer := time.NewTimer(dm.downloadSettings.DownloadTimeout)
-	defer timeoutTimer.Stop()
+	var timeoutTimer *time.Timer
+	var timeoutChan <-chan time.Time
+	if dm.downloadSettings.DownloadTimeout > 0 {
+		timeoutTimer = time.NewTimer(dm.downloadSettings.DownloadTimeout)
+		timeoutChan = timeoutTimer.C
+		defer timeoutTimer.Stop()
+	}
 
 	for {
 		select {
@@ -123,11 +128,13 @@ func (dm *DownloadManager) monitorDownload(
 			}
 			dm.mu.RUnlock()
 
-		case <-timeoutTimer.C:
-			err := fmt.Errorf("download timeout after %v", dm.downloadSettings.DownloadTimeout)
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Download timed out")
-			outerErrChan <- err
-			return
+		case <-timeoutChan:
+			if timeoutChan != nil {
+				err := fmt.Errorf("download timeout after %v", dm.downloadSettings.DownloadTimeout)
+				logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Download timed out")
+				outerErrChan <- err
+				return
+			}
 
 		case <-job.ctx.Done():
 			logutils.Log.WithField("movie_id", movieID).Info("Download canceled")

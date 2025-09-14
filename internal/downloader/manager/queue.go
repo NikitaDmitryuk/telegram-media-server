@@ -117,6 +117,14 @@ func (dm *DownloadManager) addToQueue(
 		updateTicker := time.NewTicker(QueueProgressUpdateInterval)
 		defer updateTicker.Stop()
 
+		var timeoutTimer *time.Timer
+		var timeoutChan <-chan time.Time
+		if dm.downloadSettings.DownloadTimeout > 0 {
+			timeoutTimer = time.NewTimer(dm.downloadSettings.DownloadTimeout)
+			timeoutChan = timeoutTimer.C
+			defer timeoutTimer.Stop()
+		}
+
 		for {
 			select {
 			case <-updateTicker.C:
@@ -134,18 +142,20 @@ func (dm *DownloadManager) addToQueue(
 					return
 				}
 
-			case <-time.After(dm.downloadSettings.DownloadTimeout):
-				dm.queueMutex.Lock()
-				for i, item := range dm.queue {
-					if item.movieID == movieID {
-						dm.queue = append(dm.queue[:i], dm.queue[i+1:]...)
-						break
+			case <-timeoutChan:
+				if timeoutChan != nil {
+					dm.queueMutex.Lock()
+					for i, item := range dm.queue {
+						if item.movieID == movieID {
+							dm.queue = append(dm.queue[:i], dm.queue[i+1:]...)
+							break
+						}
 					}
-				}
-				dm.queueMutex.Unlock()
+					dm.queueMutex.Unlock()
 
-				outerErrChan <- fmt.Errorf("download timeout in queue")
-				return
+					outerErrChan <- fmt.Errorf("download timeout in queue")
+					return
+				}
 			}
 		}
 	}()

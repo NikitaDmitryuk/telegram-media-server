@@ -34,7 +34,7 @@ func TestShouldUseProxy(t *testing.T) {
 		{
 			url:          "https://example.com",
 			proxyDomains: "",
-			expected:     true, // Если прокси настроен, но доменов нет, всё равно может использовать прокси
+			expected:     true,
 		},
 	}
 
@@ -42,7 +42,7 @@ func TestShouldUseProxy(t *testing.T) {
 		t.Run(tt.url, func(t *testing.T) {
 			tempCfg := *cfg
 			tempCfg.ProxyDomains = tt.proxyDomains
-			tempCfg.Proxy = "http://proxy.example.com:8080" // Нужен для проверки
+			tempCfg.Proxy = "http://proxy.example.com:8080"
 			result, err := shouldUseProxy(tt.url, &tempCfg)
 			if err != nil {
 				t.Errorf("shouldUseProxy(%s) failed: %v", tt.url, err)
