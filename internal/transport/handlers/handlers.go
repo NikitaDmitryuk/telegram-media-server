@@ -26,7 +26,9 @@ func HandleCommand(bot domain.BotInterface, update *tgbotapi.Update, db database
 
 	switch command {
 	case "start":
-		bot.SendMessage(chatID, lang.Translate("general.commands.start", nil), nil)
+		// Создаем меню с кнопками
+		keyboard := createMainMenuKeyboard()
+		bot.SendMessage(chatID, lang.Translate("general.commands.start", nil), keyboard)
 	case "ls":
 		movies, err := db.GetMovieList(context.Background())
 		if err != nil {
@@ -35,7 +37,7 @@ func HandleCommand(bot domain.BotInterface, update *tgbotapi.Update, db database
 		}
 
 		if len(movies) == 0 {
-			bot.SendMessage(chatID, lang.Translate("general.movies.no_movies", nil), nil)
+			bot.SendMessage(chatID, lang.Translate("general.status_messages.empty_list", nil), nil)
 			return
 		}
 
@@ -54,4 +56,15 @@ func HandleCommand(bot domain.BotInterface, update *tgbotapi.Update, db database
 	default:
 		bot.SendMessage(chatID, lang.Translate("error.commands.unknown_command", nil), nil)
 	}
+}
+
+// createMainMenuKeyboard создает основное меню с кнопками
+func createMainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	return tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton(lang.Translate("general.interface.list_movies", nil)),
+			tgbotapi.NewKeyboardButton(lang.Translate("general.interface.delete_movie", nil)),
+			tgbotapi.NewKeyboardButton(lang.Translate("general.interface.search_torrents", nil)),
+		),
+	)
 }

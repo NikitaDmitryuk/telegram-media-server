@@ -31,5 +31,7 @@ func convertConfig(cfg *config.Config) *domain.Config {
 		ProwlarrURL:    cfg.ProwlarrURL,
 		ProwlarrAPIKey: cfg.ProwlarrAPIKey,
 		LogLevel:       cfg.LogLevel,
+		Lang:           cfg.Lang,
+		LangPath:       cfg.LangPath,
 	}
 }
