@@ -86,6 +86,8 @@ func initializeBotAndServices(appContainer *container.Container, domainConfig *d
 		logger.Log.WithError(err).Fatal("Bot initialization failed")
 		return err
 	}
+	// Устанавливаем конфигурацию в бот
+	botInstance.Config = domainConfig
 	appContainer.SetBot(botInstance)
 
 	// Инициализируем Prowlarr (если настроен)

@@ -53,6 +53,12 @@ func loadNestedJSONFile(bundle *i18n.Bundle, filename string) error {
 	// Преобразуем в плоскую структуру
 	flatData := flattenMap(nestedData, "")
 
+	// Debug: выводим все созданные ключи
+	logger.Log.Info("Flattened localization keys:")
+	for key, value := range flatData {
+		logger.Log.Debugf("Key: '%s' -> Value: '%s'", key, value)
+	}
+
 	// Создаем массив сообщений для go-i18n
 	var messages []map[string]string
 	for key, value := range flatData {

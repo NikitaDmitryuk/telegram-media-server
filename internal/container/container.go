@@ -9,6 +9,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/filesystem"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/notification"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/pkg/validation"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/process"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/timeutil"
 )
@@ -28,6 +29,7 @@ type Container struct {
 	timeProvider        domain.TimeProvider
 	downloaderFactory   domain.DownloaderFactory
 	notificationService domain.NotificationService
+	urlValidator        domain.URLValidator
 
 	// Сервисы
 	authService     domain.AuthServiceInterface
@@ -126,6 +128,7 @@ func (c *Container) GetDownloadService() domain.DownloadServiceInterface {
 			c.GetNotificationService(),
 			c.GetDatabase(),
 			c.GetConfig(),
+			c.GetBot(),
 		)
 	}
 	return c.downloadService
@@ -175,7 +178,7 @@ func (c *Container) GetDownloaderFactory() domain.DownloaderFactory {
 		c.downloaderFactory = factories.NewDownloaderFactory(
 			c.GetBot(),
 			c.GetNotificationService(),
-			nil, // URL validator будет добавлен позже
+			c.GetURLValidator(),
 			c.GetFileSystem(),
 			c.GetProcessExecutor(),
 			c.GetTimeProvider(),
@@ -213,6 +216,19 @@ func (c *Container) GetTimeProvider() domain.TimeProvider {
 // SetTimeProvider устанавливает провайдер времени
 func (c *Container) SetTimeProvider(provider domain.TimeProvider) {
 	c.timeProvider = provider
+}
+
+// GetURLValidator возвращает URL валидатор
+func (c *Container) GetURLValidator() domain.URLValidator {
+	if c.urlValidator == nil {
+		c.urlValidator = validation.NewDefaultURLValidator()
+	}
+	return c.urlValidator
+}
+
+// SetURLValidator устанавливает URL валидатор
+func (c *Container) SetURLValidator(validator domain.URLValidator) {
+	c.urlValidator = validator
 }
 
 // Validate проверяет, что все необходимые зависимости установлены

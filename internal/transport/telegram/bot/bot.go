@@ -106,6 +106,21 @@ func (b *Bot) DeleteMessage(chatID int64, messageID int) error {
 	return err
 }
 
+// SendMessageWithMarkup отправляет сообщение с inline клавиатурой
+func (b *Bot) SendMessageWithMarkup(chatID int64, text string, markup tgbotapi.InlineKeyboardMarkup) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = markup
+
+	_, err := b.Api.Send(msg)
+	if err != nil {
+		logger.Log.WithError(err).Errorf("Failed to send message with markup to chat %d", chatID)
+		return err
+	}
+
+	logger.Log.Debugf("Message with markup sent to chat %d", chatID)
+	return nil
+}
+
 func (b *Bot) SaveFile(fileName string, data []byte) error {
 	path := filepath.Join(b.Config.MoviePath, fileName)
 	f, err := os.Create(path)

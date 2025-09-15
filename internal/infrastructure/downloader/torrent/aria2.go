@@ -86,12 +86,25 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan 
 		defer close(progressChan)
 		defer close(errChan)
 
-		go d.parseProgress(stdout, progressChan)
+		// Запускаем парсинг прогресса в отдельной горутине
+		progressDone := make(chan struct{})
+		go func() {
+			defer close(progressDone)
+			d.parseProgress(stdout, progressChan)
+		}()
 
-		if err := d.cmd.Wait(); err != nil && !d.stoppedManually {
+		// Ждем завершения процесса
+		err := d.cmd.Wait()
+
+		// Ждем завершения парсинга прогресса
+		<-progressDone
+
+		// Отправляем результат в канал ошибок
+		if err != nil && !d.stoppedManually {
 			logger.Log.WithError(err).Warn("aria2c exited with error")
 			errChan <- err
 		} else {
+			logger.Log.Info("aria2c completed successfully")
 			errChan <- nil
 		}
 	}()
@@ -103,6 +116,8 @@ func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
 	reProgress := regexp.MustCompile(`\(\s*(\d+\.?\d*)%\s*\)`)
 	scanner := bufio.NewScanner(r)
 
+	logger.Log.Info("Starting aria2 output parsing")
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		logger.Log.Debugf("aria2c output: %s", line)
@@ -110,7 +125,9 @@ func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
 		matches := reProgress.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			if prog, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				logger.Log.WithField("progress", prog).Debug("Sending progress update")
 				progressChan <- prog
+				logger.Log.WithField("progress", prog).Debug("Progress update sent")
 			} else {
 				logger.Log.WithError(err).Error("failed to parse progress value")
 			}
@@ -119,6 +136,8 @@ func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
 	if err := scanner.Err(); err != nil {
 		logger.Log.WithError(err).Error("error reading aria2c output")
 	}
+
+	logger.Log.Info("Finished aria2 output parsing")
 }
 
 func (d *Aria2Downloader) StopDownload() error {

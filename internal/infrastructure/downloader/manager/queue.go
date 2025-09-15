@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/downloader"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/domain"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/pkg/logger"
 )
 
@@ -74,7 +74,7 @@ func (dm *DownloadManager) startQueuedDownload(queued queuedDownload) {
 
 func (dm *DownloadManager) addToQueue(
 	movieID uint,
-	dl downloader.Downloader,
+	dl domain.Downloader,
 	movieTitle string,
 	chatID int64,
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error) {

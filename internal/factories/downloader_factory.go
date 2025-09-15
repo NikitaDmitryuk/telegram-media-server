@@ -2,6 +2,7 @@ package factories
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/domain"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/errors"
@@ -80,7 +81,9 @@ func (f *DefaultDownloaderFactory) CreateTorrentDownloader(
 	}
 
 	// Создаем загрузчик с полными зависимостями
-	torrentDownloader := aria2.NewAria2Downloader(f.bot, fileName, moviePath, config)
+	// Извлекаем только имя файла из полного пути
+	torrentFileName := filepath.Base(fileName)
+	torrentDownloader := aria2.NewAria2Downloader(f.bot, torrentFileName, moviePath, config)
 
 	return torrentDownloader, nil
 }

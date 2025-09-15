@@ -10,6 +10,7 @@ import (
 // BotInterface определяет интерфейс для работы с Telegram Bot API
 type BotInterface interface {
 	SendMessage(chatID int64, text string, keyboard any)
+	SendMessageWithMarkup(chatID int64, text string, markup tgbotapi.InlineKeyboardMarkup) error
 	DownloadFile(fileID, fileName string) error
 	SaveFile(fileName string, data []byte) error
 	AnswerCallbackQuery(callbackConfig tgbotapi.CallbackConfig)

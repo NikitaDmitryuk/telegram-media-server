@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/domain"
@@ -19,6 +20,7 @@ type DownloadService struct {
 	notificationService domain.NotificationService
 	db                  database.Database
 	cfg                 *domain.Config
+	bot                 domain.BotInterface
 }
 
 // NewDownloadService создает новый сервис загрузок
@@ -28,6 +30,7 @@ func NewDownloadService(
 	notificationService domain.NotificationService,
 	db database.Database,
 	cfg *domain.Config,
+	bot domain.BotInterface,
 ) domain.DownloadServiceInterface {
 	return &DownloadService{
 		downloadManager:     downloadManager,
@@ -35,6 +38,7 @@ func NewDownloadService(
 		notificationService: notificationService,
 		db:                  db,
 		cfg:                 cfg,
+		bot:                 bot,
 	}
 }
 
@@ -62,12 +66,7 @@ func (s *DownloadService) HandleVideoLink(ctx context.Context, link string, chat
 			})
 	}
 
-	// Уведомляем о начале загрузки
-	if err := s.notificationService.NotifyDownloadStarted(ctx, chatID, "Video"); err != nil {
-		logger.Log.WithError(err).Warn("Failed to send download started notification")
-	}
-
-	// Запускаем мониторинг загрузки в горутине
+	// Запускаем мониторинг загрузки в горутине (уведомление отправляется в monitorDownload)
 	go s.monitorDownload(ctx, movieID, progressChan, errChan, chatID, "Video")
 
 	logger.Log.WithFields(map[string]any{
@@ -81,16 +80,25 @@ func (s *DownloadService) HandleVideoLink(ctx context.Context, link string, chat
 
 // HandleTorrentFile обрабатывает торрент файл
 func (s *DownloadService) HandleTorrentFile(ctx context.Context, fileData []byte, fileName string, chatID int64) error {
-	// Валидация теперь происходит в фабрике
-
 	logger.Log.WithFields(map[string]any{
 		"filename": fileName,
 		"chat_id":  chatID,
 		"size":     len(fileData),
 	}).Info("Starting torrent download")
 
-	// Создаем downloader через фабрику
-	downloader, err := s.downloaderFactory.CreateTorrentDownloader(ctx, fileName, s.cfg.MoviePath, s.cfg)
+	// Сначала сохраняем торрент-файл на диск
+	if err := s.bot.SaveFile(fileName, fileData); err != nil {
+		return errors.WrapDomainError(err, errors.ErrorTypeValidation, "save_torrent_failed", "failed to save torrent file to disk").
+			WithDetails(map[string]any{
+				"filename": fileName,
+				"chat_id":  chatID,
+			})
+	}
+
+	// Создаем downloader через фабрику (теперь файл существует на диске)
+	// Передаем полный путь к файлу для проверки существования
+	fullPath := filepath.Join(s.cfg.MoviePath, fileName)
+	downloader, err := s.downloaderFactory.CreateTorrentDownloader(ctx, fullPath, s.cfg.MoviePath, s.cfg)
 	if err != nil {
 		return errors.WrapDomainError(err, errors.ErrorTypeValidation, "invalid_torrent_file", "failed to create torrent downloader")
 	}
@@ -104,12 +112,7 @@ func (s *DownloadService) HandleTorrentFile(ctx context.Context, fileData []byte
 			})
 	}
 
-	// Уведомляем о начале загрузки
-	if err := s.notificationService.NotifyDownloadStarted(ctx, chatID, fileName); err != nil {
-		logger.Log.WithError(err).Warn("Failed to send download started notification")
-	}
-
-	// Запускаем мониторинг загрузки в горутине
+	// Запускаем мониторинг загрузки в горутине (уведомление отправляется в monitorDownload)
 	go s.monitorDownload(ctx, movieID, progressChan, errChan, chatID, fileName)
 
 	logger.Log.WithFields(map[string]any{
@@ -181,6 +184,12 @@ func (s *DownloadService) monitorDownload(
 	chatID int64,
 	title string,
 ) {
+	logger.Log.WithFields(map[string]any{
+		"movie_id": movieID,
+		"chat_id":  chatID,
+		"title":    title,
+	}).Info("Starting download monitoring")
+
 	ticker := time.NewTicker(s.cfg.DownloadSettings.ProgressUpdateInterval)
 	defer ticker.Stop()
 
@@ -190,16 +199,26 @@ func (s *DownloadService) monitorDownload(
 		select {
 		case progress, ok := <-progressChan:
 			if !ok {
+				logger.Log.WithField("movie_id", movieID).Info("Progress channel closed - monitoring complete")
 				s.handleProgressChannelClosed(movieID)
 				return
 			}
+			logger.Log.WithFields(map[string]any{
+				"movie_id": movieID,
+				"progress": progress,
+			}).Debug("Received progress update")
 			s.handleProgressUpdate(ctx, movieID, progress, chatID, title)
 
 		case err, ok := <-errChan:
 			if !ok {
+				logger.Log.WithField("movie_id", movieID).Info("Error channel closed - download completed")
 				s.handleErrorChannelClosed(ctx, movieID, chatID, title)
 				return
 			}
+			logger.Log.WithFields(map[string]any{
+				"movie_id": movieID,
+				"error":    err,
+			}).Info("Received error result")
 			s.handleDownloadResult(ctx, movieID, err, chatID, title)
 			return
 
@@ -216,8 +235,16 @@ func (s *DownloadService) monitorDownload(
 
 // notifyDownloadStarted отправляет уведомление о начале загрузки
 func (s *DownloadService) notifyDownloadStarted(ctx context.Context, chatID int64, title string, movieID uint) {
+	logger.Log.WithFields(map[string]any{
+		"movie_id": movieID,
+		"chat_id":  chatID,
+		"title":    title,
+	}).Info("Sending download started notification")
+
 	if err := s.notificationService.NotifyDownloadStarted(ctx, chatID, title); err != nil {
 		logger.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to send download started notification")
+	} else {
+		logger.Log.WithField("movie_id", movieID).Info("Download started notification sent successfully")
 	}
 }
 
@@ -228,20 +255,38 @@ func (*DownloadService) handleProgressChannelClosed(movieID uint) {
 
 // handleProgressUpdate обрабатывает обновление прогресса
 func (s *DownloadService) handleProgressUpdate(ctx context.Context, movieID uint, progress float64, chatID int64, title string) {
+	logger.Log.WithFields(map[string]any{
+		"movie_id": movieID,
+		"progress": progress,
+		"chat_id":  chatID,
+	}).Info("Handling progress update")
+
 	if err := s.db.UpdateDownloadedPercentage(ctx, movieID, int(progress)); err != nil {
 		logger.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to update download progress")
 	}
 
 	if err := s.notificationService.NotifyDownloadProgress(ctx, chatID, title, int(progress)); err != nil {
 		logger.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to send download progress notification")
+	} else {
+		logger.Log.WithFields(map[string]any{
+			"movie_id": movieID,
+			"progress": progress,
+		}).Info("Progress notification sent successfully")
 	}
 }
 
 // handleErrorChannelClosed обрабатывает закрытие канала ошибок
 func (s *DownloadService) handleErrorChannelClosed(ctx context.Context, movieID uint, chatID int64, title string) {
-	logger.Log.WithField("movie_id", movieID).Debug("Error channel closed")
+	logger.Log.WithFields(map[string]any{
+		"movie_id": movieID,
+		"chat_id":  chatID,
+		"title":    title,
+	}).Info("Error channel closed - sending completion notification")
+
 	if err := s.notificationService.NotifyDownloadCompleted(ctx, chatID, title); err != nil {
 		logger.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to send download completed notification")
+	} else {
+		logger.Log.WithField("movie_id", movieID).Info("Download completed notification sent successfully")
 	}
 }
 

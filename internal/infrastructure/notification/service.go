@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/domain"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -21,19 +22,18 @@ func NewTelegramNotificationService(bot domain.BotInterface) domain.Notification
 
 // NotifyDownloadStarted уведомляет о начале загрузки
 func (s *TelegramNotificationService) NotifyDownloadStarted(_ context.Context, chatID int64, title string) error {
-	message := lang.Translate("downloads.notifications.started", map[string]any{
+	message := lang.Translate("general.downloads.notifications.started", map[string]any{
 		"title": title,
 	})
 
-	if message == "downloads.notifications.started" {
-		message = lang.Translate("downloads.notifications.started", map[string]any{
-			"title": title,
+	// Если локализация не сработала, используем fallback из старой версии
+	if message == "general.downloads.notifications.started" {
+		message = lang.Translate("general.video_downloading", map[string]any{
+			"Title": title,
 		})
 	}
 
 	s.bot.SendMessage(chatID, message, nil)
-	// Telegram bot interface не возвращает ошибку в нашей реализации
-
 	return nil
 }
 
@@ -44,59 +44,67 @@ func (s *TelegramNotificationService) NotifyDownloadProgress(_ context.Context, 
 		return nil
 	}
 
-	message := lang.Translate("downloads.notifications.progress", map[string]any{
+	// Пробуем основной ключ
+	message := lang.Translate("general.downloads.notifications.progress", map[string]any{
 		"title":    title,
 		"progress": progress,
 	})
 
-	if message == "downloads.notifications.progress" {
-		message = lang.Translate("downloads.notifications.progress", map[string]any{
-			"title":    title,
-			"progress": progress,
+	// Если не сработал, используем fallback
+	if message == "general.downloads.notifications.progress" {
+		message = lang.Translate("general.download.progress", map[string]any{
+			"Name":     title,
+			"Progress": progress,
 		})
+
+		// Если и fallback не сработал, используем простое сообщение
+		if message == "general.download.progress" {
+			message = fmt.Sprintf("📊 %s: %d%%", title, progress)
+		}
 	}
 
 	s.bot.SendMessage(chatID, message, nil)
-	// Telegram bot interface не возвращает ошибку в нашей реализации
-
 	return nil
 }
 
 // NotifyDownloadCompleted уведомляет о завершении загрузки
 func (s *TelegramNotificationService) NotifyDownloadCompleted(_ context.Context, chatID int64, title string) error {
-	message := lang.Translate("downloads.notifications.completed", map[string]any{
+	// Пробуем основной ключ
+	message := lang.Translate("general.downloads.notifications.completed", map[string]any{
 		"title": title,
 	})
 
-	if message == "downloads.notifications.completed" {
-		message = lang.Translate("downloads.notifications.completed", map[string]any{
-			"title": title,
+	// Если не сработал, используем fallback
+	if message == "general.downloads.notifications.completed" {
+		message = lang.Translate("general.video_successfully_downloaded", map[string]any{
+			"Title": title,
 		})
+
+		// Если и fallback не сработал, используем простое сообщение
+		if message == "general.video_successfully_downloaded" {
+			message = fmt.Sprintf("✅ Загрузка завершена: %s", title)
+		}
 	}
 
 	s.bot.SendMessage(chatID, message, nil)
-	// Telegram bot interface не возвращает ошибку в нашей реализации
-
 	return nil
 }
 
 // NotifyDownloadFailed уведомляет об ошибке загрузки
 func (s *TelegramNotificationService) NotifyDownloadFailed(_ context.Context, chatID int64, title string, downloadErr error) error {
-	message := lang.Translate("downloads.notifications.failed", map[string]any{
+	message := lang.Translate("general.downloads.notifications.failed", map[string]any{
 		"title": title,
 		"error": downloadErr.Error(),
 	})
 
-	if message == "downloads.notifications.failed" {
-		message = lang.Translate("downloads.notifications.failed", map[string]any{
-			"title": title,
-			"error": downloadErr.Error(),
+	// Если локализация не сработала, используем fallback
+	if message == "general.downloads.notifications.failed" {
+		message = lang.Translate("error.downloads.video_download_error", map[string]any{
+			"Error": downloadErr.Error(),
 		})
 	}
 
 	s.bot.SendMessage(chatID, message, nil)
-	// Telegram bot interface не возвращает ошибку в нашей реализации
-
 	return nil
 }
 
@@ -144,6 +152,16 @@ func NewMockNotificationService() *MockNotificationService {
 func (m *MockNotificationService) SetError(err error) {
 	m.ShouldError = true
 	m.ErrorToReturn = err
+}
+
+// Reset очищает все записанные вызовы
+func (m *MockNotificationService) Reset() {
+	m.StartedCalls = nil
+	m.ProgressCalls = nil
+	m.CompletedCalls = nil
+	m.FailedCalls = nil
+	m.ShouldError = false
+	m.ErrorToReturn = nil
 }
 
 // NotifyDownloadStarted mock реализация

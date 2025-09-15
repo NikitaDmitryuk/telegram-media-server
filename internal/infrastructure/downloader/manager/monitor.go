@@ -14,6 +14,7 @@ import (
 func (dm *DownloadManager) monitorDownload(
 	movieID uint,
 	job *downloadJob,
+	outerProgressChan chan float64,
 	outerErrChan chan error,
 ) {
 	defer func() {
@@ -21,6 +22,10 @@ func (dm *DownloadManager) monitorDownload(
 		delete(dm.jobs, movieID)
 		dm.mu.Unlock()
 		<-dm.semaphore
+
+		// Закрываем внешние каналы
+		close(outerProgressChan)
+		close(outerErrChan)
 	}()
 
 	var (
@@ -48,17 +53,9 @@ func (dm *DownloadManager) monitorDownload(
 				logger.Log.WithFields(map[string]any{
 					"movie_id": movieID,
 					"duration": time.Since(downloadStartTime),
-				}).Info("Download completed successfully")
-
-				if err := dm.db.SetLoaded(context.Background(), movieID); err != nil {
-					logger.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
-					outerErrChan <- utils.WrapError(err, "Failed to mark movie as loaded", map[string]any{
-						"movie_id": movieID,
-					})
-				} else {
-					outerErrChan <- nil
-				}
-				return
+				}).Info("Download manager: progress channel closed")
+				// Не завершаем здесь - ждем errChan
+				continue
 			}
 
 			currentTime := time.Now()
@@ -77,39 +74,68 @@ func (dm *DownloadManager) monitorDownload(
 				progress = maxProgress
 			}
 
+			// Обновляем базу данных
 			if updateErr := dm.db.UpdateDownloadedPercentage(context.Background(), movieID, int(progress)); updateErr != nil {
 				logger.Log.WithError(updateErr).WithField("movie_id", movieID).Error("Failed to update progress in database")
+			}
+
+			// Передаем прогресс дальше в download service
+			select {
+			case outerProgressChan <- progress:
+				logger.Log.WithFields(map[string]any{
+					"movie_id": movieID,
+					"progress": progress,
+				}).Debug("Progress forwarded to download service")
+			default:
+				logger.Log.WithField("movie_id", movieID).Warn("Failed to forward progress - channel full")
 			}
 
 			if !progressStagnantTime.IsZero() && currentTime.Sub(progressStagnantTime) > maxStagnantDuration {
 				err := fmt.Errorf("download appears to be stagnant (no progress for %v)", maxStagnantDuration)
 				logger.Log.WithError(err).WithField("movie_id", movieID).Warn("Download stagnant")
-				outerErrChan <- err
+				select {
+				case outerErrChan <- err:
+				default:
+				}
 				return
 			}
 
 		case err, ok := <-job.errChan:
 			if !ok {
-				logger.Log.WithField("movie_id", movieID).Info("Download completed (error channel closed without error)")
-				outerErrChan <- nil
+				logger.Log.WithField("movie_id", movieID).Info("Download manager: error channel closed without error")
+				select {
+				case outerErrChan <- nil:
+					logger.Log.WithField("movie_id", movieID).Info("Completion signal forwarded to download service")
+				default:
+				}
 				return
 			}
 
 			if err != nil {
 				logger.Log.WithError(err).WithField("movie_id", movieID).Error("Download failed")
-				outerErrChan <- utils.WrapError(err, "Download failed", map[string]any{
+				select {
+				case outerErrChan <- utils.WrapError(err, "Download failed", map[string]any{
 					"movie_id": movieID,
-				})
+				}):
+				default:
+				}
 			} else {
 				logger.Log.WithField("movie_id", movieID).Info("Download completed successfully")
 
 				if err := dm.db.SetLoaded(context.Background(), movieID); err != nil {
 					logger.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
-					outerErrChan <- utils.WrapError(err, "Failed to mark movie as loaded", map[string]any{
+					select {
+					case outerErrChan <- utils.WrapError(err, "Failed to mark movie as loaded", map[string]any{
 						"movie_id": movieID,
-					})
+					}):
+					default:
+					}
 				} else {
-					outerErrChan <- nil
+					select {
+					case outerErrChan <- nil:
+						logger.Log.WithField("movie_id", movieID).Info("Success signal forwarded to download service")
+					default:
+					}
 				}
 			}
 			return
@@ -132,13 +158,19 @@ func (dm *DownloadManager) monitorDownload(
 			if timeoutChan != nil {
 				err := fmt.Errorf("download timeout after %v", dm.downloadSettings.DownloadTimeout)
 				logger.Log.WithError(err).WithField("movie_id", movieID).Error("Download timed out")
-				outerErrChan <- err
+				select {
+				case outerErrChan <- err:
+				default:
+				}
 				return
 			}
 
 		case <-job.ctx.Done():
 			logger.Log.WithField("movie_id", movieID).Info("Download canceled")
-			outerErrChan <- job.ctx.Err()
+			select {
+			case outerErrChan <- job.ctx.Err():
+			default:
+			}
 			return
 		}
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/domain"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/database"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/pkg/logger"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/pkg/utils"
 )
@@ -82,7 +81,7 @@ func (dm *DownloadManager) StartDownload(
 
 func (dm *DownloadManager) startDownloadImmediately(
 	movieID uint,
-	dl downloader.Downloader,
+	dl domain.Downloader,
 	movieTitle string,
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -97,6 +96,8 @@ func (dm *DownloadManager) startDownloadImmediately(
 		})
 	}
 
+	// Создаем каналы для внешнего использования (download service)
+	outerProgressChan := make(chan float64)
 	outerErrChan = make(chan error, 1)
 
 	job := downloadJob{
@@ -112,9 +113,10 @@ func (dm *DownloadManager) startDownloadImmediately(
 	dm.jobs[movieID] = job
 	dm.mu.Unlock()
 
-	go dm.monitorDownload(movieID, &job, outerErrChan)
+	// Запускаем мониторинг с проброской каналов
+	go dm.monitorDownload(movieID, &job, outerProgressChan, outerErrChan)
 
-	return movieID, progressChan, outerErrChan, nil
+	return movieID, outerProgressChan, outerErrChan, nil
 }
 
 func (dm *DownloadManager) StopDownload(movieID uint) error {

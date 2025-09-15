@@ -108,7 +108,7 @@ func (c *Client) buildURL(url string) string {
 	}
 
 	// Если URL уже полный, возвращаем как есть
-	if len(url) > 7 && (url[:7] == "http://" || url[:8] == "https://") {
+	if len(url) > 7 && (url[:7] == "http://" || len(url) > 8 && url[:8] == "https://") {
 		return url
 	}
 
@@ -127,7 +127,7 @@ func (c *Client) buildURL(url string) string {
 }
 
 // buildResponse создает объект ответа
-func (*Client) buildResponse(resp *http.Response) (*domain.HTTPResponse, error) {
+func (c *Client) buildResponse(resp *http.Response) (*domain.HTTPResponse, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)

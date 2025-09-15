@@ -7,7 +7,6 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/domain"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/database"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/downloader"
 )
 
 const (
@@ -28,7 +27,7 @@ type DownloadManager struct {
 }
 
 type downloadJob struct {
-	downloader   downloader.Downloader
+	downloader   domain.Downloader
 	startTime    time.Time
 	progressChan chan float64
 	errChan      chan error
@@ -37,7 +36,7 @@ type downloadJob struct {
 }
 
 type queuedDownload struct {
-	downloader downloader.Downloader
+	downloader domain.Downloader
 	movieID    uint
 	title      string
 	addedAt    time.Time
