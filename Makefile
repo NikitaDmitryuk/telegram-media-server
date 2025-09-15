@@ -158,11 +158,9 @@ test-unit:
 .PHONY: test-integration
 test-integration:
 	@echo "Running integration tests (without external tools)..."
-	go test -v -run Integration ./internal/handlers/auth
-	go test -v -run Integration ./internal/handlers/movies
-	go test -v -run Integration ./internal/handlers/session
-	go test -v -run Integration ./internal/filemanager
-	go test -v -run "TestValidateContentIntegration" ./internal/downloader/torrent
+	go test -v -run Integration ./internal/infrastructure/downloader/torrent
+	go test -v -run Integration ./internal/infrastructure/downloader/video
+	go test -v -run "TestValidateContentIntegration" ./internal/infrastructure/downloader/torrent
 
 .PHONY: test-docker
 test-docker: docker-test-build
@@ -171,7 +169,7 @@ test-docker: docker-test-build
 		-v $${GITHUB_WORKSPACE:-$(PWD)}:/workspace \
 		-w /workspace \
 		telegram-media-server:test \
-		go test -v ./internal/downloader/torrent ./internal/downloader/video ./internal/filemanager -run "Integration|TestTorrentDownload|TestVideo.*Integration|.*_Docker"
+		go test -v ./internal/infrastructure/downloader/torrent ./internal/infrastructure/downloader/video -run "Integration|TestTorrentDownload|TestVideo.*Integration|.*_Docker"
 
 .PHONY: test-coverage
 test-coverage:

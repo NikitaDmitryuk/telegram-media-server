@@ -33,6 +33,12 @@
             "search_torrents": "🔍",
             "main_menu": "Main menu"
         },
+        "movies": {
+            "list_header": "📋 Movie list:\n\n",
+            "status_pending": "⏳",
+            "status_completed": "✅",
+            "status_downloading": "📥"
+        },
         "torrent_search": {
             "enter_query": "Please enter the movie name to search for torrents",
             "empty_query": "Query cannot be empty",
@@ -49,7 +55,27 @@
             "session_expired": "Search session expired. Please start a new search."
         }
     },
+    "downloads": {
+        "notifications": {
+            "started": "🚀 Download started: {{.title}}",
+            "progress": "📥 Downloading {{.title}}: {{.progress}}%",
+            "completed": "✅ Download completed: {{.title}}",
+            "failed": "❌ Download failed {{.title}}: {{.error}}"
+        }
+    },
     "error": {
+        "general": {
+            "internal_error": "An internal error occurred. Please try again later.",
+            "rate_limit_exceeded": "Too many requests, please try again later",
+            "unauthorized": "Authentication required",
+            "invalid_credentials": "Invalid credentials", 
+            "access_denied": "Access denied",
+            "not_found": "Resource not found",
+            "already_exists": "Resource already exists",
+            "invalid_state": "Invalid state for operation",
+            "external_service": "External service unavailable",
+            "network_timeout": "Network timeout"
+        },
         "authentication": {
             "login": "An error occurred during login. Please try again.",
             "wrong_password": "Incorrect password.",
