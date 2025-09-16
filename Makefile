@@ -158,11 +158,9 @@ test-unit:
 .PHONY: test-integration
 test-integration:
 	@echo "Running integration tests (without external tools)..."
-	go test -v -run Integration ./internal/handlers/auth
-	go test -v -run Integration ./internal/handlers/movies
-	go test -v -run Integration ./internal/handlers/session
-	go test -v -run Integration ./internal/filemanager
-	go test -v -run "TestValidateContentIntegration" ./internal/downloader/torrent
+	go test -v -run Integration ./internal/infrastructure/downloader/torrent
+	go test -v -run Integration ./internal/infrastructure/downloader/video
+	go test -v -run "TestValidateContentIntegration" ./internal/infrastructure/downloader/torrent
 
 .PHONY: test-docker
 test-docker: docker-test-build
@@ -171,7 +169,7 @@ test-docker: docker-test-build
 		-v $${GITHUB_WORKSPACE:-$(PWD)}:/workspace \
 		-w /workspace \
 		telegram-media-server:test \
-		go test -v ./internal/downloader/torrent ./internal/downloader/video ./internal/filemanager -run "Integration|TestTorrentDownload|TestVideo.*Integration|.*_Docker"
+		go test -v ./internal/infrastructure/downloader/torrent ./internal/infrastructure/downloader/video -run "Integration|TestTorrentDownload|TestVideo.*Integration|.*_Docker"
 
 .PHONY: test-coverage
 test-coverage:
@@ -179,6 +177,61 @@ test-coverage:
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	go tool cover -func=coverage.out
+
+.PHONY: test-notifications
+test-notifications:
+	@echo "Running notification system tests..."
+	go test -v ./internal/infrastructure/notification -run "TestNotification"
+
+.PHONY: test-download-service
+test-download-service:
+	@echo "Running download service tests..."
+	go test -v ./internal/core/services -run "TestDownloadService"
+
+.PHONY: test-channel-flow
+test-channel-flow:
+	@echo "Running channel flow and synchronization tests..."
+	go test -v ./internal/infrastructure/downloader/manager -run "TestDownloadManager.*Channel"
+
+.PHONY: test-aria2-integration
+test-aria2-integration:
+	@echo "Running aria2 integration tests (requires INTEGRATION_TESTS=true)..."
+	INTEGRATION_TESTS=true go test -v ./internal/infrastructure/downloader/torrent -run "TestAria2Integration"
+
+.PHONY: test-aria2-docker
+test-aria2-docker: docker-test-build
+	@echo "Running aria2 tests in Docker environment..."
+	docker run --rm \
+		-v $${GITHUB_WORKSPACE:-$(PWD)}:/workspace \
+		-w /workspace \
+		-e INTEGRATION_TESTS=true \
+		-e CI=true \
+		telegram-media-server:test \
+		go test -v ./internal/infrastructure/downloader/torrent -run "TestAria2Integration|TestAria2.*Integration"
+
+.PHONY: test-full-integration
+test-full-integration:
+	@echo "Running complete integration test suite..."
+	@echo "Step 1: Testing notification system..."
+	@$(MAKE) test-notifications
+	@echo "Step 2: Testing download service..."
+	@$(MAKE) test-download-service  
+	@echo "Step 3: Testing channel flow..."
+	@$(MAKE) test-channel-flow
+	@echo "Step 4: Testing aria2 integration..."
+	@$(MAKE) test-aria2-integration
+	@echo "✅ All integration tests completed!"
+
+.PHONY: test-docker-full
+test-docker-full: docker-test-build
+	@echo "Running complete test suite in Docker..."
+	docker run --rm \
+		-v $${GITHUB_WORKSPACE:-$(PWD)}:/workspace \
+		-w /workspace \
+		-e INTEGRATION_TESTS=true \
+		-e CI=true \
+		telegram-media-server:test \
+		go test -v ./internal/infrastructure/notification ./internal/core/services ./internal/infrastructure/downloader/manager ./internal/infrastructure/downloader/torrent
 
 # Docker commands
 .PHONY: run
@@ -295,6 +348,15 @@ help:
 	@echo "  test-integration - Run integration tests (without external tools)"
 	@echo "  test-docker    - Run tests requiring external tools (yt-dlp, aria2, ffmpeg)"
 	@echo "  test-coverage  - Run tests with coverage report"
+	@echo ""
+	@echo "Specific Test Suites:"
+	@echo "  test-notifications    - Test notification system (unit + fallbacks)"
+	@echo "  test-download-service  - Test download service integration"
+	@echo "  test-channel-flow      - Test channel synchronization and race conditions"
+	@echo "  test-aria2-integration - Test aria2 downloader (requires INTEGRATION_TESTS=true)"
+	@echo "  test-aria2-docker      - Test aria2 in Docker environment"
+	@echo "  test-full-integration  - Run complete integration test suite"
+	@echo "  test-docker-full       - Run complete test suite in Docker"
 	@echo ""
 	@echo "Service Management:"
 	@echo "  status         - Check service status"

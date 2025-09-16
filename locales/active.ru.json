@@ -14,17 +14,34 @@
         "download": {
             "progress": "Загрузка {{.Name}}: {{.Progress}}%"
         },
+        "downloads": {
+            "notifications": {
+                "started": "🚀 Начата загрузка: {{.title}}",
+                "progress": "📊 {{.title}}: {{.progress}}%",
+                "completed": "✅ Загрузка завершена: {{.title}}",
+                "failed": "❌ Загрузка не удалась: {{.title}}"
+            }
+        },
         "video_downloading": "⬇️ Загрузка видео: {{.Title}}",
-        "download_stopped": "⏹️ Загрузка видео остановлена: {{.Title}}",
         "downloaded_list": "ID:{{.ID}} [{{.Progress}}%] {{.SizeGB}} ГБ\n{{.Name}}\n",
         "disk_space_info": "Свободное место на диске: {{.AvailableSpaceGB}} ГБ",
+        "download_stopped": "⏹️ Загрузка видео остановлена: {{.Title}}",
         "video_successfully_downloaded": "✅ Видео успешно загружено: {{.Title}}",
         "download_queued": "📋 Фильм добавлен в очередь загрузки: {{.Title}}\nПозиция в очереди: {{.Position}}\nМаксимум одновременных загрузок: {{.MaxConcurrent}}",
         "download_started_from_queue": "🚀 Загрузка началась: {{.Title}}",
         "user_prompts": {
             "unknown_user": "Выполните вход с помощью команды /login [PASSWORD]",
             "delete_prompt": "Выберите фильм для удаления:",
-            "no_movies_to_delete": "Нет фильмов для удаления"
+            "no_movies_to_delete": "Нет фильмов для удаления",
+            "no_permission": "У вас нет прав для выполнения этой команды"
+        },
+        "auth": {
+            "login_success": "✅ Вход выполнен успешно. Роль: {{.Role}}",
+            "temp_password_created": "🔑 Временный пароль создан: {{.Password}}\nДлительность: {{.Duration}}"
+        },
+        "downloads": {
+            "video_started": "📥 Загрузка видео начата",
+            "torrent_started": "📥 Загрузка торрента начата"
         },
         "interface": {
             "list_movies": "🎬",
@@ -32,6 +49,12 @@
             "cancel": "❌",
             "search_torrents": "🔍",
             "main_menu": "Главное меню"
+        },
+        "movies": {
+            "list_header": "📋 Список фильмов:\n\n",
+            "status_pending": "⏳",
+            "status_completed": "✅",
+            "status_downloading": "📥"
         },
         "torrent_search": {
             "enter_query": "Введите название фильма для поиска торрентов",
@@ -50,10 +73,30 @@
         }
     },
     "error": {
+        "general": {
+            "internal_error": "Произошла внутренняя ошибка. Попробуйте позже.",
+            "rate_limit_exceeded": "Слишком много запросов, попробуйте позже",
+            "unauthorized": "Необходима авторизация",
+            "invalid_credentials": "Неверные учетные данные", 
+            "access_denied": "Доступ запрещен",
+            "not_found": "Ресурс не найден",
+            "already_exists": "Ресурс уже существует",
+            "invalid_state": "Недопустимое состояние для операции",
+            "external_service": "Внешний сервис недоступен",
+            "network_timeout": "Превышено время ожидания"
+        },
         "authentication": {
             "login": "Произошла ошибка при входе. Пожалуйста, попробуйте снова.",
             "wrong_password": "Неверный пароль.",
             "access_denied": "Доступ запрещён."
+        },
+        "auth": {
+            "password_required": "Пожалуйста, введите пароль: /login <пароль>",
+            "login_failed": "Ошибка авторизации. Попробуйте еще раз.",
+            "wrong_password": "Неверный пароль",
+            "duration_required": "Укажите длительность: /temp <длительность>",
+            "invalid_duration": "Неверный формат длительности. Используйте: 30m, 1h, 3h, 1d",
+            "temp_password_failed": "Не удалось создать временный пароль"
         },
         "commands": {
             "unknown_command": "Неизвестная команда. Используйте /start для получения списка доступных команд.",
@@ -62,7 +105,11 @@
         "movies": {
             "fetch_error": "Произошла ошибка при получении списка фильмов. Пожалуйста, попробуйте позже.",
             "check_error": "Ошибка при проверке существования фильма: {{.Error}}",
-            "already_exists": "Видео уже существует или находится в процессе загрузки."
+            "already_exists": "Видео уже существует или находится в процессе загрузки.",
+            "delete_failed": "Не удалось удалить фильм",
+            "all_deleted": "🗑️ Все фильмы удалены",
+            "deleted": "🗑️ Фильм удален",
+            "invalid_id": "Неверный ID фильма"
         },
         "storage": {
             "not_enough_space": "Недостаточно места для загрузки фильма."
@@ -71,7 +118,11 @@
             "video_title_error": "Ошибка получения названия видео: {{.Error}}",
             "video_size_error": "Ошибка получения размера видео: {{.Error}}",
             "video_download_error": "Ошибка загрузки видео: {{.Error}}",
-            "document_download_error": "Произошла ошибка при загрузке файла (файлы больше 50МБ не поддерживаются)."
+            "document_download_error": "Произошла ошибка при загрузке файла (файлы больше 50МБ не поддерживаются).",
+            "video_failed": "Не удалось начать загрузку видео",
+            "torrent_failed": "Не удалось начать загрузку торрента",
+            "torrent_download_failed": "Не удалось загрузить торрент-файл",
+            "save_torrent_failed": "Не удалось сохранить торрент-файл на диск"
         },
         "database": {
             "delete_movie_error": "Ошибка при удалении записи фильма из базы данных."

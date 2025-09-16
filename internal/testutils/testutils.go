@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/core/domain"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/infrastructure/database"
 	"github.com/jackpal/bencode-go"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -28,8 +28,8 @@ const (
 )
 
 // TestConfig creates a configuration suitable for testing
-func TestConfig(tempDir string) *config.Config {
-	return &config.Config{
+func TestConfig(tempDir string) *domain.Config {
+	return &domain.Config{
 		BotToken:        "test-bot-token",
 		MoviePath:       tempDir,
 		AdminPassword:   "test-admin",
@@ -38,17 +38,17 @@ func TestConfig(tempDir string) *config.Config {
 		LangPath:        "./locales",
 		LogLevel:        "debug",
 
-		DownloadSettings: config.DownloadConfig{
+		DownloadSettings: domain.DownloadConfig{
 			MaxConcurrentDownloads: 1,
 			DownloadTimeout:        30 * time.Second,
 			ProgressUpdateInterval: 100 * time.Millisecond,
 		},
 
-		SecuritySettings: config.SecurityConfig{
+		SecuritySettings: domain.SecurityConfig{
 			PasswordMinLength: 4,
 		},
 
-		Aria2Settings: config.Aria2Config{
+		Aria2Settings: domain.Aria2Config{
 			MaxPeers:                 50,
 			MaxConnectionsPerServer:  4,
 			Split:                    4,
@@ -81,7 +81,7 @@ func TestConfig(tempDir string) *config.Config {
 			RetryWait:                1,
 		},
 
-		VideoSettings: config.VideoConfig{
+		VideoSettings: domain.VideoConfig{
 			EnableReencoding:  false,
 			ForceReencoding:   false,
 			VideoCodec:        "h264",
@@ -128,7 +128,7 @@ func (t *TestSQLiteDatabase) runMigrations() error {
 	)
 }
 
-func (*TestSQLiteDatabase) Init(_ *config.Config) error {
+func (*TestSQLiteDatabase) Init(_ *domain.Config) error {
 	return nil // Already initialized
 }
 
@@ -204,7 +204,7 @@ func (*TestSQLiteDatabase) Login(
 	_ string,
 	_ int64,
 	_ string,
-	_ *config.Config,
+	_ *domain.Config,
 ) (bool, error) {
 	return false, nil
 }
@@ -225,6 +225,24 @@ func (*TestSQLiteDatabase) GenerateTemporaryPassword(_ context.Context, _ time.D
 }
 func (*TestSQLiteDatabase) GetUserByChatID(_ context.Context, _ int64) (database.User, error) {
 	return database.User{}, nil
+}
+
+// Close закрывает соединение с базой данных
+func (t *TestSQLiteDatabase) Close() error {
+	if t.db == nil {
+		return nil
+	}
+
+	sqlDB, err := t.db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	if err := sqlDB.Close(); err != nil {
+		return fmt.Errorf("failed to close test database connection: %w", err)
+	}
+
+	return nil
 }
 func (*TestSQLiteDatabase) MovieExistsId(_ context.Context, _ uint) (bool, error) {
 	return false, nil

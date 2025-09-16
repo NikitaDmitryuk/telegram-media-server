@@ -28,8 +28,6 @@ go.work.sum
 
 artifacts/
 *.pkg.tar.zst
-src/
-pkg/
 .vscode/
 build/
 
