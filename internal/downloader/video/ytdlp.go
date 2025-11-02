@@ -433,10 +433,21 @@ func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 		}
 	}
 
+	if videoSettings.WriteSubs {
+		args = append(args, "--write-subs")
+		if videoSettings.SubtitleLang != "" {
+			args = append(args, "--sub-lang", videoSettings.SubtitleLang)
+		}
+	} else if videoSettings.SubtitleLang != "" {
+		args = append(args, "--write-subs", "--sub-lang", videoSettings.SubtitleLang)
+	}
+
+	if videoSettings.AudioLang != "" {
+		args = append(args, "--audio-lang", videoSettings.AudioLang)
+	}
+
 	return args
 }
-
-// Video utility functions
 
 func shouldUseProxy(rawURL string, cfg *tmsconfig.Config) (bool, error) {
 	if cfg.Proxy == "" {

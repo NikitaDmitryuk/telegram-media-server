@@ -90,6 +90,9 @@ func NewConfig() (*Config, error) {
 			FFmpegExtraArgs:   getEnv("FFMPEG_EXTRA_ARGS", "-pix_fmt yuv420p"),
 			QualitySelector:   getEnv("VIDEO_QUALITY_SELECTOR", "bv*+ba/b"),
 			CompatibilityMode: getEnvBool("VIDEO_COMPATIBILITY_MODE", false),
+			SubtitleLang:      getEnv("VIDEO_SUBTITLE_LANG", ""),
+			AudioLang:         getEnv("VIDEO_AUDIO_LANG", ""),
+			WriteSubs:         getEnvBool("VIDEO_WRITE_SUBS", false),
 		},
 	}
 
@@ -184,6 +187,9 @@ type VideoConfig struct {
 	FFmpegExtraArgs   string
 	QualitySelector   string
 	CompatibilityMode bool
+	SubtitleLang      string
+	AudioLang         string
+	WriteSubs         bool
 }
 
 func (c *Config) GetDownloadSettings() DownloadConfig {
