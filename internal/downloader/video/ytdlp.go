@@ -271,7 +271,6 @@ func (d *YTDLPDownloader) GetFiles() (mainFiles, tempFiles []string, err error) 
 	return mainFiles, tempFiles, nil
 }
 
-// cleanupTempFiles attempts to remove temporary files that might be left behind
 func (d *YTDLPDownloader) cleanupTempFiles() error {
 	if d.config == nil || d.config.MoviePath == "" {
 		return nil
@@ -386,7 +385,6 @@ func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 	return 0, nil
 }
 
-// Helper function to get map keys for debugging
 func getMapKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -402,9 +400,14 @@ func (d *YTDLPDownloader) StoppedManually() bool {
 func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 	videoSettings := d.config.GetVideoSettings()
 
+	qualitySelector := videoSettings.QualitySelector
+	if videoSettings.AudioLang != "" {
+		qualitySelector = addAudioLanguageFilter(qualitySelector, videoSettings.AudioLang)
+	}
+
 	args := []string{
 		"--newline",
-		"-f", videoSettings.QualitySelector,
+		"-f", qualitySelector,
 		"-o", outputPath,
 		d.url,
 	}
@@ -436,14 +439,10 @@ func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 	if videoSettings.WriteSubs {
 		args = append(args, "--write-subs")
 		if videoSettings.SubtitleLang != "" {
-			args = append(args, "--sub-lang", videoSettings.SubtitleLang)
+			args = append(args, "--sub-langs", videoSettings.SubtitleLang)
 		}
 	} else if videoSettings.SubtitleLang != "" {
-		args = append(args, "--write-subs", "--sub-lang", videoSettings.SubtitleLang)
-	}
-
-	if videoSettings.AudioLang != "" {
-		args = append(args, "--audio-lang", videoSettings.AudioLang)
+		args = append(args, "--write-subs", "--sub-langs", videoSettings.SubtitleLang)
 	}
 
 	return args
@@ -524,4 +523,40 @@ func extractVideoID(rawURL string) (string, error) {
 	}
 
 	return cleanHostname, nil
+}
+
+func addAudioLanguageFilter(selector, lang string) string {
+	if lang == "" {
+		return selector
+	}
+
+	languageFilter := fmt.Sprintf("[language=%s]", lang)
+
+	if strings.Contains(selector, "/") {
+		parts := strings.Split(selector, "/")
+		for i, part := range parts {
+			parts[i] = addLanguageFilterToSingleFormat(part, languageFilter)
+		}
+		return strings.Join(parts, "/")
+	}
+
+	return addLanguageFilterToSingleFormat(selector, languageFilter)
+}
+
+func addLanguageFilterToSingleFormat(format, languageFilter string) string {
+	if strings.Contains(format, "+") {
+		parts := strings.Split(format, "+")
+		for i, part := range parts {
+			if strings.Contains(part, "a") || strings.Contains(part, "audio") || i > 0 {
+				parts[i] = addFilterToFormat(part, languageFilter)
+			}
+		}
+		return strings.Join(parts, "+")
+	}
+
+	return addFilterToFormat(format, languageFilter)
+}
+
+func addFilterToFormat(format, filter string) string {
+	return format + filter
 }
