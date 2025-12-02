@@ -11,6 +11,7 @@ func TestNewSessionManager(t *testing.T) {
 
 	if manager == nil {
 		t.Fatal("NewSessionManager returned nil")
+		return
 	}
 
 	if manager.sessions == nil {
@@ -45,6 +46,7 @@ func TestSessionManager_SetAndGet(t *testing.T) {
 	retrievedSession := manager.Get(chatID)
 	if retrievedSession == nil {
 		t.Fatal("Retrieved session is nil")
+		return
 	}
 
 	if retrievedSession.ChatID != chatID {

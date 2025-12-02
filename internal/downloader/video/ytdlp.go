@@ -241,7 +241,18 @@ func (d *YTDLPDownloader) GetTitle() (string, error) {
 
 func (d *YTDLPDownloader) GetFiles() (mainFiles, tempFiles []string, err error) {
 	baseName := strings.TrimSuffix(d.outputFileName, ".mp4")
-	mainFiles = []string{d.outputFileName}
+	mainFiles = []string{
+		d.outputFileName,
+		// Subtitle files that yt-dlp can download
+		baseName + ".*.vtt", // WebVTT subtitles (e.g., video.ru.vtt, video.en.vtt)
+		baseName + ".*.srt", // SubRip subtitles
+		baseName + ".*.ass", // Advanced SubStation Alpha
+		baseName + ".*.ssa", // SubStation Alpha
+		baseName + ".vtt",   // Subtitles without language code
+		baseName + ".srt",
+		baseName + ".ass",
+		baseName + ".ssa",
+	}
 
 	// Comprehensive list of temporary files that yt-dlp can create
 	tempFiles = []string{
@@ -405,8 +416,15 @@ func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 		qualitySelector = addAudioLanguageFilter(qualitySelector, videoSettings.AudioLang)
 	}
 
+	// Add fallback to "best" if the requested format is not available
+	// This helps with sites like VK that may not support complex format selectors
+	if !strings.HasSuffix(qualitySelector, "/best") && !strings.HasSuffix(qualitySelector, "/b") {
+		qualitySelector += "/best"
+	}
+
 	args := []string{
 		"--newline",
+		"--remote-components", "ejs:github", // Enable remote components for JS challenge solving
 		"-f", qualitySelector,
 		"-o", outputPath,
 		d.url,

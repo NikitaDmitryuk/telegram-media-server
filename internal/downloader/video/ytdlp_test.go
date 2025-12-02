@@ -257,28 +257,28 @@ func TestBuildYTDLPArgs(t *testing.T) {
 			name:              "with audio language ru",
 			audioLang:         "ru",
 			qualitySelector:   "bv*+ba/b",
-			expectedFormat:    "bv*+ba[language=ru]/b[language=ru]",
+			expectedFormat:    "bv*+ba[language=ru]/b[language=ru]/best", // /best fallback added
 			shouldContainLang: true,
 		},
 		{
 			name:              "with audio language en",
 			audioLang:         "en",
 			qualitySelector:   "best",
-			expectedFormat:    "best[language=en]",
+			expectedFormat:    "best[language=en]/best", // /best fallback added
 			shouldContainLang: true,
 		},
 		{
 			name:              "without audio language",
 			audioLang:         "",
 			qualitySelector:   "bv*+ba/b",
-			expectedFormat:    "bv*+ba/b",
+			expectedFormat:    "bv*+ba/b", // ends with /b, no fallback needed
 			shouldContainLang: false,
 		},
 		{
 			name:              "with audio language and complex selector",
 			audioLang:         "fr",
 			qualitySelector:   "bestvideo[height<=1080]+bestaudio/best",
-			expectedFormat:    "bestvideo[height<=1080]+bestaudio[language=fr]/best[language=fr]",
+			expectedFormat:    "bestvideo[height<=1080]+bestaudio[language=fr]/best[language=fr]/best", // /best fallback added
 			shouldContainLang: true,
 		},
 	}
