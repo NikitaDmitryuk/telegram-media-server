@@ -289,6 +289,8 @@ func TestBuildYTDLPArgs(t *testing.T) {
 			testCfg := *cfg
 			testCfg.VideoSettings.AudioLang = tt.audioLang
 			testCfg.VideoSettings.QualitySelector = tt.qualitySelector
+			testCfg.VideoSettings.MaxHeight = 0             // Disable max height for format testing
+			testCfg.VideoSettings.CompatibilityMode = false // Disable compatibility mode for format testing
 
 			downloader := &YTDLPDownloader{
 				config: &testCfg,

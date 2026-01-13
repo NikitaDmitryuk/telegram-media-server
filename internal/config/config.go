@@ -19,6 +19,7 @@ const (
 	DefaultPasswordMinLength            = 8
 	DefaultMaxConcurrentDownloads       = 3
 	DefaultProgressUpdateInterval       = 3 * time.Second
+	DefaultVideoMaxHeight               = 0 // Default: no max height limit (0 = disabled)
 )
 
 func NewConfig() (*Config, error) {
@@ -89,6 +90,7 @@ func NewConfig() (*Config, error) {
 			OutputFormat:      getEnv("VIDEO_OUTPUT_FORMAT", "mp4"),
 			FFmpegExtraArgs:   getEnv("FFMPEG_EXTRA_ARGS", "-pix_fmt yuv420p"),
 			QualitySelector:   getEnv("VIDEO_QUALITY_SELECTOR", "bv*+ba/b"),
+			MaxHeight:         getEnvInt("VIDEO_MAX_HEIGHT", DefaultVideoMaxHeight),
 			CompatibilityMode: getEnvBool("VIDEO_COMPATIBILITY_MODE", false),
 			SubtitleLang:      getEnv("VIDEO_SUBTITLE_LANG", ""),
 			AudioLang:         getEnv("VIDEO_AUDIO_LANG", ""),
@@ -186,6 +188,7 @@ type VideoConfig struct {
 	OutputFormat      string
 	FFmpegExtraArgs   string
 	QualitySelector   string
+	MaxHeight         int // Maximum video height (e.g., 1080 for 1080p, 720 for 720p, 0 for no limit)
 	CompatibilityMode bool
 	SubtitleLang      string
 	AudioLang         string
