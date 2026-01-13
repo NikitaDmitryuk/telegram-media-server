@@ -89,6 +89,7 @@ func TestConfig(tempDir string) *config.Config {
 			OutputFormat:      "mp4",
 			FFmpegExtraArgs:   "-pix_fmt yuv420p",
 			QualitySelector:   "worst",
+			MaxHeight:         1080,
 			CompatibilityMode: true,
 		},
 	}

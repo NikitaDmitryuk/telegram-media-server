@@ -430,12 +430,27 @@ func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 		d.url,
 	}
 
+	// Build format sort options
+	// -S (--format-sort) controls format preference order
+	var formatSortParts []string
+
+	// Add max height restriction (e.g., 1080 for 1080p, 720 for 720p)
+	// Set VIDEO_MAX_HEIGHT=0 to disable the limit
+	if videoSettings.MaxHeight > 0 {
+		formatSortParts = append(formatSortParts, fmt.Sprintf("res:%d", videoSettings.MaxHeight))
+	}
+
 	if videoSettings.CompatibilityMode {
-		args = append(args, "-S", "vcodec:h264,acodec:mp3")
+		formatSortParts = append(formatSortParts, "vcodec:h264", "acodec:mp3")
 		videoSettings.EnableReencoding = true
 		videoSettings.VideoCodec = "h264"
 		videoSettings.AudioCodec = "mp3"
 		videoSettings.OutputFormat = "mp4"
+	}
+
+	// Apply format sort if we have any options
+	if len(formatSortParts) > 0 {
+		args = append(args, "-S", strings.Join(formatSortParts, ","))
 	}
 
 	if videoSettings.EnableReencoding {
