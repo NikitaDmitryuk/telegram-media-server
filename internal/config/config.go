@@ -19,7 +19,7 @@ const (
 	DefaultPasswordMinLength            = 8
 	DefaultMaxConcurrentDownloads       = 3
 	DefaultProgressUpdateInterval       = 3 * time.Second
-	DefaultVideoMaxHeight               = 1080 // Default max video height (1080p)
+	DefaultVideoMaxHeight               = 0 // Default: no max height limit (0 = disabled)
 )
 
 func NewConfig() (*Config, error) {

@@ -411,7 +411,30 @@ func (d *YTDLPDownloader) StoppedManually() bool {
 func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 	videoSettings := d.config.GetVideoSettings()
 
+	qualitySelector := prepareQualitySelector(&videoSettings)
+
+	args := []string{
+		"--newline",
+		"--remote-components", "ejs:github", // Enable remote components for JS challenge solving
+		"-f", qualitySelector,
+		"-o", outputPath,
+		d.url,
+	}
+
+	args = appendFormatSortArgs(args, &videoSettings)
+	args = appendReencodingArgs(args, &videoSettings)
+	args = appendSubtitleArgs(args, &videoSettings)
+
+	return args
+}
+
+// prepareQualitySelector processes the quality selector with audio language filter and fallback.
+func prepareQualitySelector(videoSettings *tmsconfig.VideoConfig) string {
 	qualitySelector := videoSettings.QualitySelector
+
+	// Check for potential conflict between VIDEO_QUALITY_SELECTOR and VIDEO_MAX_HEIGHT
+	checkQualitySettingsConflict(qualitySelector, videoSettings.MaxHeight)
+
 	if videoSettings.AudioLang != "" {
 		qualitySelector = addAudioLanguageFilter(qualitySelector, videoSettings.AudioLang)
 	}
@@ -422,20 +445,24 @@ func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 		qualitySelector += "/best"
 	}
 
-	args := []string{
-		"--newline",
-		"--remote-components", "ejs:github", // Enable remote components for JS challenge solving
-		"-f", qualitySelector,
-		"-o", outputPath,
-		d.url,
-	}
+	return qualitySelector
+}
 
-	// Build format sort options
-	// -S (--format-sort) controls format preference order
+// checkQualitySettingsConflict logs a warning if both height filter and MaxHeight are set.
+func checkQualitySettingsConflict(qualitySelector string, maxHeight int) {
+	hasHeightFilter := strings.Contains(qualitySelector, "[height<=") || strings.Contains(qualitySelector, "[height<")
+	if hasHeightFilter && maxHeight > 0 {
+		logutils.Log.Warn("Both VIDEO_QUALITY_SELECTOR with height filter and VIDEO_MAX_HEIGHT are set. " +
+			"This may cause unexpected behavior. Consider using only one of these settings: " +
+			"either VIDEO_QUALITY_SELECTOR with [height<=X] filter OR VIDEO_MAX_HEIGHT (recommended)")
+	}
+}
+
+// appendFormatSortArgs adds format sorting options (-S) for resolution and codec preferences.
+func appendFormatSortArgs(args []string, videoSettings *tmsconfig.VideoConfig) []string {
 	var formatSortParts []string
 
 	// Add max height restriction (e.g., 1080 for 1080p, 720 for 720p)
-	// Set VIDEO_MAX_HEIGHT=0 to disable the limit
 	if videoSettings.MaxHeight > 0 {
 		formatSortParts = append(formatSortParts, fmt.Sprintf("res:%d", videoSettings.MaxHeight))
 	}
@@ -448,27 +475,37 @@ func (d *YTDLPDownloader) buildYTDLPArgs(outputPath string) []string {
 		videoSettings.OutputFormat = "mp4"
 	}
 
-	// Apply format sort if we have any options
 	if len(formatSortParts) > 0 {
 		args = append(args, "-S", strings.Join(formatSortParts, ","))
 	}
 
-	if videoSettings.EnableReencoding {
-		if !videoSettings.ForceReencoding {
-			args = append(args, "--recode-video", videoSettings.OutputFormat)
-		} else {
-			args = append(args, "--recode-video", videoSettings.OutputFormat)
-			postprocessorArgs := fmt.Sprintf("ffmpeg:-c:v %s -c:a %s",
-				videoSettings.VideoCodec, videoSettings.AudioCodec)
+	return args
+}
 
-			if videoSettings.FFmpegExtraArgs != "" {
-				postprocessorArgs += " " + videoSettings.FFmpegExtraArgs
-			}
-
-			args = append(args, "--postprocessor-args", postprocessorArgs)
-		}
+// appendReencodingArgs adds video reencoding options if enabled.
+func appendReencodingArgs(args []string, videoSettings *tmsconfig.VideoConfig) []string {
+	if !videoSettings.EnableReencoding {
+		return args
 	}
 
+	args = append(args, "--recode-video", videoSettings.OutputFormat)
+
+	if videoSettings.ForceReencoding {
+		postprocessorArgs := fmt.Sprintf("ffmpeg:-c:v %s -c:a %s",
+			videoSettings.VideoCodec, videoSettings.AudioCodec)
+
+		if videoSettings.FFmpegExtraArgs != "" {
+			postprocessorArgs += " " + videoSettings.FFmpegExtraArgs
+		}
+
+		args = append(args, "--postprocessor-args", postprocessorArgs)
+	}
+
+	return args
+}
+
+// appendSubtitleArgs adds subtitle download options if configured.
+func appendSubtitleArgs(args []string, videoSettings *tmsconfig.VideoConfig) []string {
 	if videoSettings.WriteSubs {
 		args = append(args, "--write-subs")
 		if videoSettings.SubtitleLang != "" {
