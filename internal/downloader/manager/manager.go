@@ -57,7 +57,8 @@ func (dm *DownloadManager) StartDownload(
 		fileSize = 0
 	}
 
-	movieID, err = dm.db.AddMovie(context.Background(), movieTitle, fileSize, movieFiles, tempFiles)
+	totalEpisodes := dl.TotalEpisodes()
+	movieID, err = dm.db.AddMovie(context.Background(), movieTitle, fileSize, movieFiles, tempFiles, totalEpisodes)
 	if err != nil {
 		return 0, nil, nil, utils.WrapError(err, "Failed to add movie to database", map[string]any{
 			"title": movieTitle,
@@ -72,7 +73,7 @@ func (dm *DownloadManager) StartDownload(
 
 	select {
 	case dm.semaphore <- struct{}{}:
-		return dm.startDownloadImmediately(movieID, dl, movieTitle)
+		return dm.startDownloadImmediately(movieID, dl, movieTitle, chatID)
 	default:
 		queuedMovieID, progressChan, outerErrChan := dm.addToQueue(movieID, dl, movieTitle, chatID)
 		return queuedMovieID, progressChan, outerErrChan, nil
@@ -83,10 +84,11 @@ func (dm *DownloadManager) startDownloadImmediately(
 	movieID uint,
 	dl downloader.Downloader,
 	movieTitle string,
+	chatID int64,
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	progressChan, errChan, err := dl.StartDownload(ctx)
+	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
 	if err != nil {
 		cancel()
 		<-dm.semaphore
@@ -103,8 +105,11 @@ func (dm *DownloadManager) startDownloadImmediately(
 		startTime:    dm.getCurrentTime(),
 		progressChan: progressChan,
 		errChan:      errChan,
+		episodesChan: episodesChan,
 		ctx:          ctx,
 		cancel:       cancel,
+		chatID:       chatID,
+		title:        movieTitle,
 	}
 
 	dm.mu.Lock()

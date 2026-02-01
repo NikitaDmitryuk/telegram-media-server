@@ -44,7 +44,7 @@ func (*MockMoviesBot) SendDocument(_ int64, _ *tgbotapi.DocumentConfig)         
 func (*MockMoviesBot) SendEditMessageText(_ *tgbotapi.EditMessageTextConfig)               {}
 func (*MockMoviesBot) SendEditMessageReplyMarkup(_ *tgbotapi.EditMessageReplyMarkupConfig) {}
 
-// Simulate bot calls by calling handler logic directly
+// Simulate bot calls by calling handler logic directly (mirrors list.go: episodes 2/8 for series)
 func simulateListMoviesHandler(bot BotInterface, update *tgbotapi.Update, db database.Database, _ *tmsconfig.Config) {
 	chatID := update.Message.Chat.ID
 
@@ -59,13 +59,17 @@ func simulateListMoviesHandler(bot BotInterface, update *tgbotapi.Update, db dat
 		return
 	}
 
-	// Simulate formatting movies
 	var messages []string
-	for _, movie := range movies {
+	for i := range movies {
+		movie := &movies[i]
 		sizeGB := float64(movie.FileSize) / (1024 * 1024 * 1024)
 		formattedSize := fmt.Sprintf("%.2f", sizeGB)
-		message := fmt.Sprintf("ID:%d [%d%%] %s ГБ\n%s\n",
-			movie.ID, movie.DownloadedPercentage, formattedSize, movie.Name)
+		episodes := ""
+		if movie.TotalEpisodes > 0 {
+			episodes = fmt.Sprintf("%d/%d ", movie.CompletedEpisodes, movie.TotalEpisodes)
+		}
+		message := fmt.Sprintf("ID:%d [%d%%] %s%s ГБ\n%s\n",
+			movie.ID, movie.DownloadedPercentage, episodes, formattedSize, movie.Name)
 		messages = append(messages, message)
 	}
 
@@ -183,6 +187,110 @@ func TestListMoviesHandler_DatabaseError(t *testing.T) {
 	}
 }
 
+// MockDatabaseWithSeries returns one series (TotalEpisodes > 0) for testing episodes display 2/8.
+type MockDatabaseWithSeries struct{}
+
+func (*MockDatabaseWithSeries) Init(_ *tmsconfig.Config) error { return nil }
+func (*MockDatabaseWithSeries) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
+	return 1, nil
+}
+func (*MockDatabaseWithSeries) RemoveMovie(_ context.Context, _ uint) error { return nil }
+func (*MockDatabaseWithSeries) GetMovieList(_ context.Context) ([]database.Movie, error) {
+	return []database.Movie{
+		{
+			ID:                   1,
+			Name:                 "Test Series S01",
+			FileSize:             1073741824,
+			DownloadedPercentage: 25,
+			TotalEpisodes:        8,
+			CompletedEpisodes:    2,
+		},
+	}, nil
+}
+func (*MockDatabaseWithSeries) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*MockDatabaseWithSeries) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*MockDatabaseWithSeries) SetLoaded(_ context.Context, _ uint) error { return nil }
+func (*MockDatabaseWithSeries) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
+	return database.Movie{}, nil
+}
+func (*MockDatabaseWithSeries) GetFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
+	return nil, nil
+}
+func (*MockDatabaseWithSeries) RemoveFilesByMovieID(_ context.Context, _ uint) error {
+	return nil
+}
+func (*MockDatabaseWithSeries) RemoveTempFilesByMovieID(_ context.Context, _ uint) error {
+	return nil
+}
+func (*MockDatabaseWithSeries) MovieExistsFiles(_ context.Context, _ []string) (bool, error) {
+	return false, nil
+}
+func (*MockDatabaseWithSeries) MovieExistsUploadedFile(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+func (*MockDatabaseWithSeries) GetTempFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
+	return nil, nil
+}
+func (*MockDatabaseWithSeries) CreateMovie(_ context.Context, _ *models.Movie) (uint, error) {
+	return 1, nil
+}
+func (*MockDatabaseWithSeries) Login(_ context.Context, _ string, _ int64, _ string, _ *tmsconfig.Config) (bool, error) {
+	return true, nil
+}
+func (*MockDatabaseWithSeries) GetUserRole(_ context.Context, _ int64) (database.UserRole, error) {
+	return models.AdminRole, nil
+}
+func (*MockDatabaseWithSeries) IsUserAccessAllowed(_ context.Context, _ int64) (allowed bool, role database.UserRole, err error) {
+	return true, models.AdminRole, nil
+}
+func (*MockDatabaseWithSeries) AssignTemporaryPassword(_ context.Context, _ string, _ int64) error {
+	return nil
+}
+func (*MockDatabaseWithSeries) ExtendTemporaryUser(_ context.Context, _ int64, _ time.Time) error {
+	return nil
+}
+func (*MockDatabaseWithSeries) GenerateTemporaryPassword(_ context.Context, _ time.Duration) (string, error) {
+	return "temp123", nil
+}
+func (*MockDatabaseWithSeries) GetUserByChatID(_ context.Context, _ int64) (database.User, error) {
+	return database.User{}, nil
+}
+func (*MockDatabaseWithSeries) MovieExistsId(_ context.Context, _ uint) (bool, error) {
+	return true, nil
+}
+
+func TestListMoviesHandler_WithSeries(t *testing.T) {
+	bot := &MockMoviesBot{}
+	config := testutils.TestConfig("/tmp")
+	mockDB := &MockDatabaseWithSeries{}
+	update := &tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Chat: &tgbotapi.Chat{ID: 123},
+		},
+	}
+
+	simulateListMoviesHandler(bot, update, mockDB, config)
+
+	if len(bot.SentMessages) != 1 {
+		t.Fatalf("Expected 1 message, got %d", len(bot.SentMessages))
+	}
+	msg := bot.SentMessages[0]
+	if msg.ChatID != 123 {
+		t.Errorf("Expected chat ID 123, got %d", msg.ChatID)
+	}
+	// Сериал: рядом с процентами отображается 2/8 без подписей
+	if !contains(msg.Text, "2/8") {
+		t.Errorf("Expected message to contain '2/8' for series, got: %s", msg.Text)
+	}
+	if !contains(msg.Text, "Test Series S01") {
+		t.Errorf("Expected message to contain series name, got: %s", msg.Text)
+	}
+}
+
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || substr == "" ||
@@ -194,7 +302,7 @@ func contains(s, substr string) bool {
 type MockDatabaseWithMovies struct{}
 
 func (*MockDatabaseWithMovies) Init(_ *tmsconfig.Config) error { return nil }
-func (*MockDatabaseWithMovies) AddMovie(_ context.Context, _ string, _ int64, _, _ []string) (uint, error) {
+func (*MockDatabaseWithMovies) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
 	return 1, nil
 }
 func (*MockDatabaseWithMovies) RemoveMovie(_ context.Context, _ uint) error { return nil }
@@ -215,6 +323,9 @@ func (*MockDatabaseWithMovies) GetMovieList(_ context.Context) ([]database.Movie
 	}, nil
 }
 func (*MockDatabaseWithMovies) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*MockDatabaseWithMovies) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
 	return nil
 }
 func (*MockDatabaseWithMovies) SetLoaded(_ context.Context, _ uint) error { return nil }
@@ -269,8 +380,11 @@ func (*MockDatabaseWithMovies) MovieExistsId(_ context.Context, _ uint) (bool, e
 type MockErrorDatabase struct{}
 
 func (*MockErrorDatabase) Init(_ *tmsconfig.Config) error { return nil }
-func (*MockErrorDatabase) AddMovie(_ context.Context, _ string, _ int64, _, _ []string) (uint, error) {
+func (*MockErrorDatabase) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
 	return 0, fmt.Errorf("database error")
+}
+func (*MockErrorDatabase) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
+	return fmt.Errorf("database error")
 }
 func (*MockErrorDatabase) RemoveMovie(_ context.Context, _ uint) error {
 	return fmt.Errorf("database error")

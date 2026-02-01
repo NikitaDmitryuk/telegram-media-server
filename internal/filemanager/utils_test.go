@@ -126,7 +126,7 @@ func TestDeleteTemporaryFilesByMovieID(t *testing.T) {
 
 	// Add a test movie
 	movieID, err := db.AddMovie(context.Background(), "Test Movie", 1024,
-		[]string{"movie.mp4"}, []string{"movie.torrent", "movie.temp"})
+		[]string{"movie.mp4"}, []string{"movie.torrent", "movie.temp"}, 0)
 	if err != nil {
 		t.Fatalf("Failed to add test movie: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestDeleteMainFilesByMovieID(t *testing.T) {
 
 	// Add a test movie
 	movieID, err := db.AddMovie(context.Background(), "Test Movie", 1024,
-		[]string{"movie.mp4"}, []string{"movie.torrent"})
+		[]string{"movie.mp4"}, []string{"movie.torrent"}, 0)
 	if err != nil {
 		t.Fatalf("Failed to add test movie: %v", err)
 	}

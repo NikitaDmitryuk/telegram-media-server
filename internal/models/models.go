@@ -7,6 +7,8 @@ type Movie struct {
 	Name                 string      `json:"name"                  gorm:"not null"`
 	DownloadedPercentage int         `json:"downloaded_percentage" gorm:"not null;default:0"`
 	FileSize             int64       `json:"file_size"             gorm:"not null;default:0"`
+	TotalEpisodes        int         `json:"total_episodes"        gorm:"not null;default:0"` // > 0 for series (multi-file torrent)
+	CompletedEpisodes    int         `json:"completed_episodes"    gorm:"not null;default:0"` // how many episodes fully downloaded
 	Files                []MovieFile `json:"files"                 gorm:"foreignKey:MovieID"`
 	CreatedAt            time.Time   `json:"created_at"            gorm:"autoCreateTime"`
 	UpdatedAt            time.Time   `json:"updated_at"            gorm:"autoUpdateTime"`

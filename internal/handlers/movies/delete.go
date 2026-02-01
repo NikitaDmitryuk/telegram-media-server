@@ -50,9 +50,10 @@ func deleteAllMovies(bot *tmsbot.Bot, chatID int64, db database.Database, movieP
 	}), ui.GetMainMenuKeyboard())
 
 	go func() {
-		for _, movie := range movies {
-			if err := filemanager.DeleteMovie(movie.ID, moviePath, db, downloadManager); err != nil {
-				logutils.Log.WithError(err).Errorf("Failed to delete movie with ID %d", movie.ID)
+		for i := range movies {
+			m := &movies[i]
+			if err := filemanager.DeleteMovie(m.ID, moviePath, db, downloadManager); err != nil {
+				logutils.Log.WithError(err).Errorf("Failed to delete movie with ID %d", m.ID)
 			}
 		}
 

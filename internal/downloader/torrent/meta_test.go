@@ -236,3 +236,31 @@ func TestMetaStructure(t *testing.T) {
 		}
 	})
 }
+
+func TestSortedFileIndicesByPath(t *testing.T) {
+	// Meta with files in non-lexicographic order (03, 01, 02); sorted order should be 01, 02, 03
+	meta := &Meta{}
+	meta.Info.Name = "Series"
+	meta.Info.Files = []struct {
+		Length int64    `bencode:"length"`
+		Path   []string `bencode:"path"`
+	}{
+		{100, []string{"Episode 03.mkv"}},
+		{200, []string{"Episode 01.mkv"}},
+		{300, []string{"Episode 02.mkv"}},
+	}
+
+	indices, sizes, totalSize := sortedFileIndicesByPath(meta)
+
+	// Lexicographic by path: "Series/Episode 01.mkv" < "Series/Episode 02.mkv" < "Series/Episode 03.mkv"
+	// Original aria2 indices: 1=Episode 03, 2=Episode 01, 3=Episode 02 → sorted: 2, 3, 1
+	if want := []int{2, 3, 1}; len(indices) != len(want) || indices[0] != want[0] || indices[1] != want[1] || indices[2] != want[2] {
+		t.Errorf("sortedFileIndicesByPath indices = %v, want %v", indices, want)
+	}
+	if want := []int64{200, 300, 100}; len(sizes) != len(want) || sizes[0] != want[0] || sizes[1] != want[1] || sizes[2] != want[2] {
+		t.Errorf("sortedFileIndicesByPath sizes = %v, want %v", sizes, want)
+	}
+	if totalSize != 600 {
+		t.Errorf("sortedFileIndicesByPath totalSize = %d, want 600", totalSize)
+	}
+}

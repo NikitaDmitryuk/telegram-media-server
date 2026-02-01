@@ -134,10 +134,17 @@ func (*TestSQLiteDatabase) Init(_ *config.Config) error {
 }
 
 // Implement all database interface methods by delegating to the real implementation
-func (t *TestSQLiteDatabase) AddMovie(ctx context.Context, name string, fileSize int64, mainFiles, tempFiles []string) (uint, error) {
+func (t *TestSQLiteDatabase) AddMovie(
+	ctx context.Context,
+	name string,
+	fileSize int64,
+	mainFiles, tempFiles []string,
+	totalEpisodes int,
+) (uint, error) {
 	movie := database.Movie{
-		Name:     name,
-		FileSize: fileSize,
+		Name:          name,
+		FileSize:      fileSize,
+		TotalEpisodes: totalEpisodes,
 	}
 	result := t.db.WithContext(ctx).Create(&movie)
 	if result.Error != nil {
@@ -175,6 +182,9 @@ func (*TestSQLiteDatabase) GetMovieList(_ context.Context) ([]database.Movie, er
 	return nil, nil
 }
 func (*TestSQLiteDatabase) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*TestSQLiteDatabase) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
 	return nil
 }
 func (*TestSQLiteDatabase) SetLoaded(_ context.Context, _ uint) error { return nil }
@@ -475,13 +485,15 @@ func WaitForCondition(t *testing.T, condition func() bool, timeout time.Duration
 
 // MockDownloader implements the downloader interface for testing
 type MockDownloader struct {
-	ShouldBlock     bool
-	ShouldError     bool
-	ErrorMessage    string
-	Title           string
-	Files           []string
-	TempFiles       []string
-	FileSize        int64
+	ShouldBlock  bool
+	ShouldError  bool
+	ErrorMessage string
+	Title        string
+	Files        []string
+	TempFiles    []string
+	FileSize     int64
+	// EpisodesChan if set is returned from StartDownload; test can send completed episode counts (e.g. 1 for first_episode_ready).
+	EpisodesChan    chan int
 	stoppedManually bool
 }
 
@@ -525,12 +537,26 @@ func (m *MockDownloader) StoppedManually() bool {
 	return m.stoppedManually
 }
 
-func (m *MockDownloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
+func (m *MockDownloader) TotalEpisodes() int {
+	if m.EpisodesChan != nil {
+		return 1
+	}
+	return 0
+}
+
+func (m *MockDownloader) StartDownload(
+	ctx context.Context,
+) (progressChan chan float64, errChan chan error, episodesChan <-chan int, err error) {
 	progressChan = make(chan float64, 1)
 	errChan = make(chan error, 1)
 
 	if m.ShouldError && m.ErrorMessage != "" {
-		return nil, nil, fmt.Errorf("%s", m.ErrorMessage)
+		return nil, nil, nil, fmt.Errorf("%s", m.ErrorMessage)
+	}
+
+	var epCh <-chan int
+	if m.EpisodesChan != nil {
+		epCh = m.EpisodesChan
 	}
 
 	go func() {
@@ -552,7 +578,7 @@ func (m *MockDownloader) StartDownload(ctx context.Context) (progressChan chan f
 		errChan <- nil
 	}()
 
-	return progressChan, errChan, nil
+	return progressChan, errChan, epCh, nil
 }
 
 func (m *MockDownloader) StopDownload() error {

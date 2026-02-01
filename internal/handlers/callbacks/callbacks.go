@@ -114,9 +114,9 @@ func handleDeleteMovieCallback(
 		}
 
 		var remainingMovies []database.Movie
-		for _, movie := range movieList {
-			if movie.ID != uint(movieID) {
-				remainingMovies = append(remainingMovies, movie)
+		for i := range movieList {
+			if movieList[i].ID != uint(movieID) {
+				remainingMovies = append(remainingMovies, movieList[i])
 			}
 		}
 

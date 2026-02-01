@@ -26,13 +26,16 @@ type Downloader interface {
 	// For a single file downloader, the returned size relates to that one file.
 	GetFileSize() (int64, error)
 
+	// TotalEpisodes returns the number of files (episodes) for multi-file torrents; 0 for single-file or video.
+	TotalEpisodes() int
+
 	// StoppedManually returns whether the download was stopped manually.
 	StoppedManually() bool
 
 	// StartDownload initiates the download process.
-	// It returns a channel to receive progress updates (in percentage) and an error if the start fails.
-	// The progress channel must be closed when the download completes or is stopped.
-	StartDownload(ctx context.Context) (chan float64, chan error, error)
+	// progressChan receives progress updates (0-100). episodesChan, if non-nil, receives completed episode count (1, 2, ...) for series.
+	// Both channels are closed when the download completes or is stopped.
+	StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, episodesChan <-chan int, err error)
 
 	// StopDownload stops the download process.
 	// If the download is stopped manually, implementations should track that state so that handlers

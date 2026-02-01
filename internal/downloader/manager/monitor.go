@@ -2,10 +2,12 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
@@ -43,6 +45,23 @@ func (dm *DownloadManager) monitorDownload(
 
 	for {
 		select {
+		case completed, ok := <-job.episodesChan:
+			if !ok {
+				job.episodesChan = nil
+				continue
+			}
+			if updateErr := dm.db.UpdateEpisodesProgress(context.Background(), movieID, completed); updateErr != nil {
+				logutils.Log.WithError(updateErr).WithField("movie_id", movieID).Error("Failed to update episodes progress")
+			}
+			if completed == 1 {
+				dm.notificationChan <- QueueNotification{
+					Type:    "first_episode_ready",
+					ChatID:  job.chatID,
+					MovieID: movieID,
+					Title:   job.title,
+				}
+			}
+
 		case progress, ok := <-job.progressChan:
 			if !ok {
 				logutils.Log.WithFields(map[string]any{
@@ -95,6 +114,11 @@ func (dm *DownloadManager) monitorDownload(
 				return
 			}
 
+			if errors.Is(err, downloader.ErrStoppedByUser) {
+				logutils.Log.WithField("movie_id", movieID).Info("Download stopped by user")
+				outerErrChan <- nil
+				return
+			}
 			if err != nil {
 				logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Download failed")
 				outerErrChan <- utils.WrapError(err, "Download failed", map[string]any{

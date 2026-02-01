@@ -8,10 +8,7 @@ services:
       - RUNNING_IN_DOCKER=true
     volumes:
       - ${MOVIE_PATH}:/app/media
-    ports:
-      - "6881-6999:6881-6999/tcp"
-      - "6881-6999:6881-6999/udp"
-    network_mode: bridge
+    network_mode: host
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest

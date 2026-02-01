@@ -46,7 +46,7 @@ func testRealFileOperations(t *testing.T) {
 	// Add a movie to database
 	movieID, err := db.AddMovie(context.Background(), "Integration Test Movie", 1024*1024, // 1MB
 		[]string{"movie.mp4", "subtitle.srt"},
-		[]string{"movie.torrent", "movie.part", "movie.tmp"})
+		[]string{"movie.torrent", "movie.part", "movie.tmp"}, 0)
 	if err != nil {
 		t.Fatalf("Failed to add movie: %v", err)
 	}

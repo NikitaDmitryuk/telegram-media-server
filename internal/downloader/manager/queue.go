@@ -50,6 +50,7 @@ func (dm *DownloadManager) startQueuedDownload(queued queuedDownload) {
 		queued.movieID,
 		queued.downloader,
 		queued.title,
+		queued.chatID,
 	)
 	if err != nil {
 		logutils.Log.WithError(err).WithFields(map[string]any{

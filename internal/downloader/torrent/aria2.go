@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -47,31 +48,58 @@ func NewAria2Downloader(botInstance *bot.Bot, torrentFileName, moviePath string,
 	}
 }
 
-func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
+func (d *Aria2Downloader) StartDownload(
+	ctx context.Context,
+) (progressChan chan float64, errChan chan error, episodesChan <-chan int, err error) {
 	aria2Cfg := d.config.GetAria2Settings()
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
 
-	logutils.Log.WithFields(map[string]any{
-		"torrent_file": d.torrentFileName,
-		"download_dir": d.downloadDir,
-		"aria2_config": aria2Cfg,
-	}).Info("Starting aria2c download with optimized configuration")
+	meta, metaErr := d.parseTorrentMeta()
+	if metaErr != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse torrent meta: %w", metaErr)
+	}
 
-	cmdArgs := d.buildAria2Args(torrentPath, &aria2Cfg)
+	progressChan = make(chan float64)
+	errChan = make(chan error, 1)
+
+	if len(meta.Info.Files) > 0 {
+		epCh := make(chan int, len(meta.Info.Files))
+		episodesChan = epCh
+		go d.runMultiFileDownload(ctx, torrentPath, meta, &aria2Cfg, progressChan, errChan, epCh)
+	} else {
+		go d.runSingleDownload(ctx, torrentPath, &aria2Cfg, progressChan, errChan)
+		return progressChan, errChan, nil, nil
+	}
+	return progressChan, errChan, episodesChan, nil
+}
+
+// runSingleDownload runs one aria2 process for single-file torrent or multi-file without ordering.
+func (d *Aria2Downloader) runSingleDownload(
+	ctx context.Context,
+	torrentPath string,
+	aria2Cfg *config.Aria2Config,
+	progressChan chan float64,
+	errChan chan error,
+) {
+	defer close(progressChan)
+	defer close(errChan)
+
+	cmdArgs := d.buildAria2Args(torrentPath, aria2Cfg, nil)
 	d.cmd = exec.CommandContext(ctx, "aria2c", cmdArgs...)
 
-	stdout, err := d.cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to capture stdout: %w", err)
+	stdout, pipeErr := d.cmd.StdoutPipe()
+	if pipeErr != nil {
+		errChan <- fmt.Errorf("failed to capture stdout: %w", pipeErr)
+		return
 	}
-
-	stderr, err := d.cmd.StderrPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to capture stderr: %w", err)
+	stderr, pipeErr := d.cmd.StderrPipe()
+	if pipeErr != nil {
+		errChan <- fmt.Errorf("failed to capture stderr: %w", pipeErr)
+		return
 	}
-
-	if err := d.cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("failed to start aria2c: %w", err)
+	if startErr := d.cmd.Start(); startErr != nil {
+		errChan <- fmt.Errorf("failed to start aria2c: %w", startErr)
+		return
 	}
 
 	go func() {
@@ -81,24 +109,140 @@ func (d *Aria2Downloader) StartDownload(ctx context.Context) (progressChan chan 
 		}
 	}()
 
-	progressChan = make(chan float64)
-	errChan = make(chan error, 1)
+	go d.parseProgress(stdout, progressChan)
 
-	go func() {
-		defer close(progressChan)
-		defer close(errChan)
+	waitErr := d.cmd.Wait()
+	if waitErr != nil && !d.stoppedManually {
+		logutils.Log.WithError(waitErr).Warn("aria2c exited with error")
+		errChan <- waitErr
+	} else {
+		errChan <- nil
+	}
+}
 
-		go d.parseProgress(stdout, progressChan)
+// runMultiFileDownload runs aria2 sequentially, one file at a time in lexicographic path order,
+// so the first episode (by name) finishes first and can be played sooner.
+// Sends completed episode count (1, 2, ...) on episodesChan after each run.
+//
+//nolint:funlen // sequential multi-file download with progress and episode notifications
+func (d *Aria2Downloader) runMultiFileDownload(
+	ctx context.Context,
+	torrentPath string,
+	meta *Meta,
+	aria2Cfg *config.Aria2Config,
+	progressChan chan float64,
+	errChan chan error,
+	episodesChan chan int,
+) {
+	defer close(progressChan)
+	defer close(errChan)
+	if episodesChan != nil {
+		defer close(episodesChan)
+	}
 
-		if err := d.cmd.Wait(); err != nil && !d.stoppedManually {
-			logutils.Log.WithError(err).Warn("aria2c exited with error")
-			errChan <- err
-		} else {
-			errChan <- nil
+	sortedIndices, sortedSizes, totalSize := sortedFileIndicesByPath(meta)
+	if totalSize == 0 {
+		errChan <- nil
+		return
+	}
+
+	logutils.Log.WithFields(map[string]any{
+		"torrent_file":   d.torrentFileName,
+		"download_dir":   d.downloadDir,
+		"num_files":      len(sortedIndices),
+		"download_order": "lexicographic by path",
+	}).Info("Starting aria2c multi-file download in lexicographic order")
+
+	var runStartSize int64
+	for run := range sortedIndices {
+		if ctx.Err() != nil {
+			errChan <- ctx.Err()
+			return
 		}
-	}()
+		selectIndices := sortedIndices[:run+1]
+		currentFileSize := sortedSizes[run]
 
-	return progressChan, errChan, nil
+		cmdArgs := d.buildAria2Args(torrentPath, aria2Cfg, selectIndices)
+		cmd := exec.CommandContext(ctx, "aria2c", cmdArgs...)
+		d.cmd = cmd
+
+		stdout, pipeErr := cmd.StdoutPipe()
+		if pipeErr != nil {
+			errChan <- fmt.Errorf("failed to capture stdout: %w", pipeErr)
+			return
+		}
+		stderr, pipeErr := cmd.StderrPipe()
+		if pipeErr != nil {
+			errChan <- fmt.Errorf("failed to capture stderr: %w", pipeErr)
+			return
+		}
+		if startErr := cmd.Start(); startErr != nil {
+			errChan <- fmt.Errorf("failed to start aria2c: %w", startErr)
+			return
+		}
+
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				logutils.Log.Errorf("aria2c stderr: %s", scanner.Text())
+			}
+		}()
+
+		runTotalSize := runStartSize + currentFileSize
+		runProgressChan := make(chan float64)
+		go func() {
+			d.parseProgress(stdout, runProgressChan)
+			close(runProgressChan)
+		}()
+		for p := range runProgressChan {
+			// aria2 reports progress for current run (selected files); map to overall progress
+			totalProgress := p * float64(runTotalSize) / float64(totalSize)
+			progressChan <- totalProgress
+		}
+
+		waitErr := cmd.Wait()
+		if waitErr != nil && !d.stoppedManually {
+			logutils.Log.WithError(waitErr).Warn("aria2c exited with error")
+			errChan <- waitErr
+			return
+		}
+		if d.stoppedManually {
+			errChan <- downloader.ErrStoppedByUser
+			return
+		}
+		completed := run + 1
+		if episodesChan != nil {
+			episodesChan <- completed
+		}
+		runStartSize += currentFileSize
+	}
+	errChan <- nil
+}
+
+// sortedFileIndicesByPath returns aria2 file indices (1-based) and sizes sorted by file path (lexicographic).
+// So the first episode by name is downloaded first.
+func sortedFileIndicesByPath(meta *Meta) (indices []int, sizes []int64, totalSize int64) {
+	type entry struct {
+		aria2Index int // 1-based
+		path       string
+		size       int64
+	}
+	var entries []entry
+	for i := range meta.Info.Files {
+		f := &meta.Info.Files[i]
+		path := filepath.Join(meta.Info.Name, filepath.Join(f.Path...))
+		entries = append(entries, entry{aria2Index: i + 1, path: path, size: f.Length})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].path < entries[j].path })
+
+	indices = make([]int, len(entries))
+	sizes = make([]int64, len(entries))
+	for i, e := range entries {
+		indices[i] = e.aria2Index
+		sizes[i] = e.size
+		totalSize += e.size
+	}
+	return indices, sizes, totalSize
 }
 
 func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
@@ -147,6 +291,14 @@ func (d *Aria2Downloader) StopDownload() error {
 
 func (d *Aria2Downloader) StoppedManually() bool {
 	return d.stoppedManually
+}
+
+func (d *Aria2Downloader) TotalEpisodes() int {
+	meta, err := d.parseTorrentMeta()
+	if err != nil {
+		return 0
+	}
+	return len(meta.Info.Files)
 }
 
 // handleProcessExit handles the exit of aria2c process after SIGINT
@@ -323,7 +475,8 @@ func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 	return ValidateContent(header, n)
 }
 
-func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Config) []string {
+//nolint:gocyclo // aria2 CLI has many optional flags, each adds a branch
+func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Config, selectFileIndices []int) []string {
 	args := []string{
 		"--dir", d.downloadDir,
 		"--summary-interval=3",
@@ -439,6 +592,15 @@ func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Co
 	// Follow torrent setting
 	if cfg.FollowTorrent {
 		args = append(args, "--follow-torrent=true")
+	}
+
+	// File selection: download only these files (1-based indices), in order (for sequential multi-file)
+	if len(selectFileIndices) > 0 {
+		parts := make([]string, len(selectFileIndices))
+		for i, idx := range selectFileIndices {
+			parts[i] = strconv.Itoa(idx)
+		}
+		args = append(args, "--select-file="+strings.Join(parts, ","))
 	}
 
 	// Add the torrent file path at the end

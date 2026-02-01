@@ -32,8 +32,11 @@ type downloadJob struct {
 	startTime    time.Time
 	progressChan chan float64
 	errChan      chan error
+	episodesChan <-chan int
 	ctx          context.Context
 	cancel       context.CancelFunc
+	chatID       int64
+	title        string
 }
 
 type queuedDownload struct {
