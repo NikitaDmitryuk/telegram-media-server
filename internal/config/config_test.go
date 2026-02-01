@@ -316,6 +316,30 @@ func TestConfigEnvironmentVariableParsing(t *testing.T) {
 			envValue: "1.5",
 			checkFn:  func(c *Config) bool { return c.Aria2Settings.SeedRatio == 1.5 },
 		},
+		{
+			name:     "YTDLP_UPDATE_ON_START true",
+			envVar:   "YTDLP_UPDATE_ON_START",
+			envValue: "true",
+			checkFn:  func(c *Config) bool { return c.YtdlpUpdateOnStart == true },
+		},
+		{
+			name:     "YTDLP_UPDATE_ON_START false",
+			envVar:   "YTDLP_UPDATE_ON_START",
+			envValue: "false",
+			checkFn:  func(c *Config) bool { return c.YtdlpUpdateOnStart == false },
+		},
+		{
+			name:     "YTDLP_UPDATE_INTERVAL parsing",
+			envVar:   "YTDLP_UPDATE_INTERVAL",
+			envValue: "12h",
+			checkFn:  func(c *Config) bool { return c.YtdlpUpdateInterval == 12*time.Hour },
+		},
+		{
+			name:     "YTDLP_UPDATE_INTERVAL zero disables periodic",
+			envVar:   "YTDLP_UPDATE_INTERVAL",
+			envValue: "0",
+			checkFn:  func(c *Config) bool { return c.YtdlpUpdateInterval == 0 },
+		},
 	}
 
 	for _, tt := range tests {

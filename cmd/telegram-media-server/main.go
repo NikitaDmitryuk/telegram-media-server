@@ -10,6 +10,7 @@ import (
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	tmsdownloadmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
+	tmsvideo "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/video"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/common"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -34,6 +35,10 @@ func main() {
 		"build_time": BuildTime,
 	}).Info("Starting Telegram Media Server")
 
+	if config.YtdlpUpdateOnStart {
+		go tmsvideo.RunUpdate(context.Background())
+	}
+
 	if dbErr := database.InitDatabase(config); dbErr != nil {
 		logutils.Log.WithError(dbErr).Fatal("Failed to initialize the database")
 	}
@@ -55,6 +60,10 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if config.YtdlpUpdateInterval > 0 {
+		go tmsvideo.StartPeriodicUpdater(ctx, config.YtdlpUpdateInterval)
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

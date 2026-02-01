@@ -95,6 +95,16 @@ If you plan to use DLNA, follow these steps:
 
 ---
 
+### Обновление yt-dlp / Keeping yt-dlp up to date
+
+Приложение само обновляет yt-dlp при старте и затем по расписанию (по умолчанию раз в 3 часа). Отключить или изменить интервал можно в `.env` — см. [`.env.example`](.env.example).  
+The application updates yt-dlp on start and then on a schedule (default: every 3 hours). To disable or change the interval, use `.env` — see [`.env.example`](.env.example).
+
+Рекомендуется ставить yt-dlp с [релизов](https://github.com/yt-dlp/yt-dlp/releases) или через `pip install yt-dlp` — версии из репозитория ОС часто не поддерживают самообновление.  
+Prefer installing yt-dlp from [releases](https://github.com/yt-dlp/yt-dlp/releases) or via `pip install yt-dlp`; OS package versions often do not support self-update.
+
+---
+
 ## Конфигурация / Configuration
 
 Файл конфигурации — `.env`:  

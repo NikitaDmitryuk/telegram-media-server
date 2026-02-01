@@ -19,22 +19,25 @@ const (
 	DefaultPasswordMinLength            = 8
 	DefaultMaxConcurrentDownloads       = 3
 	DefaultProgressUpdateInterval       = 3 * time.Second
-	DefaultVideoMaxHeight               = 0 // Default: no max height limit (0 = disabled)
+	DefaultVideoMaxHeight               = 0             // Default: no max height limit (0 = disabled)
+	DefaultYtdlpUpdateInterval          = 3 * time.Hour // Periodic yt-dlp update interval; 0 = disabled
 )
 
 func NewConfig() (*Config, error) {
 	config := &Config{
-		BotToken:        getEnv("BOT_TOKEN", ""),
-		MoviePath:       getEnv("MOVIE_PATH", ""),
-		AdminPassword:   getEnv("ADMIN_PASSWORD", ""),
-		RegularPassword: getEnv("REGULAR_PASSWORD", ""),
-		Lang:            getEnv("LANG", "en"),
-		Proxy:           getEnv("PROXY", ""),
-		ProxyDomains:    getEnv("PROXY_DOMAINS", ""),
-		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		LangPath:        getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
-		ProwlarrURL:     getEnv("PROWLARR_URL", ""),
-		ProwlarrAPIKey:  getEnv("PROWLARR_API_KEY", ""),
+		BotToken:            getEnv("BOT_TOKEN", ""),
+		MoviePath:           getEnv("MOVIE_PATH", ""),
+		AdminPassword:       getEnv("ADMIN_PASSWORD", ""),
+		RegularPassword:     getEnv("REGULAR_PASSWORD", ""),
+		Lang:                getEnv("LANG", "en"),
+		Proxy:               getEnv("PROXY", ""),
+		ProxyDomains:        getEnv("PROXY_DOMAINS", ""),
+		LogLevel:            getEnv("LOG_LEVEL", "info"),
+		LangPath:            getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
+		ProwlarrURL:         getEnv("PROWLARR_URL", ""),
+		ProwlarrAPIKey:      getEnv("PROWLARR_API_KEY", ""),
+		YtdlpUpdateOnStart:  getEnvBool("YTDLP_UPDATE_ON_START", true),
+		YtdlpUpdateInterval: getEnvDuration("YTDLP_UPDATE_INTERVAL", DefaultYtdlpUpdateInterval),
 
 		DownloadSettings: DownloadConfig{
 			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", DefaultMaxConcurrentDownloads),
@@ -116,17 +119,19 @@ func NewConfig() (*Config, error) {
 }
 
 type Config struct {
-	BotToken        string
-	MoviePath       string
-	AdminPassword   string
-	RegularPassword string
-	Lang            string
-	Proxy           string
-	ProxyDomains    string
-	LogLevel        string
-	LangPath        string
-	ProwlarrURL     string
-	ProwlarrAPIKey  string
+	BotToken            string
+	MoviePath           string
+	AdminPassword       string
+	RegularPassword     string
+	Lang                string
+	Proxy               string
+	ProxyDomains        string
+	LogLevel            string
+	LangPath            string
+	ProwlarrURL         string
+	ProwlarrAPIKey      string
+	YtdlpUpdateOnStart  bool
+	YtdlpUpdateInterval time.Duration
 
 	DownloadSettings DownloadConfig
 	SecuritySettings SecurityConfig
