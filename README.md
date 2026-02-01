@@ -95,6 +95,35 @@ If you plan to use DLNA, follow these steps:
 
 ---
 
+### Обновление yt-dlp / Keeping yt-dlp up to date
+
+yt-dlp часто обновляется; актуальная версия важна для работы с меняющимися сайтами.  
+yt-dlp is updated frequently; having the latest version is critical for compatibility with changing video sites.
+
+Приложение само обновляет yt-dlp гибридным способом (и при старте, и по расписанию):  
+The application updates yt-dlp itself in a hybrid way (on start and on a schedule):
+
+- **При старте** — один раз выполняется `yt-dlp -U` (в фоне, не блокирует запуск).  
+  **On start** — `yt-dlp -U` is run once in the background (does not block startup).
+- **По расписанию** — каждые `YTDLP_UPDATE_INTERVAL` (по умолчанию 3h) снова выполняется `yt-dlp -U`.  
+  **Periodic** — every `YTDLP_UPDATE_INTERVAL` (default 3h), `yt-dlp -U` is run again.
+
+Одинаково работает при запуске через systemd и в Docker.  
+Works the same when run via systemd or in Docker.
+
+Переменные в `.env` (см. [`.env.example`](.env.example)):  
+Variables in `.env` (see [`.env.example`](.env.example)):
+
+- `YTDLP_UPDATE_ON_START` — обновлять при старте (по умолчанию `true`).  
+  Update on start (default `true`).
+- `YTDLP_UPDATE_INTERVAL` — интервал периодического обновления (например `3h`, `12h`). `0` — отключить периодическое обновление.  
+  Interval for periodic updates (e.g. `3h`, `12h`). `0` disables periodic updates.
+
+Для работы `yt-dlp -U` нужна установка, поддерживающая самообновление (standalone-бинарник с [релизов](https://github.com/yt-dlp/yt-dlp/releases) или `pip install yt-dlp`; пакеты из репозитория ОС часто не поддерживают `-U`).  
+For `yt-dlp -U` to work, use an installation that supports self-update (standalone binary from [releases](https://github.com/yt-dlp/yt-dlp/releases) or `pip install yt-dlp`; OS package manager versions often do not support `-U`).
+
+---
+
 ## Конфигурация / Configuration
 
 Файл конфигурации — `.env`:  
