@@ -20,6 +20,7 @@ import (
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
 	tmsutils "github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
@@ -66,6 +67,48 @@ func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string, config *tmsconfig
 }
 
 func (*YTDLPDownloader) TotalEpisodes() int { return 0 }
+
+// GetEarlyTvCompatibility runs yt-dlp -j --no-download to get format info and returns a preliminary
+// TV compatibility (green/yellow/red) from vcodec so the circle can be shown immediately.
+func (d *YTDLPDownloader) GetEarlyTvCompatibility(ctx context.Context) (string, error) {
+	vcodec, err := d.fetchVcodecFromMetadata(ctx)
+	if err != nil {
+		logutils.Log.WithError(err).WithField("url", d.url).Debug("Early TV compat: failed to get vcodec from yt-dlp")
+		return "", err
+	}
+	return tvcompat.CompatFromVcodec(vcodec), nil
+}
+
+// fetchVcodecFromMetadata runs yt-dlp -j --no-download and returns the first non-empty vcodec (top-level or from formats).
+func (d *YTDLPDownloader) fetchVcodecFromMetadata(ctx context.Context) (string, error) {
+	args := []string{"-j", "--no-download", "--no-warnings", d.url}
+	if useProxy, _ := shouldUseProxy(d.url, d.config); useProxy && d.config.Proxy != "" {
+		args = append([]string{"--proxy", d.config.Proxy}, args...)
+	}
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("yt-dlp -j: %w", err)
+	}
+	var info struct {
+		Vcodec  string `json:"vcodec"`
+		Formats []struct {
+			Vcodec string `json:"vcodec"`
+		} `json:"formats"`
+	}
+	if err := json.Unmarshal(out, &info); err != nil {
+		return "", fmt.Errorf("parse yt-dlp json: %w", err)
+	}
+	if info.Vcodec != "" && info.Vcodec != "none" {
+		return info.Vcodec, nil
+	}
+	for _, f := range info.Formats {
+		if f.Vcodec != "" && f.Vcodec != "none" {
+			return f.Vcodec, nil
+		}
+	}
+	return "", nil
+}
 
 func (d *YTDLPDownloader) StartDownload(
 	ctx context.Context,

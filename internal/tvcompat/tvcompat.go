@@ -18,6 +18,44 @@ var videoExtensions = map[string]struct{}{
 	".mkv": {}, ".mp4": {}, ".avi": {}, ".mov": {}, ".webm": {}, ".m4v": {},
 }
 
+// Extensions that typically indicate non-H.264 (VP9, AV1) — show red until probe.
+var likelyNonH264Extensions = map[string]struct{}{
+	".webm": {},
+}
+
+// CompatFromTorrentFileNames returns a preliminary TV compatibility from the first video file name in the list.
+// Used to show the circle immediately when a torrent is added (from torrent meta). Returns "" if no video file found.
+func CompatFromTorrentFileNames(filePaths []string) string {
+	for _, p := range filePaths {
+		ext := strings.ToLower(filepath.Ext(p))
+		if _, ok := videoExtensions[ext]; !ok {
+			continue
+		}
+		if _, bad := likelyNonH264Extensions[ext]; bad {
+			return TvCompatRed
+		}
+		// .mkv, .mp4, .mov, .m4v — likely H.264 but level unknown
+		return TvCompatYellow
+	}
+	return ""
+}
+
+// CompatFromVcodec returns a preliminary TV compatibility from a codec string (e.g. from yt-dlp JSON: "avc1.64001f", "vp9").
+// Returns "" if unknown or empty.
+func CompatFromVcodec(vcodec string) string {
+	v := strings.ToLower(strings.TrimSpace(vcodec))
+	if v == "" || v == "none" {
+		return ""
+	}
+	if strings.Contains(v, "vp9") || strings.Contains(v, "av01") || strings.Contains(v, "av1") {
+		return TvCompatRed
+	}
+	if strings.Contains(v, "h264") || strings.Contains(v, "avc") {
+		return TvCompatYellow
+	}
+	return ""
+}
+
 // TvCompatGreen means video will play on old TV without conversion.
 // TvCompatYellow means light conversion (remux) may be needed.
 // TvCompatRed means heavy re-encoding would be needed (not implemented).

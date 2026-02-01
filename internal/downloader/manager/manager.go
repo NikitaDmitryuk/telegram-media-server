@@ -106,6 +106,15 @@ func (dm *DownloadManager) startDownloadImmediately(
 		})
 	}
 
+	// Show TV compatibility circle immediately from metadata (torrent file names or yt-dlp format info).
+	if dm.cfg.VideoSettings.CompatibilityMode {
+		if early, ok := dl.(downloader.EarlyCompatDownloader); ok {
+			if compat, earlyErr := early.GetEarlyTvCompatibility(ctx); earlyErr == nil && compat != "" {
+				_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
+			}
+		}
+	}
+
 	outerErrChan = make(chan error, 1)
 
 	job := downloadJob{
