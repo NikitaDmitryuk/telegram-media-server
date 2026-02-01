@@ -8,13 +8,16 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
 var GlobalDownloadManager *DownloadManager
 
-func InitDownloadManager(cfg *config.Config) {
-	GlobalDownloadManager = NewDownloadManager(cfg, database.GlobalDB)
+// InitDownloadManager creates the download manager and assigns it to GlobalDownloadManager.
+// Caller must pass db (e.g. database.GlobalDB after InitDatabase) so manager does not depend on database package globals.
+func InitDownloadManager(cfg *config.Config, db database.Database) {
+	GlobalDownloadManager = NewDownloadManager(cfg, db)
 }
 
 func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManager {
@@ -25,9 +28,14 @@ func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManag
 		downloadSettings: cfg.GetDownloadSettings(),
 		notificationChan: make(chan QueueNotification, NotificationChannelSize),
 		db:               db,
+		cfg:              cfg,
+		conversionQueue:  make(chan conversionJob, ConversionQueueSize),
 	}
 
 	go dm.processQueue()
+	if cfg.VideoSettings.CompatibilityMode {
+		go dm.runConversionWorker()
+	}
 
 	return dm
 }
@@ -101,15 +109,16 @@ func (dm *DownloadManager) startDownloadImmediately(
 	outerErrChan = make(chan error, 1)
 
 	job := downloadJob{
-		downloader:   dl,
-		startTime:    dm.getCurrentTime(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		episodesChan: episodesChan,
-		ctx:          ctx,
-		cancel:       cancel,
-		chatID:       chatID,
-		title:        movieTitle,
+		downloader:    dl,
+		startTime:     dm.getCurrentTime(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		episodesChan:  episodesChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		chatID:        chatID,
+		title:         movieTitle,
+		totalEpisodes: dl.TotalEpisodes(),
 	}
 
 	dm.mu.Lock()
@@ -148,12 +157,13 @@ func (dm *DownloadManager) StopDownload(movieID uint) error {
 func (dm *DownloadManager) StopAllDownloads() {
 	dm.mu.Lock()
 	jobs := make(map[uint]downloadJob)
-	for k, v := range dm.jobs {
-		jobs[k] = v
+	for k := range dm.jobs {
+		jobs[k] = dm.jobs[k]
 	}
 	dm.mu.Unlock()
 
-	for movieID, job := range jobs {
+	for movieID := range jobs {
+		job := jobs[movieID]
 		logutils.Log.WithField("movie_id", movieID).Info("Stopping download")
 		if err := job.downloader.StopDownload(); err != nil {
 			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader (may have stopped anyway)")
@@ -164,4 +174,74 @@ func (dm *DownloadManager) StopAllDownloads() {
 
 func (*DownloadManager) getCurrentTime() time.Time {
 	return time.Now()
+}
+
+// enqueueConversionIfNeeded runs after download completes: probes TV compatibility, sets tv_compatibility,
+// and either marks as skipped (red) or enqueues for light conversion (green/yellow).
+// Returns needWait, done channel, and compatRed (true if video is red / not playable on TV).
+func (dm *DownloadManager) enqueueConversionIfNeeded(
+	ctx context.Context,
+	movieID uint,
+	chatID int64,
+	title string,
+) (needWait bool, done <-chan struct{}, compatRed bool) {
+	if !dm.cfg.VideoSettings.CompatibilityMode {
+		return false, nil, false
+	}
+	targetLevel := tvcompat.ParseH264Level(dm.cfg.VideoSettings.TvH264Level)
+	if targetLevel <= 0 {
+		targetLevel = 41
+	}
+	compat := tvcompat.ProbeTvCompatibility(ctx, movieID, dm.cfg.MoviePath, dm.db, targetLevel)
+	_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
+	if compat == tvcompat.TvCompatRed {
+		_ = dm.db.UpdateConversionStatus(ctx, movieID, "skipped")
+		return false, nil, true
+	}
+	_ = dm.db.UpdateConversionStatus(ctx, movieID, "pending")
+	_ = dm.db.UpdateConversionPercentage(ctx, movieID, 0)
+	needWait, ch := dm.EnqueueConversion(movieID, chatID, title)
+	return needWait, ch, false
+}
+
+// EnqueueConversion adds movieID to the conversion queue (no-op if compatibility mode is off).
+// Returns (enqueued, done). If enqueued, caller must <-done before signaling "download completed" to the user.
+func (dm *DownloadManager) EnqueueConversion(movieID uint, chatID int64, title string) (enqueued bool, done <-chan struct{}) {
+	if !dm.cfg.VideoSettings.CompatibilityMode {
+		return false, nil
+	}
+	jobDone := make(chan struct{}, 1)
+	job := conversionJob{MovieID: movieID, ChatID: chatID, Title: title, Done: jobDone}
+	select {
+	case dm.conversionQueue <- job:
+		logutils.Log.WithField("movie_id", movieID).Info("Movie enqueued for TV compatibility conversion")
+		return true, jobDone
+	default:
+		logutils.Log.WithField("movie_id", movieID).Warn("Conversion queue full, movie not enqueued")
+		return false, nil
+	}
+}
+
+func (dm *DownloadManager) runConversionWorker() {
+	ctx := context.Background()
+	vs := &dm.cfg.VideoSettings
+	for job := range dm.conversionQueue {
+		movieID := job.MovieID
+		if err := dm.db.UpdateConversionStatus(ctx, movieID, "in_progress"); err != nil {
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status")
+		}
+		movie, _ := dm.db.GetMovieByID(ctx, movieID)
+		if movie.TvCompatibility != tvcompat.TvCompatGreen {
+			tvcompat.RunTvCompatibility(ctx, movieID, dm.cfg.MoviePath, dm.db, vs)
+		}
+		const completeConversionPct = 100
+		if err := dm.db.UpdateConversionPercentage(ctx, movieID, completeConversionPct); err != nil {
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion percentage")
+		}
+		if err := dm.db.UpdateConversionStatus(ctx, movieID, "done"); err != nil {
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status done")
+		}
+		logutils.Log.WithField("movie_id", movieID).Info("TV compatibility conversion completed")
+		close(job.Done)
+	}
 }

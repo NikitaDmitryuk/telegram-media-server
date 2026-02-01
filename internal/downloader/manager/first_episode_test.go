@@ -41,6 +41,13 @@ func (*firstEpisodeMockDB) UpdateDownloadedPercentage(_ context.Context, _ uint,
 	return nil
 }
 func (*firstEpisodeMockDB) SetLoaded(_ context.Context, _ uint) error { return nil }
+func (*firstEpisodeMockDB) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
+	return nil
+}
+func (*firstEpisodeMockDB) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*firstEpisodeMockDB) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
 func (*firstEpisodeMockDB) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
 	return database.Movie{}, nil
 }
@@ -94,7 +101,7 @@ func (*firstEpisodeDownloader) GetFiles() (mainFiles, tempFiles []string, err er
 	return []string{"e01.mkv"}, []string{"t.torrent"}, nil
 }
 func (*firstEpisodeDownloader) GetFileSize() (int64, error) { return 1024, nil }
-func (*firstEpisodeDownloader) TotalEpisodes() int          { return 1 }
+func (*firstEpisodeDownloader) TotalEpisodes() int          { return 8 }
 func (*firstEpisodeDownloader) StoppedManually() bool       { return false }
 func (*firstEpisodeDownloader) StopDownload() error         { return nil }
 

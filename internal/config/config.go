@@ -86,18 +86,20 @@ func NewConfig() (*Config, error) {
 		},
 
 		VideoSettings: VideoConfig{
-			EnableReencoding:  getEnvBool("VIDEO_ENABLE_REENCODING", false),
-			ForceReencoding:   getEnvBool("VIDEO_FORCE_REENCODING", false),
-			VideoCodec:        getEnv("VIDEO_CODEC", "h264"),
-			AudioCodec:        getEnv("AUDIO_CODEC", "mp3"),
-			OutputFormat:      getEnv("VIDEO_OUTPUT_FORMAT", "mp4"),
-			FFmpegExtraArgs:   getEnv("FFMPEG_EXTRA_ARGS", "-pix_fmt yuv420p"),
-			QualitySelector:   getEnv("VIDEO_QUALITY_SELECTOR", "bv*+ba/b"),
-			MaxHeight:         getEnvInt("VIDEO_MAX_HEIGHT", DefaultVideoMaxHeight),
-			CompatibilityMode: getEnvBool("VIDEO_COMPATIBILITY_MODE", false),
-			SubtitleLang:      getEnv("VIDEO_SUBTITLE_LANG", ""),
-			AudioLang:         getEnv("VIDEO_AUDIO_LANG", ""),
-			WriteSubs:         getEnvBool("VIDEO_WRITE_SUBS", false),
+			EnableReencoding:   getEnvBool("VIDEO_ENABLE_REENCODING", false),
+			ForceReencoding:    getEnvBool("VIDEO_FORCE_REENCODING", false),
+			VideoCodec:         getEnv("VIDEO_CODEC", "h264"),
+			AudioCodec:         getEnv("AUDIO_CODEC", "mp3"),
+			OutputFormat:       getEnv("VIDEO_OUTPUT_FORMAT", "mp4"),
+			FFmpegExtraArgs:    getEnv("FFMPEG_EXTRA_ARGS", "-pix_fmt yuv420p"),
+			QualitySelector:    getEnv("VIDEO_QUALITY_SELECTOR", "bv*+ba/b"),
+			MaxHeight:          getEnvInt("VIDEO_MAX_HEIGHT", DefaultVideoMaxHeight),
+			CompatibilityMode:  getEnvBool("VIDEO_COMPATIBILITY_MODE", false),
+			RejectIncompatible: getEnvBool("VIDEO_REJECT_INCOMPATIBLE", false),
+			SubtitleLang:       getEnv("VIDEO_SUBTITLE_LANG", ""),
+			AudioLang:          getEnv("VIDEO_AUDIO_LANG", ""),
+			WriteSubs:          getEnvBool("VIDEO_WRITE_SUBS", false),
+			TvH264Level:        getEnv("VIDEO_TV_H264_LEVEL", "4.1"),
 		},
 	}
 
@@ -186,18 +188,20 @@ type SecurityConfig struct {
 }
 
 type VideoConfig struct {
-	EnableReencoding  bool
-	ForceReencoding   bool
-	VideoCodec        string
-	AudioCodec        string
-	OutputFormat      string
-	FFmpegExtraArgs   string
-	QualitySelector   string
-	MaxHeight         int // Maximum video height (e.g., 1080 for 1080p, 720 for 720p, 0 for no limit)
-	CompatibilityMode bool
-	SubtitleLang      string
-	AudioLang         string
-	WriteSubs         bool
+	EnableReencoding   bool
+	ForceReencoding    bool
+	VideoCodec         string
+	AudioCodec         string
+	OutputFormat       string
+	FFmpegExtraArgs    string
+	QualitySelector    string
+	MaxHeight          int // Maximum video height (e.g., 1080 for 1080p, 720 for 720p, 0 for no limit)
+	CompatibilityMode  bool
+	RejectIncompatible bool // if true, stop download and notify when video is red (not playable on TV)
+	SubtitleLang       string
+	AudioLang          string
+	WriteSubs          bool
+	TvH264Level        string // H.264 level cap for compatibility mode (e.g. "4.0", "4.1")
 }
 
 func (c *Config) GetDownloadSettings() DownloadConfig {

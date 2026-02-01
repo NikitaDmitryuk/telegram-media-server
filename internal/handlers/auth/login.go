@@ -13,7 +13,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func LoginHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Database, cfg *config.Config) {
+func LoginHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.AuthStore, cfg *config.Config) {
 	textFields := strings.Fields(update.Message.Text)
 
 	if len(textFields) != 2 {

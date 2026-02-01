@@ -93,7 +93,15 @@ func (*MockDatabaseTempPassword) UpdateEpisodesProgress(_ context.Context, _ uin
 func (*MockDatabaseTempPassword) SetLoaded(_ context.Context, _ uint) error {
 	return nil
 }
-
+func (*MockDatabaseTempPassword) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
+	return nil
+}
+func (*MockDatabaseTempPassword) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*MockDatabaseTempPassword) SetTvCompatibility(_ context.Context, _ uint, _ string) error {
+	return nil
+}
 func (*MockDatabaseTempPassword) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
 	return database.Movie{}, nil
 }

@@ -29,6 +29,9 @@ const (
 	secondsPerMinute    = 60
 	gracefulStopTimeout = 5 * time.Second
 	forceKillTimeout    = 2 * time.Second
+	// minProbeSize is the minimum file size (bytes) for ffprobe to read headers; used for early TV compatibility probe.
+	minProbeSize      = 256 * 1024
+	probePollInterval = 2 * time.Second
 )
 
 type YTDLPDownloader struct {
@@ -105,18 +108,48 @@ func (d *YTDLPDownloader) StartDownload(
 
 	progressChan = make(chan float64)
 	errChan = make(chan error, 1)
+	epCh := make(chan int, 1)
 
-	go d.monitorDownload(ctx, stdout, stderr, progressChan, errChan)
+	go d.monitorDownload(ctx, cancel, stdout, stderr, progressChan, errChan)
+	go waitForProbeableFile(ctx, outputPath, epCh)
 
-	return progressChan, errChan, nil, nil
+	return progressChan, errChan, epCh, nil
+}
+
+// waitForProbeableFile sends 1 on epCh when the output file exists and is large enough for ffprobe,
+// so the manager can run TV compatibility probe and show the circle early (before full download).
+func waitForProbeableFile(ctx context.Context, outputPath string, epCh chan int) {
+	defer close(epCh)
+	ticker := time.NewTicker(probePollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			info, err := os.Stat(outputPath)
+			if err != nil {
+				continue
+			}
+			if info.Size() >= minProbeSize {
+				select {
+				case epCh <- 1:
+				default:
+				}
+				return
+			}
+		}
+	}
 }
 
 func (d *YTDLPDownloader) monitorDownload(
 	ctx context.Context,
+	cancel context.CancelFunc,
 	stdout, stderr io.ReadCloser,
 	progressChan chan float64,
 	errChan chan error,
 ) {
+	defer cancel()
 	defer close(progressChan)
 	errorOutput := make(chan string, 1)
 

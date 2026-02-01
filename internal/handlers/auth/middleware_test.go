@@ -98,7 +98,9 @@ func (*MockDatabase) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) er
 func (*MockDatabase) SetLoaded(_ context.Context, _ uint) error {
 	return nil
 }
-
+func (*MockDatabase) UpdateConversionStatus(_ context.Context, _ uint, _ string) error  { return nil }
+func (*MockDatabase) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error { return nil }
+func (*MockDatabase) SetTvCompatibility(_ context.Context, _ uint, _ string) error      { return nil }
 func (*MockDatabase) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
 	return database.Movie{}, nil
 }

@@ -3,15 +3,20 @@ package models
 import "time"
 
 type Movie struct {
-	ID                   uint        `json:"id"                    gorm:"primaryKey"`
-	Name                 string      `json:"name"                  gorm:"not null"`
-	DownloadedPercentage int         `json:"downloaded_percentage" gorm:"not null;default:0"`
-	FileSize             int64       `json:"file_size"             gorm:"not null;default:0"`
-	TotalEpisodes        int         `json:"total_episodes"        gorm:"not null;default:0"` // > 0 for series (multi-file torrent)
-	CompletedEpisodes    int         `json:"completed_episodes"    gorm:"not null;default:0"` // how many episodes fully downloaded
-	Files                []MovieFile `json:"files"                 gorm:"foreignKey:MovieID"`
-	CreatedAt            time.Time   `json:"created_at"            gorm:"autoCreateTime"`
-	UpdatedAt            time.Time   `json:"updated_at"            gorm:"autoUpdateTime"`
+	ID                   uint   `json:"id"                    gorm:"primaryKey"`
+	Name                 string `json:"name"                  gorm:"not null"`
+	DownloadedPercentage int    `json:"downloaded_percentage" gorm:"not null;default:0"`
+	FileSize             int64  `json:"file_size"             gorm:"not null;default:0"`
+	TotalEpisodes        int    `json:"total_episodes"        gorm:"not null;default:0"` // > 0 for series (multi-file torrent)
+	CompletedEpisodes    int    `json:"completed_episodes"    gorm:"not null;default:0"` // how many episodes fully downloaded
+	// ConversionStatus: "", "pending", "in_progress", "done", "failed", "skipped"
+	ConversionStatus     string `json:"conversion_status"     gorm:"not null;default:''"`
+	ConversionPercentage int    `json:"conversion_percentage" gorm:"not null;default:0"`
+	// TvCompatibility: "", "green", "yellow", "red" (only in compatibility mode)
+	TvCompatibility string      `json:"tv_compatibility"      gorm:"not null;default:''"`
+	Files           []MovieFile `json:"files"                 gorm:"foreignKey:MovieID"`
+	CreatedAt       time.Time   `json:"created_at"            gorm:"autoCreateTime"`
+	UpdatedAt       time.Time   `json:"updated_at"            gorm:"autoUpdateTime"`
 }
 
 type MovieFile struct {

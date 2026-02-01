@@ -77,6 +77,30 @@ func (s *SQLiteDatabase) SetLoaded(ctx context.Context, movieID uint) error {
 	return nil
 }
 
+func (s *SQLiteDatabase) UpdateConversionStatus(ctx context.Context, movieID uint, status string) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("conversion_status", status)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (s *SQLiteDatabase) UpdateConversionPercentage(ctx context.Context, movieID uint, percentage int) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("conversion_percentage", percentage)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (s *SQLiteDatabase) SetTvCompatibility(ctx context.Context, movieID uint, compat string) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("tv_compatibility", compat)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func (s *SQLiteDatabase) GetMovieByID(ctx context.Context, movieID uint) (Movie, error) {
 	var movie Movie
 	result := s.db.WithContext(ctx).First(&movie, movieID)

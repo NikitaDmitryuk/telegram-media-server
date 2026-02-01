@@ -7,35 +7,34 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
-var notificationBot *tmsbot.Bot
-
 func InitNotificationHandler(bot *tmsbot.Bot, downloadManager *tmsdmanager.DownloadManager) {
-	notificationBot = bot
-	go handleQueueNotifications(downloadManager)
+	go handleQueueNotifications(bot, downloadManager)
 }
 
-func handleQueueNotifications(downloadManager *tmsdmanager.DownloadManager) {
+func handleQueueNotifications(bot *tmsbot.Bot, downloadManager *tmsdmanager.DownloadManager) {
 	notificationChan := downloadManager.GetNotificationChan()
 
 	for notification := range notificationChan {
 		switch notification.Type {
 		case "queued":
-			sendQueuedNotification(&notification)
+			sendQueuedNotification(bot, &notification)
 		case "started":
-			sendStartedNotification(&notification)
+			sendStartedNotification(bot, &notification)
 		case "first_episode_ready":
-			sendFirstEpisodeReadyNotification(&notification)
+			sendFirstEpisodeReadyNotification(bot, &notification)
+		case "video_not_supported":
+			sendVideoNotSupportedNotification(bot, &notification)
 		default:
 			logutils.Log.WithField("type", notification.Type).Warn("Unknown notification type")
 		}
 	}
 }
 
-func sendFirstEpisodeReadyNotification(notification *tmsdmanager.QueueNotification) {
+func sendFirstEpisodeReadyNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
 	message := lang.Translate("general.first_episode_ready", map[string]any{
 		"Title": notification.Title,
 	})
-	notificationBot.SendMessage(notification.ChatID, message, nil)
+	bot.SendMessage(notification.ChatID, message, nil)
 	logutils.Log.WithFields(map[string]any{
 		"chat_id":  notification.ChatID,
 		"movie_id": notification.MovieID,
@@ -43,14 +42,26 @@ func sendFirstEpisodeReadyNotification(notification *tmsdmanager.QueueNotificati
 	}).Info("Sent first episode ready notification")
 }
 
-func sendQueuedNotification(notification *tmsdmanager.QueueNotification) {
+func sendVideoNotSupportedNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
+	message := lang.Translate("general.video_not_supported", map[string]any{
+		"Title": notification.Title,
+	})
+	bot.SendMessage(notification.ChatID, message, nil)
+	logutils.Log.WithFields(map[string]any{
+		"chat_id":  notification.ChatID,
+		"movie_id": notification.MovieID,
+		"title":    notification.Title,
+	}).Info("Sent video not supported notification")
+}
+
+func sendQueuedNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
 	message := lang.Translate("general.download_queued", map[string]any{
 		"Title":         notification.Title,
 		"Position":      notification.Position,
 		"MaxConcurrent": notification.MaxConcurrent,
 	})
 
-	notificationBot.SendMessage(notification.ChatID, message, nil)
+	bot.SendMessage(notification.ChatID, message, nil)
 
 	logutils.Log.WithFields(map[string]any{
 		"chat_id":  notification.ChatID,
@@ -60,12 +71,12 @@ func sendQueuedNotification(notification *tmsdmanager.QueueNotification) {
 	}).Info("Sent queued notification")
 }
 
-func sendStartedNotification(notification *tmsdmanager.QueueNotification) {
+func sendStartedNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
 	message := lang.Translate("general.download_started_from_queue", map[string]any{
 		"Title": notification.Title,
 	})
 
-	notificationBot.SendMessage(notification.ChatID, message, nil)
+	bot.SendMessage(notification.ChatID, message, nil)
 
 	logutils.Log.WithFields(map[string]any{
 		"chat_id":  notification.ChatID,

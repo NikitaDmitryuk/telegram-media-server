@@ -9,6 +9,7 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
@@ -54,11 +55,28 @@ func (dm *DownloadManager) monitorDownload(
 				logutils.Log.WithError(updateErr).WithField("movie_id", movieID).Error("Failed to update episodes progress")
 			}
 			if completed == 1 {
-				dm.notificationChan <- QueueNotification{
-					Type:    "first_episode_ready",
-					ChatID:  job.chatID,
-					MovieID: movieID,
-					Title:   job.title,
+				// "First episode ready" only for series (multiple files); skip for single-file video/yt-dlp.
+				if job.totalEpisodes > 1 {
+					dm.notificationChan <- QueueNotification{
+						Type:    "first_episode_ready",
+						ChatID:  job.chatID,
+						MovieID: movieID,
+						Title:   job.title,
+					}
+				}
+				// Probe TV compatibility as soon as first file is ready so user sees green/yellow/red immediately.
+				if dm.cfg.VideoSettings.CompatibilityMode {
+					ctx := context.Background()
+					targetLevel := tvcompat.ParseH264Level(dm.cfg.VideoSettings.TvH264Level)
+					if targetLevel <= 0 {
+						targetLevel = 41
+					}
+					compat := tvcompat.ProbeTvCompatibility(ctx, movieID, dm.cfg.MoviePath, dm.db, targetLevel)
+					_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
+					if compat == tvcompat.TvCompatRed && dm.cfg.VideoSettings.RejectIncompatible {
+						job.rejectedIncompatible = true
+						job.cancel()
+					}
 				}
 			}
 
@@ -69,6 +87,20 @@ func (dm *DownloadManager) monitorDownload(
 					"duration": time.Since(downloadStartTime),
 				}).Info("Download completed successfully")
 
+				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.chatID, job.title)
+				if compatRed && dm.cfg.VideoSettings.RejectIncompatible {
+					dm.notificationChan <- QueueNotification{
+						Type:    "video_not_supported",
+						ChatID:  job.chatID,
+						MovieID: movieID,
+						Title:   job.title,
+					}
+					outerErrChan <- nil
+					return
+				}
+				if needWait && done != nil {
+					<-done
+				}
 				if err := dm.db.SetLoaded(context.Background(), movieID); err != nil {
 					logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
 					outerErrChan <- utils.WrapError(err, "Failed to mark movie as loaded", map[string]any{
@@ -127,6 +159,20 @@ func (dm *DownloadManager) monitorDownload(
 			} else {
 				logutils.Log.WithField("movie_id", movieID).Info("Download completed successfully")
 
+				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.chatID, job.title)
+				if compatRed && dm.cfg.VideoSettings.RejectIncompatible {
+					dm.notificationChan <- QueueNotification{
+						Type:    "video_not_supported",
+						ChatID:  job.chatID,
+						MovieID: movieID,
+						Title:   job.title,
+					}
+					outerErrChan <- nil
+					return
+				}
+				if needWait && done != nil {
+					<-done
+				}
 				if err := dm.db.SetLoaded(context.Background(), movieID); err != nil {
 					logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
 					outerErrChan <- utils.WrapError(err, "Failed to mark movie as loaded", map[string]any{
@@ -161,8 +207,18 @@ func (dm *DownloadManager) monitorDownload(
 			}
 
 		case <-job.ctx.Done():
-			logutils.Log.WithField("movie_id", movieID).Info("Download canceled")
-			outerErrChan <- job.ctx.Err()
+			if job.rejectedIncompatible {
+				dm.notificationChan <- QueueNotification{
+					Type:    "video_not_supported",
+					ChatID:  job.chatID,
+					MovieID: movieID,
+					Title:   job.title,
+				}
+				outerErrChan <- nil
+			} else {
+				logutils.Log.WithField("movie_id", movieID).Info("Download canceled")
+				outerErrChan <- job.ctx.Err()
+			}
 			return
 		}
 	}

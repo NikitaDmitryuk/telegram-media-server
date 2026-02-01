@@ -23,7 +23,7 @@ func LoggingMiddleware(update *tgbotapi.Update) {
 	}
 }
 
-func AuthMiddleware(update *tgbotapi.Update, db database.Database) (bool, models.UserRole) {
+func AuthMiddleware(update *tgbotapi.Update, db database.AuthStore) (bool, models.UserRole) {
 	if update == nil {
 		logutils.Log.Error("Update is nil")
 		return false, ""
@@ -58,12 +58,12 @@ func AuthMiddleware(update *tgbotapi.Update, db database.Database) (bool, models
 	return true, userRole
 }
 
-func CheckAccess(update *tgbotapi.Update, db database.Database) bool {
+func CheckAccess(update *tgbotapi.Update, db database.AuthStore) bool {
 	allowed, _ := AuthMiddleware(update, db)
 	return allowed
 }
 
-func CheckAccessWithRole(update *tgbotapi.Update, allowedRoles []models.UserRole, db database.Database) bool {
+func CheckAccessWithRole(update *tgbotapi.Update, allowedRoles []models.UserRole, db database.AuthStore) bool {
 	allowed, role := AuthMiddleware(update, db)
 	if !allowed {
 		return false
