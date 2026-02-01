@@ -23,10 +23,24 @@ func handleQueueNotifications(downloadManager *tmsdmanager.DownloadManager) {
 			sendQueuedNotification(&notification)
 		case "started":
 			sendStartedNotification(&notification)
+		case "first_episode_ready":
+			sendFirstEpisodeReadyNotification(&notification)
 		default:
 			logutils.Log.WithField("type", notification.Type).Warn("Unknown notification type")
 		}
 	}
+}
+
+func sendFirstEpisodeReadyNotification(notification *tmsdmanager.QueueNotification) {
+	message := lang.Translate("general.first_episode_ready", map[string]any{
+		"Title": notification.Title,
+	})
+	notificationBot.SendMessage(notification.ChatID, message, nil)
+	logutils.Log.WithFields(map[string]any{
+		"chat_id":  notification.ChatID,
+		"movie_id": notification.MovieID,
+		"title":    notification.Title,
+	}).Info("Sent first episode ready notification")
 }
 
 func sendQueuedNotification(notification *tmsdmanager.QueueNotification) {

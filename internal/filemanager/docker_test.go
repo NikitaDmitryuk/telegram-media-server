@@ -62,7 +62,7 @@ func testCrossPlatformFileOperations(t *testing.T) {
 
 	// Add movie to database
 	movieID, err := db.AddMovie(context.Background(), "Cross Platform Test", 1024,
-		problematicFiles[:4], problematicFiles[4:])
+		problematicFiles[:4], problematicFiles[4:], 0)
 	if err != nil {
 		t.Fatalf("Failed to add movie: %v", err)
 	}

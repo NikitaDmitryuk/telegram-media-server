@@ -123,6 +123,9 @@ All available configuration parameters are thoroughly documented in the [`.env.e
 Создайте файл `.env` на основе `.env.example` и настройте необходимые параметры.  
 Create a `.env` file based on `.env.example` and configure the required parameters.
 
+**Docker и торренты / Docker and torrents**: если в контейнере торренты «стоят» без пиров, попробуйте `network_mode: host` в `docker-compose.yml` для сервиса `telegram-media-server` (aria2 сможет принимать входящие соединения). Убедитесь, что на хосте открыты порты 6881–6999 (TCP и UDP).  
+If torrents in the container get no peers, try `network_mode: host` for the `telegram-media-server` service in `docker-compose.yml` so aria2 can accept incoming connections. Ensure ports 6881–6999 (TCP and UDP) are open on the host.
+
 ---
 
 ## Использование / Usage

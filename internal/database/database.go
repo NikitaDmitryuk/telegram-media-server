@@ -10,7 +10,8 @@ import (
 
 type Database interface {
 	Init(config *tmsconfig.Config) error
-	AddMovie(ctx context.Context, name string, fileSize int64, mainFiles, tempFiles []string) (uint, error)
+	AddMovie(ctx context.Context, name string, fileSize int64, mainFiles, tempFiles []string, totalEpisodes int) (uint, error)
+	UpdateEpisodesProgress(ctx context.Context, movieID uint, completedEpisodes int) error
 	RemoveMovie(ctx context.Context, movieID uint) error
 	GetMovieList(ctx context.Context) ([]Movie, error)
 	GetTempFilesByMovieID(ctx context.Context, movieID uint) ([]MovieFile, error)

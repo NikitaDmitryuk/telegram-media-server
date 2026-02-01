@@ -5,11 +5,18 @@ import (
 	"fmt"
 )
 
-func (s *SQLiteDatabase) AddMovie(ctx context.Context, name string, fileSize int64, mainFiles, tempFiles []string) (uint, error) {
+func (s *SQLiteDatabase) AddMovie(
+	ctx context.Context,
+	name string,
+	fileSize int64,
+	mainFiles, tempFiles []string,
+	totalEpisodes int,
+) (uint, error) {
 	movie := Movie{
 		Name:                 name,
 		FileSize:             fileSize,
 		DownloadedPercentage: 0,
+		TotalEpisodes:        totalEpisodes,
 	}
 
 	result := s.db.WithContext(ctx).Create(&movie)
@@ -47,6 +54,14 @@ func (s *SQLiteDatabase) GetMovieList(ctx context.Context) ([]Movie, error) {
 
 func (s *SQLiteDatabase) UpdateDownloadedPercentage(ctx context.Context, movieID uint, percentage int) error {
 	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("downloaded_percentage", percentage)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (s *SQLiteDatabase) UpdateEpisodesProgress(ctx context.Context, movieID uint, completedEpisodes int) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("completed_episodes", completedEpisodes)
 	if result.Error != nil {
 		return result.Error
 	}

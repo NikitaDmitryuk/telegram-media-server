@@ -46,7 +46,7 @@ func TestAria2StopDownload(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		progressChan, errChan, err := downloader.StartDownload(ctx)
+		progressChan, errChan, _, err := downloader.StartDownload(ctx)
 		if err != nil {
 			t.Logf("StartDownload failed (expected without aria2): %v", err)
 			return // Skip if aria2 not available
@@ -127,7 +127,7 @@ func TestAria2ProcessCleanup(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		progressChan, errChan, err := downloader.StartDownload(ctx)
+		progressChan, errChan, _, err := downloader.StartDownload(ctx)
 		if err != nil {
 			t.Logf("StartDownload failed (expected without aria2): %v", err)
 			return

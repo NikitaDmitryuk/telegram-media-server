@@ -11,9 +11,10 @@ import (
 
 func CreateDeleteMovieMenuMarkup(movies []database.Movie) tgbotapi.InlineKeyboardMarkup {
 	var rows [][]tgbotapi.InlineKeyboardButton
-	for _, movie := range movies {
+	for i := range movies {
+		m := &movies[i]
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(movie.Name, "delete_movie:"+strconv.FormatUint(uint64(movie.ID), 10)),
+			tgbotapi.NewInlineKeyboardButtonData(m.Name, "delete_movie:"+strconv.FormatUint(uint64(m.ID), 10)),
 		))
 	}
 

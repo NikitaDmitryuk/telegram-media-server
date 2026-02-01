@@ -62,10 +62,14 @@ func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string, config *tmsconfig
 	}
 }
 
-func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan float64, errChan chan error, err error) {
+func (*YTDLPDownloader) TotalEpisodes() int { return 0 }
+
+func (d *YTDLPDownloader) StartDownload(
+	ctx context.Context,
+) (progressChan chan float64, errChan chan error, episodesChan <-chan int, err error) {
 	useProxy, err := shouldUseProxy(d.url, d.config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error checking proxy requirement: %w", err)
+		return nil, nil, nil, fmt.Errorf("error checking proxy requirement: %w", err)
 	}
 
 	outputPath := filepath.Join(d.config.MoviePath, d.outputFileName)
@@ -87,16 +91,16 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan 
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("failed to start yt-dlp: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to start yt-dlp: %w", err)
 	}
 
 	progressChan = make(chan float64)
@@ -104,7 +108,7 @@ func (d *YTDLPDownloader) StartDownload(ctx context.Context) (progressChan chan 
 
 	go d.monitorDownload(ctx, stdout, stderr, progressChan, errChan)
 
-	return progressChan, errChan, nil
+	return progressChan, errChan, nil, nil
 }
 
 func (d *YTDLPDownloader) monitorDownload(

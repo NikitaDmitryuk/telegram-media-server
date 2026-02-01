@@ -98,7 +98,7 @@ func (*MockDatabaseLogin) ExtendTemporaryUser(_ context.Context, _ int64, _ time
 	return nil
 }
 
-func (*MockDatabaseLogin) AddMovie(_ context.Context, _ string, _ int64, _, _ []string) (uint, error) {
+func (*MockDatabaseLogin) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
 	return 0, nil
 }
 
@@ -115,6 +115,9 @@ func (*MockDatabaseLogin) GetTempFilesByMovieID(_ context.Context, _ uint) ([]da
 }
 
 func (*MockDatabaseLogin) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*MockDatabaseLogin) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
 	return nil
 }
 

@@ -91,7 +91,7 @@ func createMoviesInDatabase(t *testing.T, db *database.SQLiteDatabase, movieFile
 
 	for movieName, size := range movieFiles {
 		movieID, err := db.AddMovie(context.Background(), movieName, size,
-			[]string{movieName}, []string{movieName + ".torrent"})
+			[]string{movieName}, []string{movieName + ".torrent"}, 0)
 		if err != nil {
 			t.Fatalf("Failed to add movie %s to database: %v", movieName, err)
 		}
@@ -122,7 +122,8 @@ func verifyMovieListFromDatabase(t *testing.T, db *database.SQLiteDatabase, movi
 		t.Errorf("Expected %d movies, got %d", len(movieFiles), len(movies))
 	}
 
-	for _, movie := range movies {
+	for i := range movies {
+		movie := &movies[i]
 		expectedSize, exists := movieFiles[movie.Name]
 		if !exists {
 			t.Errorf("Unexpected movie in list: %s", movie.Name)
@@ -173,7 +174,7 @@ func testMovieDeletionIntegration(t *testing.T) {
 
 	// Add movie to database
 	movieID, err := db.AddMovie(context.Background(), movieName, 1024*int64(len(allFiles)),
-		mainFiles, tempFiles)
+		mainFiles, tempFiles, 0)
 	if err != nil {
 		t.Fatalf("Failed to add movie: %v", err)
 	}
@@ -242,7 +243,7 @@ func testLargeMovieListHandling(t *testing.T) {
 		}
 
 		movieID, err := db.AddMovie(context.Background(), movieName, fileSize,
-			[]string{movieName}, []string{movieName + ".torrent"})
+			[]string{movieName}, []string{movieName + ".torrent"}, 0)
 		if err != nil {
 			t.Fatalf("Failed to add movie %d: %v", i, err)
 		}
@@ -266,7 +267,8 @@ func testLargeMovieListHandling(t *testing.T) {
 
 	// Test performance of list operations
 	totalSize := int64(0)
-	for _, movie := range movies {
+	for i := range movies {
+		movie := &movies[i]
 		totalSize += movie.FileSize
 		if movie.DownloadedPercentage < 0 || movie.DownloadedPercentage > 100 {
 			t.Errorf("Invalid percentage for movie %s: %d", movie.Name, movie.DownloadedPercentage)
@@ -304,7 +306,7 @@ func testMovieListWithDiskSpace(t *testing.T) {
 		}
 
 		_, err := db.AddMovie(context.Background(), movieName, size,
-			[]string{movieName}, []string{})
+			[]string{movieName}, []string{}, 0)
 		if err != nil {
 			t.Fatalf("Failed to add movie: %v", err)
 		}
