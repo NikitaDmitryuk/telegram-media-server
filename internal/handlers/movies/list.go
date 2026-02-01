@@ -15,7 +15,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Database, config *tmsconfig.Config) {
+func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.MovieReader, config *tmsconfig.Config) {
 	chatID := update.Message.Chat.ID
 
 	movies, err := db.GetMovieList(context.Background())
@@ -30,6 +30,7 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Dat
 		return
 	}
 
+	compatMode := config.VideoSettings.CompatibilityMode
 	var messages []string
 	for i := range movies {
 		movie := &movies[i]
@@ -39,10 +40,24 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Dat
 		if movie.TotalEpisodes > 0 {
 			episodes = fmt.Sprintf("%d/%d ", movie.CompletedEpisodes, movie.TotalEpisodes)
 		}
+		progressStr := fmt.Sprintf("%d%%", movie.DownloadedPercentage)
+		sticker := ""
+		if compatMode {
+			progressStr = fmt.Sprintf("%d/%d", movie.DownloadedPercentage, movie.ConversionPercentage)
+			switch movie.TvCompatibility {
+			case "green":
+				sticker = "🟢 "
+			case "yellow":
+				sticker = "🟡 "
+			case "red":
+				sticker = "🔴 "
+			}
+		}
 		messages = append(messages, lang.Translate("general.downloaded_list", map[string]any{
 			"ID":       movie.ID,
 			"Name":     movie.Name,
-			"Progress": movie.DownloadedPercentage,
+			"Progress": progressStr,
+			"Sticker":  sticker,
 			"Episodes": episodes,
 			"SizeGB":   formattedSize,
 		}))

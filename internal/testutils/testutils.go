@@ -91,6 +91,7 @@ func TestConfig(tempDir string) *config.Config {
 			QualitySelector:   "worst",
 			MaxHeight:         0, // No limit by default
 			CompatibilityMode: true,
+			TvH264Level:       "4.1",
 		},
 	}
 }
@@ -188,6 +189,13 @@ func (*TestSQLiteDatabase) UpdateEpisodesProgress(_ context.Context, _ uint, _ i
 	return nil
 }
 func (*TestSQLiteDatabase) SetLoaded(_ context.Context, _ uint) error { return nil }
+func (*TestSQLiteDatabase) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
+	return nil
+}
+func (*TestSQLiteDatabase) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error {
+	return nil
+}
+func (*TestSQLiteDatabase) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
 func (*TestSQLiteDatabase) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
 	return database.Movie{}, nil
 }

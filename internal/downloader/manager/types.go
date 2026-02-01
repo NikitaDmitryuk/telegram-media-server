@@ -16,6 +16,16 @@ const (
 	QueueProcessingDelay        = 100 * time.Millisecond
 )
 
+const ConversionQueueSize = 100
+
+// conversionJob is sent to the conversion worker; Done is closed when conversion (or skip) is finished.
+type conversionJob struct {
+	MovieID uint
+	ChatID  int64
+	Title   string
+	Done    chan struct{}
+}
+
 type DownloadManager struct {
 	mu               sync.RWMutex
 	jobs             map[uint]downloadJob
@@ -25,18 +35,22 @@ type DownloadManager struct {
 	queueMutex       sync.Mutex
 	notificationChan chan QueueNotification
 	db               database.Database
+	cfg              *config.Config
+	conversionQueue  chan conversionJob
 }
 
 type downloadJob struct {
-	downloader   downloader.Downloader
-	startTime    time.Time
-	progressChan chan float64
-	errChan      chan error
-	episodesChan <-chan int
-	ctx          context.Context
-	cancel       context.CancelFunc
-	chatID       int64
-	title        string
+	downloader           downloader.Downloader
+	startTime            time.Time
+	progressChan         chan float64
+	errChan              chan error
+	episodesChan         <-chan int
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	chatID               int64
+	title                string
+	totalEpisodes        int  // > 1 for series (multi-file); only then we send "first_episode_ready"
+	rejectedIncompatible bool // set when we cancel due to red + RejectIncompatible
 }
 
 type queuedDownload struct {
