@@ -47,3 +47,45 @@ func TestTvCompatConstants(t *testing.T) {
 		t.Errorf("TvCompatRed = %q, want red", TvCompatRed)
 	}
 }
+
+func TestCompatFromTorrentFileNames(t *testing.T) {
+	tests := []struct {
+		name       string
+		paths      []string
+		wantCompat string
+	}{
+		{"mkv first", []string{"Movie.mkv"}, TvCompatGreen},
+		{"mp4 first", []string{"Movie.mp4"}, TvCompatGreen},
+		{"mov first", []string{"Movie.mov"}, TvCompatGreen},
+		{"m4v first", []string{"Movie.m4v"}, TvCompatGreen},
+		{"avi first", []string{"Movie.avi"}, TvCompatYellow},
+		{"webm first", []string{"Movie.webm"}, TvCompatRed},
+		{"poster then mkv", []string{"poster.jpg", "Movie.mkv"}, TvCompatGreen},
+		{"srt then mkv", []string{"sub.srt", "Movie.mkv"}, TvCompatGreen},
+		{"no video", []string{"readme.txt", "poster.jpg"}, ""},
+		{"empty", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CompatFromTorrentFileNames(tt.paths)
+			if got != tt.wantCompat {
+				t.Errorf("CompatFromTorrentFileNames(%v) = %q, want %q", tt.paths, got, tt.wantCompat)
+			}
+		})
+	}
+}
+
+func TestIsVideoFilePath(t *testing.T) {
+	video := []string{"a.mkv", "a.mp4", "a.avi", "a.mov", "a.webm", "a.m4v", "dir/v.MKV"}
+	nonVideo := []string{"a.jpg", "a.srt", "a.nfo", "a.txt", ""}
+	for _, p := range video {
+		if !IsVideoFilePath(p) {
+			t.Errorf("IsVideoFilePath(%q) = false, want true", p)
+		}
+	}
+	for _, p := range nonVideo {
+		if IsVideoFilePath(p) {
+			t.Errorf("IsVideoFilePath(%q) = true, want false", p)
+		}
+	}
+}

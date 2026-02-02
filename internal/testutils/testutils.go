@@ -56,6 +56,7 @@ func TestConfig(tempDir string) *config.Config {
 			BTMaxPeers:               50,
 			BTRequestPeerSpeedLimit:  "0",
 			BTMaxOpenFiles:           10,
+			SequentialMultiFile:      true,
 			MaxOverallUploadLimit:    "100K",
 			MaxUploadLimit:           "50K",
 			SeedRatio:                0.0,

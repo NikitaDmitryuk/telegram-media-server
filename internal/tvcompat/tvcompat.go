@@ -23,8 +23,21 @@ var likelyNonH264Extensions = map[string]struct{}{
 	".webm": {},
 }
 
+// Extensions that are commonly H.264 in practice — show green optimistically until probe.
+var likelyH264Extensions = map[string]struct{}{
+	".mkv": {}, ".mp4": {}, ".mov": {}, ".m4v": {},
+}
+
+// IsVideoFilePath returns true if the file path has a known video extension.
+func IsVideoFilePath(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	_, ok := videoExtensions[ext]
+	return ok
+}
+
 // CompatFromTorrentFileNames returns a preliminary TV compatibility from the first video file name in the list.
 // Used to show the circle immediately when a torrent is added (from torrent meta). Returns "" if no video file found.
+// For .mkv/.mp4/.mov/.m4v returns green (optimistic); .avi returns yellow; .webm returns red.
 func CompatFromTorrentFileNames(filePaths []string) string {
 	for _, p := range filePaths {
 		ext := strings.ToLower(filepath.Ext(p))
@@ -34,7 +47,10 @@ func CompatFromTorrentFileNames(filePaths []string) string {
 		if _, bad := likelyNonH264Extensions[ext]; bad {
 			return TvCompatRed
 		}
-		// .mkv, .mp4, .mov, .m4v — likely H.264 but level unknown
+		if _, good := likelyH264Extensions[ext]; good {
+			return TvCompatGreen
+		}
+		// .avi — likely H.264 but level unknown
 		return TvCompatYellow
 	}
 	return ""

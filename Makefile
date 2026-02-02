@@ -184,7 +184,8 @@ test-coverage:
 .PHONY: run
 run:
 	@echo "Running with Docker Compose..."
-	docker-compose up --build
+	docker-compose up -d prowlarr
+	docker-compose up --build telegram-media-server
 
 .PHONY: stop
 stop:
