@@ -42,3 +42,11 @@ type Downloader interface {
 	// can notify the user that the download was canceled.
 	StopDownload() error
 }
+
+// EarlyCompatDownloader is an optional interface. If a Downloader implements it,
+// the manager calls GetEarlyTvCompatibility after StartDownload to show the TV compatibility circle
+// immediately from metadata (torrent file list or yt-dlp format info) without waiting for the first bytes.
+type EarlyCompatDownloader interface {
+	Downloader
+	GetEarlyTvCompatibility(ctx context.Context) (string, error)
+}

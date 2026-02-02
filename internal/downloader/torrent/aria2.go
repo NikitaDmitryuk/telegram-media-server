@@ -20,6 +20,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
 )
 
 const (
@@ -425,6 +426,16 @@ func (d *Aria2Downloader) GetFileSize() (int64, error) {
 		logutils.Log.Debugf("Single file torrent size: %d bytes", meta.Info.Length)
 	}
 	return meta.Info.Length, nil
+}
+
+// GetEarlyTvCompatibility returns a preliminary TV compatibility from torrent metadata (file names)
+// so the circle can be shown immediately when the torrent is added.
+func (d *Aria2Downloader) GetEarlyTvCompatibility(_ context.Context) (string, error) {
+	mainFiles, _, err := d.GetFiles()
+	if err != nil {
+		return "", err
+	}
+	return tvcompat.CompatFromTorrentFileNames(mainFiles), nil
 }
 
 func (d *Aria2Downloader) parseTorrentMeta() (*Meta, error) {
