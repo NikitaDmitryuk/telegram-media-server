@@ -250,7 +250,7 @@ func TestSortedFileIndicesByPath(t *testing.T) {
 		{300, []string{"Episode 02.mkv"}},
 	}
 
-	indices, sizes, totalSize := sortedFileIndicesByPath(meta)
+	indices, sizes, isVideo, totalSize := sortedFileIndicesByPath(meta)
 
 	// Lexicographic by path: "Series/Episode 01.mkv" < "Series/Episode 02.mkv" < "Series/Episode 03.mkv"
 	// Original aria2 indices: 1=Episode 03, 2=Episode 01, 3=Episode 02 → sorted: 2, 3, 1
@@ -259,6 +259,9 @@ func TestSortedFileIndicesByPath(t *testing.T) {
 	}
 	if want := []int64{200, 300, 100}; len(sizes) != len(want) || sizes[0] != want[0] || sizes[1] != want[1] || sizes[2] != want[2] {
 		t.Errorf("sortedFileIndicesByPath sizes = %v, want %v", sizes, want)
+	}
+	if len(isVideo) != 3 || !isVideo[0] || !isVideo[1] || !isVideo[2] {
+		t.Errorf("sortedFileIndicesByPath isVideo = %v, want [true, true, true] (all .mkv)", isVideo)
 	}
 	if totalSize != 600 {
 		t.Errorf("sortedFileIndicesByPath totalSize = %d, want 600", totalSize)

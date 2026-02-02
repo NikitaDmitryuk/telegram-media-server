@@ -13,6 +13,7 @@ const (
 	DefaultAria2Split                   = 16
 	DefaultAria2BTMaxPeers              = 200
 	DefaultAria2BTMaxOpenFiles          = 100
+	DefaultAria2SequentialMultiFile     = true // lexicographic order: file-by-file (first file sooner; may reduce total speed)
 	DefaultAria2BTTrackerTimeout        = 60
 	DefaultAria2Timeout                 = 60
 	DefaultAria2MaxTries                = 5
@@ -57,6 +58,7 @@ func NewConfig() (*Config, error) {
 			BTMaxPeers:               getEnvInt("ARIA2_BT_MAX_PEERS", DefaultAria2BTMaxPeers),
 			BTRequestPeerSpeedLimit:  getEnv("ARIA2_BT_REQUEST_PEER_SPEED_LIMIT", "0"),
 			BTMaxOpenFiles:           getEnvInt("ARIA2_BT_MAX_OPEN_FILES", DefaultAria2BTMaxOpenFiles),
+			SequentialMultiFile:      getEnvBool("ARIA2_SEQUENTIAL_MULTI_FILE", DefaultAria2SequentialMultiFile),
 			MaxOverallUploadLimit:    getEnv("ARIA2_MAX_OVERALL_UPLOAD_LIMIT", "1M"),
 			MaxUploadLimit:           getEnv("ARIA2_MAX_UPLOAD_LIMIT", "200K"),
 			SeedRatio:                getEnvFloat("ARIA2_SEED_RATIO", 0.0),
@@ -155,6 +157,7 @@ type Aria2Config struct {
 	BTMaxPeers               int
 	BTRequestPeerSpeedLimit  string
 	BTMaxOpenFiles           int
+	SequentialMultiFile      bool // if true, multi-file torrent: lexicographic order, file-by-file (first file sooner; may reduce total speed)
 	MaxOverallUploadLimit    string
 	MaxUploadLimit           string
 	SeedRatio                float64

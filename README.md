@@ -126,6 +126,9 @@ Create a `.env` file based on `.env.example` and configure the required paramete
 **Docker и торренты / Docker and torrents**: если в контейнере торренты «стоят» без пиров, попробуйте `network_mode: host` в `docker-compose.yml` для сервиса `telegram-media-server` (aria2 сможет принимать входящие соединения). Убедитесь, что на хосте открыты порты 6881–6999 (TCP и UDP).  
 If torrents in the container get no peers, try `network_mode: host` for the `telegram-media-server` service in `docker-compose.yml` so aria2 can accept incoming connections. Ensure ports 6881–6999 (TCP and UDP) are open on the host.
 
+**Порядок файлов в торренте / Torrent file order**: по умолчанию файлы в многофайловом торренте скачиваются в лексикографическом порядке по пути (первый по имени — первым готов). Это может замедлить общую скорость загрузки; для максимальной скорости задайте в `.env` `ARIA2_SEQUENTIAL_MULTI_FILE=false` (одна сессия aria2 на все файлы).  
+By default, files in a multi-file torrent are downloaded in lexicographic (alphabetical) order by path so the first file by name is ready sooner. This may slow down total download speed; to maximize throughput set `ARIA2_SEQUENTIAL_MULTI_FILE=false` in `.env` (single aria2 run for all files).
+
 **Режим совместимости с ТВ / TV compatibility mode**: если видео не воспроизводится на телевизоре (любой модели), в `.env` задайте `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости проходят лёгкую переконвертацию (remux). Опции: `VIDEO_TV_H264_LEVEL=4.0` или `4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — не загружать и сразу уведомлять, если видео не подойдёт под ТВ.  
 If video does not play on your TV, set `VIDEO_COMPATIBILITY_MODE=true` in `.env`. Files may be remuxed for compatibility. The “First episode ready” Options: `VIDEO_TV_H264_LEVEL=4.0` or `4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — cancel download and notify when the file would not play on your TV.
 ---
