@@ -13,7 +13,19 @@ func newQueueTestManager(t *testing.T) *DownloadManager {
 	cfg.DownloadSettings.MaxConcurrentDownloads = 2
 	cfg.VideoSettings.CompatibilityMode = false
 	db := testutils.TestDatabase(t)
-	return NewDownloadManager(cfg, db)
+
+	// Build the manager manually without starting the background processQueue
+	// goroutine, because tests add queuedDownload items with nil downloader.
+	return &DownloadManager{
+		jobs:             make(map[uint]downloadJob),
+		queue:            make([]queuedDownload, 0),
+		semaphore:        make(chan struct{}, cfg.GetDownloadSettings().MaxConcurrentDownloads),
+		downloadSettings: cfg.GetDownloadSettings(),
+		notificationChan: make(chan QueueNotification, NotificationChannelSize),
+		db:               db,
+		cfg:              cfg,
+		conversionQueue:  make(chan conversionJob, ConversionQueueSize),
+	}
 }
 
 func TestCalculateEstimatedWaitTime(t *testing.T) {
