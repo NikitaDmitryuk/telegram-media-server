@@ -66,7 +66,7 @@ func simulateListMoviesHandler(bot BotInterface, update *tgbotapi.Update, db dat
 		sizeGB := float64(movie.FileSize) / (1024 * 1024 * 1024)
 		formattedSize := fmt.Sprintf("%.2f", sizeGB)
 		episodes := ""
-		if movie.TotalEpisodes > 0 {
+		if movie.TotalEpisodes > 1 {
 			episodes = fmt.Sprintf("%d/%d ", movie.CompletedEpisodes, movie.TotalEpisodes)
 		}
 		progressStr := fmt.Sprintf("%d%%", movie.DownloadedPercentage)

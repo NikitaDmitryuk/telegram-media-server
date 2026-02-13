@@ -28,14 +28,27 @@ func GetEmptyKeyboard() tgbotapi.ReplyKeyboardRemove {
 	return tgbotapi.NewRemoveKeyboard(true)
 }
 
-func GetTorrentSearchKeyboard(hasMore bool) tgbotapi.ReplyKeyboardMarkup {
-	var menuBtns []tgbotapi.KeyboardButton
-	if hasMore {
-		menuBtns = append(menuBtns, tgbotapi.NewKeyboardButton(tmslang.Translate("general.torrent_search.more", nil)))
+func GetTorrentSearchKeyboard(hasMore, hasBack bool) tgbotapi.ReplyKeyboardMarkup {
+	var rows [][]tgbotapi.KeyboardButton
+
+	var navBtns []tgbotapi.KeyboardButton
+	if hasBack {
+		navBtns = append(navBtns, tgbotapi.NewKeyboardButton(tmslang.Translate("general.torrent_search.back", nil)))
 	}
-	menuBtns = append(menuBtns, tgbotapi.NewKeyboardButton(tmslang.Translate("general.torrent_search.cancel", nil)))
-	menu := tgbotapi.NewReplyKeyboard(menuBtns)
-	menu.OneTimeKeyboard = true
-	menu.ResizeKeyboard = true
-	return menu
+	if hasMore {
+		navBtns = append(navBtns, tgbotapi.NewKeyboardButton(tmslang.Translate("general.torrent_search.more", nil)))
+	}
+	if len(navBtns) > 0 {
+		rows = append(rows, navBtns)
+	}
+
+	rows = append(rows, tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton(tmslang.Translate("general.torrent_search.cancel", nil)),
+	))
+
+	return tgbotapi.ReplyKeyboardMarkup{
+		Keyboard:        rows,
+		OneTimeKeyboard: true,
+		ResizeKeyboard:  true,
+	}
 }

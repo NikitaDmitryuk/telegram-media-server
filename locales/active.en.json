@@ -43,6 +43,7 @@
             "not_found": "No torrents found for your query",
             "download": "Download",
             "more": "More",
+            "back": "Back",
             "choose": "Choose a torrent to download",
             "cancel": "Cancel",
             "invalid_choice": "Invalid choice",

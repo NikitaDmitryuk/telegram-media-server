@@ -502,7 +502,9 @@ type MockDownloader struct {
 	TempFiles    []string
 	FileSize     int64
 	// EpisodesChan if set is returned from StartDownload; test can send completed episode counts (e.g. 1 for first_episode_ready).
-	EpisodesChan    chan int
+	EpisodesChan chan int
+	// TotalEps overrides TotalEpisodes() return value when > 0.
+	TotalEps        int
 	stoppedManually bool
 }
 
@@ -547,6 +549,9 @@ func (m *MockDownloader) StoppedManually() bool {
 }
 
 func (m *MockDownloader) TotalEpisodes() int {
+	if m.TotalEps > 0 {
+		return m.TotalEps
+	}
 	if m.EpisodesChan != nil {
 		return 1
 	}
