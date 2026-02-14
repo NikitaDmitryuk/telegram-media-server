@@ -202,6 +202,12 @@ func (dm *DownloadManager) enqueueConversionIfNeeded(
 		targetLevel = 41
 	}
 	compat := tvcompat.ProbeTvCompatibility(ctx, movieID, dm.cfg.MoviePath, dm.db, targetLevel)
+	if compat == "" {
+		// Probe could not determine compatibility (ffprobe missing, etc.)
+		// Keep the early estimate and skip conversion (we can't convert without ffprobe anyway).
+		logutils.Log.WithField("movie_id", movieID).Debug("TV compatibility probe returned unknown, keeping early estimate")
+		return false, nil, false
+	}
 	_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
 	if compat == tvcompat.TvCompatRed {
 		_ = dm.db.UpdateConversionStatus(ctx, movieID, "skipped")

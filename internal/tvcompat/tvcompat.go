@@ -81,8 +81,10 @@ const (
 	TvCompatRed    = "red"
 )
 
-// ProbeTvCompatibility probes the first video file of the movie and returns
-// green (H.264 level <= target), yellow (H.264 level > target or unknown), or red (not H.264 / probe failed).
+// ProbeTvCompatibility probes video files of the movie and returns
+// green (H.264 level <= target), yellow (H.264 level > target or unknown), red (confirmed not H.264),
+// or "" when the probe could not determine compatibility (ffprobe unavailable, files not yet on disk, etc.).
+// Returning "" allows callers to keep the previous (early) estimate instead of blindly overriding with red.
 func ProbeTvCompatibility(
 	ctx context.Context,
 	movieID uint,
@@ -96,8 +98,9 @@ func ProbeTvCompatibility(
 	files, err := db.GetFilesByMovieID(ctx, movieID)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("movie_id", movieID).Debug("TV compatibility probe: failed to get files")
-		return TvCompatRed
+		return ""
 	}
+	probeAttempted := false
 	for i := range files {
 		rel := files[i].FilePath
 		ext := strings.ToLower(filepath.Ext(rel))
@@ -108,11 +111,18 @@ func ProbeTvCompatibility(
 		if _, err := os.Stat(absPath); err != nil {
 			continue
 		}
+		probeAttempted = true
 		codec, level := probeCodecAndLevel(ctx, absPath)
 		if codec == "" {
-			return TvCompatRed
+			// Probe failed (ffprobe missing, file incomplete, etc.) — try next file.
+			logutils.Log.WithFields(map[string]any{
+				"movie_id": movieID,
+				"path":     absPath,
+			}).Debug("TV compatibility probe: ffprobe returned empty codec, trying next file")
+			continue
 		}
 		if codec != "h264" {
+			// Confirmed non-H.264 codec — this truly needs re-encoding.
 			return TvCompatRed
 		}
 		if level <= 0 {
@@ -123,7 +133,12 @@ func ProbeTvCompatibility(
 		}
 		return TvCompatYellow
 	}
-	return TvCompatRed
+	if !probeAttempted {
+		// No video files found on disk yet (still downloading) or no video extensions in DB.
+		logutils.Log.WithField("movie_id", movieID).Debug("TV compatibility probe: no video files available on disk")
+	}
+	// Could not determine — return "" so callers keep the existing (early) estimate.
+	return ""
 }
 
 // probeCodecAndLevel returns codec name and level (e.g. 41 for 4.1). level is 0 if unknown or error.
