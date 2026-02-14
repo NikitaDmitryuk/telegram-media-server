@@ -53,6 +53,9 @@ func HandleCallbackQuery(
 	case strings.HasPrefix(callbackData, "torrent_search_download:"):
 		tmssession.HandleTorrentSearchCallback(bot, update, cfg, db, downloadManager)
 		return
+	case callbackData == "torrent_search_back":
+		tmssession.HandleTorrentSearchCallback(bot, update, cfg, db, downloadManager)
+		return
 	case callbackData == "torrent_search_cancel":
 		tmssession.HandleTorrentSearchCallback(bot, update, cfg, db, downloadManager)
 		return

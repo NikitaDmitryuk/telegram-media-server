@@ -3,11 +3,11 @@ package ytdlp
 import (
 	"testing"
 
+	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
 func TestShouldUseProxy(t *testing.T) {
-	t.Skip("Proxy logic tests need refinement - skipping for now")
 	tempDir := testutils.TempDir(t)
 	cfg := testutils.TestConfig(tempDir)
 
@@ -96,6 +96,281 @@ func TestExtractVideoID(t *testing.T) {
 
 func TestYTDLPDownloader(t *testing.T) {
 	t.Skip("YTDLPDownloader integration tests require yt-dlp executable - skipping for now")
+}
+
+func TestShouldUseProxy_NoProxy(t *testing.T) {
+	tempDir := testutils.TempDir(t)
+	cfg := testutils.TestConfig(tempDir)
+	cfg.Proxy = ""
+	cfg.ProxyDomains = ""
+
+	useProxy, err := shouldUseProxy("https://youtube.com/watch?v=123", cfg)
+	if err != nil {
+		t.Fatalf("shouldUseProxy: %v", err)
+	}
+	if useProxy {
+		t.Error("shouldUseProxy should return false when no proxy configured")
+	}
+}
+
+func TestShouldUseProxy_InvalidURL(t *testing.T) {
+	tempDir := testutils.TempDir(t)
+	cfg := testutils.TestConfig(tempDir)
+	cfg.Proxy = "http://proxy:8080"
+	cfg.ProxyDomains = "youtube.com"
+
+	_, err := shouldUseProxy("://bad-url", cfg)
+	if err == nil {
+		t.Error("shouldUseProxy should return error for invalid URL")
+	}
+}
+
+func TestPrepareQualitySelector(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings tmsconfig.VideoConfig
+		expected string
+	}{
+		{
+			name: "simple with fallback",
+			settings: tmsconfig.VideoConfig{
+				QualitySelector: "best",
+				AudioLang:       "",
+			},
+			expected: "best/best",
+		},
+		{
+			name: "already has /best",
+			settings: tmsconfig.VideoConfig{
+				QualitySelector: "bv*+ba/best",
+				AudioLang:       "",
+			},
+			expected: "bv*+ba/best",
+		},
+		{
+			name: "already has /b",
+			settings: tmsconfig.VideoConfig{
+				QualitySelector: "bv*+ba/b",
+				AudioLang:       "",
+			},
+			expected: "bv*+ba/b",
+		},
+		{
+			name: "with audio language",
+			settings: tmsconfig.VideoConfig{
+				QualitySelector: "best",
+				AudioLang:       "ru",
+			},
+			expected: "best[language=ru]/best",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := prepareQualitySelector(&tt.settings)
+			if result != tt.expected {
+				t.Errorf("prepareQualitySelector() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAppendFormatSortArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings tmsconfig.VideoConfig
+		wantSort string
+	}{
+		{
+			name: "with max height",
+			settings: tmsconfig.VideoConfig{
+				MaxHeight: 1080,
+			},
+			wantSort: "res:1080",
+		},
+		{
+			name: "no max height",
+			settings: tmsconfig.VideoConfig{
+				MaxHeight: 0,
+			},
+			wantSort: "",
+		},
+		{
+			name: "compatibility mode",
+			settings: tmsconfig.VideoConfig{
+				CompatibilityMode: true,
+			},
+			wantSort: "vcodec:h264,acodec:mp3",
+		},
+		{
+			name: "height + compatibility",
+			settings: tmsconfig.VideoConfig{
+				MaxHeight:         720,
+				CompatibilityMode: true,
+			},
+			wantSort: "res:720,vcodec:h264,acodec:mp3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := appendFormatSortArgs(nil, &tt.settings)
+			if tt.wantSort == "" {
+				if len(args) != 0 {
+					t.Errorf("Expected no args, got %v", args)
+				}
+				return
+			}
+			if len(args) < 2 || args[0] != "-S" {
+				t.Fatalf("Expected [-S sortSpec], got %v", args)
+			}
+			if args[1] != tt.wantSort {
+				t.Errorf("Sort spec = %q, want %q", args[1], tt.wantSort)
+			}
+		})
+	}
+}
+
+func TestAppendReencodingArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings tmsconfig.VideoConfig
+		want     int // expected number of added args
+	}{
+		{
+			name: "reencoding disabled",
+			settings: tmsconfig.VideoConfig{
+				EnableReencoding: false,
+			},
+			want: 0,
+		},
+		{
+			name: "reencoding enabled without force",
+			settings: tmsconfig.VideoConfig{
+				EnableReencoding: true,
+				OutputFormat:     "mp4",
+			},
+			want: 2, // --recode-video mp4
+		},
+		{
+			name: "reencoding with force",
+			settings: tmsconfig.VideoConfig{
+				EnableReencoding: true,
+				ForceReencoding:  true,
+				OutputFormat:     "mp4",
+				VideoCodec:       "h264",
+				AudioCodec:       "mp3",
+			},
+			want: 4, // --recode-video mp4 --postprocessor-args "ffmpeg:..."
+		},
+		{
+			name: "reencoding with force and extra args",
+			settings: tmsconfig.VideoConfig{
+				EnableReencoding: true,
+				ForceReencoding:  true,
+				OutputFormat:     "mp4",
+				VideoCodec:       "h264",
+				AudioCodec:       "mp3",
+				FFmpegExtraArgs:  "-pix_fmt yuv420p",
+			},
+			want: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := appendReencodingArgs(nil, &tt.settings)
+			if len(args) != tt.want {
+				t.Errorf("appendReencodingArgs added %d args, want %d; args=%v", len(args), tt.want, args)
+			}
+		})
+	}
+}
+
+func TestAppendSubtitleArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings tmsconfig.VideoConfig
+		want     []string
+	}{
+		{
+			name: "no subtitles",
+			settings: tmsconfig.VideoConfig{
+				WriteSubs:    false,
+				SubtitleLang: "",
+			},
+			want: nil,
+		},
+		{
+			name: "write subs without lang",
+			settings: tmsconfig.VideoConfig{
+				WriteSubs:    true,
+				SubtitleLang: "",
+			},
+			want: []string{"--write-subs"},
+		},
+		{
+			name: "write subs with lang",
+			settings: tmsconfig.VideoConfig{
+				WriteSubs:    true,
+				SubtitleLang: "en",
+			},
+			want: []string{"--write-subs", "--sub-langs", "en"},
+		},
+		{
+			name: "subtitle lang without write-subs flag",
+			settings: tmsconfig.VideoConfig{
+				WriteSubs:    false,
+				SubtitleLang: "ru",
+			},
+			want: []string{"--write-subs", "--sub-langs", "ru"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := appendSubtitleArgs(nil, &tt.settings)
+			if len(args) != len(tt.want) {
+				t.Fatalf("appendSubtitleArgs() = %v (len=%d), want %v (len=%d)", args, len(args), tt.want, len(tt.want))
+			}
+			for i, arg := range args {
+				if arg != tt.want[i] {
+					t.Errorf("arg[%d] = %q, want %q", i, arg, tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestGetMapKeys(t *testing.T) {
+	m := map[string]any{
+		"title":    "test",
+		"duration": 120,
+		"filesize": 1024,
+	}
+
+	keys := getMapKeys(m)
+	if len(keys) != 3 {
+		t.Fatalf("Expected 3 keys, got %d: %v", len(keys), keys)
+	}
+
+	// Check all keys present (order not guaranteed)
+	keySet := map[string]bool{}
+	for _, k := range keys {
+		keySet[k] = true
+	}
+	for _, expected := range []string{"title", "duration", "filesize"} {
+		if !keySet[expected] {
+			t.Errorf("Missing key %q in result: %v", expected, keys)
+		}
+	}
+}
+
+func TestGetMapKeys_Empty(t *testing.T) {
+	keys := getMapKeys(map[string]any{})
+	if len(keys) != 0 {
+		t.Errorf("Expected empty keys, got %v", keys)
+	}
 }
 
 func TestAddAudioLanguageFilter(t *testing.T) {

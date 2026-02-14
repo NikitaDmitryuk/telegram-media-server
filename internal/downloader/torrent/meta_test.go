@@ -5,11 +5,27 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jackpal/bencode-go"
+
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
+// writeBencode marshals data to a torrent file and returns the path.
+func writeBencode(t *testing.T, dir, name string, data any) string {
+	t.Helper()
+	filePath := filepath.Join(dir, name+".torrent")
+	f, err := os.Create(filePath)
+	if err != nil {
+		t.Fatalf("create file: %v", err)
+	}
+	defer f.Close()
+	if err := bencode.Marshal(f, data); err != nil {
+		t.Fatalf("bencode marshal: %v", err)
+	}
+	return filePath
+}
+
 func TestParseMeta(t *testing.T) {
-	t.Skip("Meta parsing tests require proper bencode structures - skipping for now")
 	tests := []struct {
 		name           string
 		setupFile      func(t *testing.T, dir string) string
@@ -21,14 +37,15 @@ func TestParseMeta(t *testing.T) {
 		{
 			name: "Valid single file torrent",
 			setupFile: func(t *testing.T, dir string) string {
-				// Create a more realistic torrent file with proper bencode structure
-				torrentContent := "d8:announce9:test-url13:creation datei1609459200e4:infod6:lengthi1048576e4:name9:test.file12:piece lengthi32768e6:pieces20:00000000000000000000ee"
-				filePath := filepath.Join(dir, "single-file.torrent")
-				err := os.WriteFile(filePath, []byte(torrentContent), 0600)
-				if err != nil {
-					t.Fatalf("Failed to create single file torrent: %v", err)
-				}
-				return filePath
+				return writeBencode(t, dir, "single-file", map[string]any{
+					"announce": "http://tracker.example.com/announce",
+					"info": map[string]any{
+						"name":         "test.file",
+						"length":       int64(1048576),
+						"piece length": int64(32768),
+						"pieces":       "01234567890123456789",
+					},
+				})
 			},
 			expectedName:   "test.file",
 			expectedLength: 1048576,
@@ -37,14 +54,24 @@ func TestParseMeta(t *testing.T) {
 		{
 			name: "Valid multi-file torrent",
 			setupFile: func(t *testing.T, dir string) string {
-				// Multi-file torrent with files list
-				torrentContent := "d8:announce9:test-url4:infod5:filesld6:lengthi524288e4:pathl8:folder111:file1.txteed6:lengthi262144e4:pathl8:folder211:file2.txtee4:name10:multi-test12:piece lengthi32768e6:pieces20:00000000000000000000ee"
-				filePath := filepath.Join(dir, "multi-file.torrent")
-				err := os.WriteFile(filePath, []byte(torrentContent), 0600)
-				if err != nil {
-					t.Fatalf("Failed to create multi file torrent: %v", err)
-				}
-				return filePath
+				return writeBencode(t, dir, "multi-file", map[string]any{
+					"announce": "http://tracker.example.com/announce",
+					"info": map[string]any{
+						"name":         "multi-test",
+						"piece length": int64(32768),
+						"pieces":       "01234567890123456789",
+						"files": []any{
+							map[string]any{
+								"length": int64(524288),
+								"path":   []any{"folder1", "file1.txt"},
+							},
+							map[string]any{
+								"length": int64(262144),
+								"path":   []any{"folder2", "file2.txt"},
+							},
+						},
+					},
+				})
 			},
 			expectedName:   "multi-test",
 			expectedLength: 0, // Multi-file torrents don't have length in root info
@@ -62,8 +89,7 @@ func TestParseMeta(t *testing.T) {
 			name: "Invalid bencode format",
 			setupFile: func(t *testing.T, dir string) string {
 				filePath := filepath.Join(dir, "invalid.torrent")
-				err := os.WriteFile(filePath, []byte("invalid bencode"), 0600)
-				if err != nil {
+				if err := os.WriteFile(filePath, []byte("invalid bencode"), 0600); err != nil {
 					t.Fatalf("Failed to create invalid torrent: %v", err)
 				}
 				return filePath
@@ -74,14 +100,14 @@ func TestParseMeta(t *testing.T) {
 		{
 			name: "Missing name field",
 			setupFile: func(t *testing.T, dir string) string {
-				// Torrent without name in info section
-				torrentContent := "d8:announce9:test-url4:infod6:lengthi1024e12:piece lengthi32768eee"
-				filePath := filepath.Join(dir, "no-name.torrent")
-				err := os.WriteFile(filePath, []byte(torrentContent), 0600)
-				if err != nil {
-					t.Fatalf("Failed to create torrent without name: %v", err)
-				}
-				return filePath
+				return writeBencode(t, dir, "no-name", map[string]any{
+					"announce": "http://tracker.example.com/announce",
+					"info": map[string]any{
+						"length":       int64(1024),
+						"piece length": int64(32768),
+						"pieces":       "01234567890123456789",
+					},
+				})
 			},
 			expectError:   true,
 			errorContains: "torrent meta does not contain a file name",
@@ -126,21 +152,17 @@ func TestParseMeta(t *testing.T) {
 }
 
 func TestAria2DownloaderParseTorrentMeta(t *testing.T) {
-	t.Skip("Integration test requires proper bencode structures - skipping for now")
 	tempDir := testutils.TempDir(t)
 
-	// Create a valid torrent file
-	torrentPath := testutils.CreateTestTorrent(t, tempDir, "integration-test")
+	// Use CreateRealTestTorrent which uses bencode.Marshal for valid format
+	torrentPath := testutils.CreateRealTestTorrent(t, tempDir, "integration-test")
 
-	// Create downloader instance
 	downloader := &Aria2Downloader{
 		downloadDir:     tempDir,
 		torrentFileName: filepath.Base(torrentPath),
 	}
 
-	// Test the parseTorrentMeta method
 	meta, err := downloader.parseTorrentMeta()
-
 	if err != nil {
 		t.Errorf("Expected no error, but got: %v", err)
 		return
@@ -151,25 +173,25 @@ func TestAria2DownloaderParseTorrentMeta(t *testing.T) {
 		return
 	}
 
-	if meta.Info.Name != "integration-test" {
-		t.Errorf("Expected name 'integration-test', but got '%s'", meta.Info.Name)
+	if meta.Info.Name != "integration-test.txt" {
+		t.Errorf("Expected name 'integration-test.txt', but got '%s'", meta.Info.Name)
 	}
 }
 
 //nolint:gocyclo // Test function validating torrent structures
 func TestMetaStructure(t *testing.T) {
-	t.Skip("Meta structure tests require proper bencode structures - skipping for now")
-	// Test that our Meta struct can handle various torrent formats
 	tempDir := testutils.TempDir(t)
 
 	t.Run("Single file structure", func(t *testing.T) {
-		// Create a single-file torrent
-		torrentContent := "d8:announce9:test-url4:infod6:lengthi2048e4:name8:test.mp412:piece lengthi32768e6:pieces20:00000000000000000000ee"
-		filePath := filepath.Join(tempDir, "single.torrent")
-		err := os.WriteFile(filePath, []byte(torrentContent), 0600)
-		if err != nil {
-			t.Fatalf("Failed to create test torrent: %v", err)
-		}
+		filePath := writeBencode(t, tempDir, "single", map[string]any{
+			"announce": "http://tracker.example.com/announce",
+			"info": map[string]any{
+				"name":         "test.mp4",
+				"length":       int64(2048),
+				"piece length": int64(32768),
+				"pieces":       "01234567890123456789",
+			},
+		})
 
 		meta, err := ParseMeta(filePath)
 		if err != nil {
@@ -190,13 +212,24 @@ func TestMetaStructure(t *testing.T) {
 	})
 
 	t.Run("Multi file structure", func(t *testing.T) {
-		// Create a multi-file torrent
-		torrentContent := "d8:announce9:test-url4:infod5:filesld6:lengthi1024e4:pathl5:file1eed6:lengthi2048e4:pathl6:subdir5:file2eee4:name11:test-folder12:piece lengthi32768e6:pieces20:00000000000000000000ee"
-		filePath := filepath.Join(tempDir, "multi.torrent")
-		err := os.WriteFile(filePath, []byte(torrentContent), 0600)
-		if err != nil {
-			t.Fatalf("Failed to create test torrent: %v", err)
-		}
+		filePath := writeBencode(t, tempDir, "multi", map[string]any{
+			"announce": "http://tracker.example.com/announce",
+			"info": map[string]any{
+				"name":         "test-folder",
+				"piece length": int64(32768),
+				"pieces":       "01234567890123456789",
+				"files": []any{
+					map[string]any{
+						"length": int64(1024),
+						"path":   []any{"file1"},
+					},
+					map[string]any{
+						"length": int64(2048),
+						"path":   []any{"subdir", "file2"},
+					},
+				},
+			},
+		})
 
 		meta, err := ParseMeta(filePath)
 		if err != nil {
@@ -215,7 +248,6 @@ func TestMetaStructure(t *testing.T) {
 			t.Errorf("Expected 2 files, got %d", len(meta.Info.Files))
 		}
 
-		// Check first file
 		if meta.Info.Files[0].Length != 1024 {
 			t.Errorf("Expected first file length 1024, got %d", meta.Info.Files[0].Length)
 		}
@@ -224,7 +256,6 @@ func TestMetaStructure(t *testing.T) {
 			t.Errorf("Expected first file path ['file1'], got %v", meta.Info.Files[0].Path)
 		}
 
-		// Check second file
 		if meta.Info.Files[1].Length != 2048 {
 			t.Errorf("Expected second file length 2048, got %d", meta.Info.Files[1].Length)
 		}
@@ -238,7 +269,6 @@ func TestMetaStructure(t *testing.T) {
 }
 
 func TestSortedFileIndicesByPath(t *testing.T) {
-	// Meta with files in non-lexicographic order (03, 01, 02); sorted order should be 01, 02, 03
 	meta := &Meta{}
 	meta.Info.Name = "Series"
 	meta.Info.Files = []struct {

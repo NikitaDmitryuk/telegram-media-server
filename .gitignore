@@ -49,3 +49,4 @@ gosec-report.json
 
 # Binary files
 telegram-media-server
+*.torrent

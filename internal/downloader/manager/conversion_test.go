@@ -147,19 +147,21 @@ func TestEnqueueConversionIfNeeded_CompatibilityModeOff(t *testing.T) {
 	}
 }
 
-func TestEnqueueConversionIfNeeded_CompatibilityModeOn_NoFiles_RedSkipped(t *testing.T) {
+func TestEnqueueConversionIfNeeded_CompatibilityModeOn_NoFiles_KeepsEarlyEstimate(t *testing.T) {
 	cfg := testutils.TestConfig("/tmp")
 	cfg.VideoSettings.CompatibilityMode = true
 	cfg.VideoSettings.TvH264Level = "4.1"
 	mockDB := &conversionMockDB{}
-	// GetFilesByMovieID returns empty -> ProbeTvCompatibility returns red
+	// GetFilesByMovieID returns empty -> ProbeTvCompatibility returns "" (unknown).
+	// When the probe cannot determine compatibility (no files on disk, ffprobe missing, etc.),
+	// we keep the early estimate (e.g. green from file extension) instead of overriding with red.
 	dm := NewDownloadManager(cfg, mockDB)
 	ctx := context.Background()
 
 	needWait, done, compatRed := dm.enqueueConversionIfNeeded(ctx, 1, 0, "test")
-	if needWait || done != nil || !compatRed {
+	if needWait || done != nil || compatRed {
 		t.Errorf(
-			"red/skipped: want needWait=false, done=nil, compatRed=true; got needWait=%v done=%v compatRed=%v",
+			"unknown probe: want needWait=false, done=nil, compatRed=false; got needWait=%v done=%v compatRed=%v",
 			needWait,
 			done != nil,
 			compatRed,
@@ -168,23 +170,15 @@ func TestEnqueueConversionIfNeeded_CompatibilityModeOn_NoFiles_RedSkipped(t *tes
 
 	mockDB.mu.Lock()
 	defer mockDB.mu.Unlock()
-	if len(mockDB.SetTvCompatibilityCalls) != 1 {
-		t.Fatalf("expected 1 SetTvCompatibility call, got %d", len(mockDB.SetTvCompatibilityCalls))
+	// When probe returns "" the early estimate is preserved — no DB calls should be made.
+	if len(mockDB.SetTvCompatibilityCalls) != 0 {
+		t.Errorf("expected 0 SetTvCompatibility calls when probe is unknown, got %d", len(mockDB.SetTvCompatibilityCalls))
 	}
-	if mockDB.SetTvCompatibilityCalls[0].MovieID != 1 || mockDB.SetTvCompatibilityCalls[0].Compat != "red" {
-		t.Errorf("SetTvCompatibility: want movieID=1 compat=red, got movieID=%d compat=%q",
-			mockDB.SetTvCompatibilityCalls[0].MovieID, mockDB.SetTvCompatibilityCalls[0].Compat)
+	if len(mockDB.UpdateConversionStatusCalls) != 0 {
+		t.Errorf("expected 0 UpdateConversionStatus calls when probe is unknown, got %d", len(mockDB.UpdateConversionStatusCalls))
 	}
-	if len(mockDB.UpdateConversionStatusCalls) != 1 {
-		t.Fatalf("expected 1 UpdateConversionStatus call, got %d", len(mockDB.UpdateConversionStatusCalls))
-	}
-	if mockDB.UpdateConversionStatusCalls[0].MovieID != 1 || mockDB.UpdateConversionStatusCalls[0].Status != "skipped" {
-		t.Errorf("UpdateConversionStatus: want movieID=1 status=skipped, got movieID=%d status=%q",
-			mockDB.UpdateConversionStatusCalls[0].MovieID, mockDB.UpdateConversionStatusCalls[0].Status)
-	}
-	// When red we return before UpdateConversionPercentage and EnqueueConversion
 	if len(mockDB.UpdateConversionPctCalls) != 0 {
-		t.Errorf("expected no UpdateConversionPercentage when red/skipped, got %d", len(mockDB.UpdateConversionPctCalls))
+		t.Errorf("expected 0 UpdateConversionPercentage calls when probe is unknown, got %d", len(mockDB.UpdateConversionPctCalls))
 	}
 }
 

@@ -111,15 +111,13 @@ func handleMessage(
 			case "show_results":
 				switch text {
 				case lang.Translate("general.torrent_search.more", nil):
-					s.Offset += 5
-					tmssession.ShowTorrentSearchResults(bot, chatID)
+					tmssession.HandleTorrentMore(bot, chatID)
+					return
+				case lang.Translate("general.torrent_search.back", nil):
+					tmssession.HandleTorrentBack(bot, chatID)
 					return
 				case lang.Translate("general.torrent_search.cancel", nil):
-					for _, msgID := range s.MessageIDs {
-						_ = bot.DeleteMessage(chatID, msgID)
-					}
-					tmssession.DeleteSearchSession(chatID)
-					ui.SendMainMenu(bot, chatID, lang.Translate("general.commands.start", nil))
+					tmssession.HandleTorrentCancel(bot, chatID)
 					return
 				}
 			}

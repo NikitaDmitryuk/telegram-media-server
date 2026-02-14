@@ -224,13 +224,17 @@ func (d *Aria2Downloader) runMultiFileDownload(
 
 // runOneSequentialBatch runs aria2 for one file set (selectIndices), forwards progress to progressChan,
 // and returns the number of video files in this batch or an error.
+//
+// Progress calculation: aria2 is invoked with --select-file covering all files up to the current batch.
+// Files from previous batches are already complete, so aria2 reports its own progress starting from a non-zero
+// value (e.g. 66% for batch 3 of 3 equal files). Thus runTotalSize*p/100 already accounts for all completed
+// bytes, and no separate "completedSize" offset is needed.
 func (d *Aria2Downloader) runOneSequentialBatch(
 	ctx context.Context,
 	torrentPath string,
 	aria2Cfg *config.Aria2Config,
 	selectIndices []int,
 	runTotalSize int64,
-	completedSize int64,
 	totalSize int64,
 	progressChan chan float64,
 	isVideo []bool,
@@ -262,8 +266,10 @@ func (d *Aria2Downloader) runOneSequentialBatch(
 	go d.parseProgress(stdout, runProgressChan)
 	go func() {
 		for p := range runProgressChan {
-			overall := float64(completedSize) + float64(runTotalSize)*p/100
-			overall = overall / float64(totalSize) * 100
+			// aria2 progress (p) already includes previously completed files in this batch,
+			// so overall = (bytes done in this run) / totalSize * 100.
+			overall := float64(runTotalSize) * p / maxProgressPercent
+			overall = overall / float64(totalSize) * maxProgressPercent
 			if overall > maxProgressPercent {
 				overall = maxProgressPercent
 			}
@@ -308,24 +314,20 @@ func (d *Aria2Downloader) runMultiFileDownloadSequential(
 		"num_files":    len(indices),
 	}).Info("Starting aria2c multi-file download (sequential mode: first file first)")
 
-	var completedSize int64
 	for i := 1; i <= len(indices); i++ {
 		selectIndices := indices[:i]
-		runTotalSize := int64(0)
+		var runTotalSize int64
 		for j := range i {
 			runTotalSize += sizes[j]
 		}
 
 		videoDone, err := d.runOneSequentialBatch(ctx, torrentPath, aria2Cfg, selectIndices,
-			runTotalSize, completedSize, totalSize, progressChan, isVideo[:i])
+			runTotalSize, totalSize, progressChan, isVideo[:i])
 		if err != nil {
 			errChan <- err
 			return
 		}
 
-		for j := range i {
-			completedSize += sizes[j]
-		}
 		if episodesChan != nil && videoDone > 0 {
 			episodesChan <- videoDone
 		}

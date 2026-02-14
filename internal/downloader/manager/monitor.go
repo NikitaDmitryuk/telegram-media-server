@@ -51,6 +51,9 @@ func (dm *DownloadManager) monitorDownload(
 				job.episodesChan = nil
 				continue
 			}
+			// Episode completion means the download is progressing; reset stagnation timer
+			// to avoid false 30-minute timeouts between sequential batches.
+			progressStagnantTime = time.Time{}
 			if updateErr := dm.db.UpdateEpisodesProgress(context.Background(), movieID, completed); updateErr != nil {
 				logutils.Log.WithError(updateErr).WithField("movie_id", movieID).Error("Failed to update episodes progress")
 			}
@@ -72,10 +75,15 @@ func (dm *DownloadManager) monitorDownload(
 						targetLevel = 41
 					}
 					compat := tvcompat.ProbeTvCompatibility(ctx, movieID, dm.cfg.MoviePath, dm.db, targetLevel)
-					_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
-					if compat == tvcompat.TvCompatRed && dm.cfg.VideoSettings.RejectIncompatible {
-						job.rejectedIncompatible = true
-						job.cancel()
+					// Only update DB when the probe actually determined compatibility.
+					// Empty result means the probe failed (ffprobe missing, file not ready, etc.)
+					// — keep the early estimate (e.g. green from file extension).
+					if compat != "" {
+						_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
+						if compat == tvcompat.TvCompatRed && dm.cfg.VideoSettings.RejectIncompatible {
+							job.rejectedIncompatible = true
+							job.cancel()
+						}
 					}
 				}
 			}

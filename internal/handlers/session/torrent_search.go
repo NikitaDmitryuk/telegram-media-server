@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
@@ -25,6 +26,10 @@ const (
 	searchPageSize  = 40
 	displayPageSize = 4
 	gbDivisor       = 1024.0 * 1024.0 * 1024.0
+	searchCacheTTL  = 60 * time.Minute
+
+	stageAwaitQuery  = "await_query"
+	stageShowResults = "show_results"
 )
 
 type SearchSession struct {
@@ -34,7 +39,51 @@ type SearchSession struct {
 	MessageIDs []int
 }
 
-var searchSessionManager = NewSessionManager()
+// searchCacheEntry stores sorted Prowlarr search results with a creation timestamp.
+type searchCacheEntry struct {
+	results []prowlarr.TorrentSearchResult
+	created time.Time
+}
+
+var (
+	searchSessionManager = NewSessionManager()
+	searchCache          = make(map[string]*searchCacheEntry)
+	searchCacheMu        sync.Mutex
+)
+
+func getCachedResults(query string) ([]prowlarr.TorrentSearchResult, bool) {
+	key := strings.TrimSpace(strings.ToLower(query))
+	searchCacheMu.Lock()
+	defer searchCacheMu.Unlock()
+
+	if entry, ok := searchCache[key]; ok && time.Since(entry.created) < searchCacheTTL {
+		logutils.Log.WithField("query", query).Debug("Prowlarr search cache hit")
+		// Return a copy so callers don't mutate the cache.
+		cp := make([]prowlarr.TorrentSearchResult, len(entry.results))
+		copy(cp, entry.results)
+		return cp, true
+	}
+	return nil, false
+}
+
+func setCachedResults(query string, results []prowlarr.TorrentSearchResult) {
+	key := strings.TrimSpace(strings.ToLower(query))
+	searchCacheMu.Lock()
+	defer searchCacheMu.Unlock()
+
+	// Evict expired entries.
+	now := time.Now()
+	for k, v := range searchCache {
+		if now.Sub(v.created) > searchCacheTTL {
+			delete(searchCache, k)
+		}
+	}
+
+	searchCache[key] = &searchCacheEntry{
+		results: results,
+		created: now,
+	}
+}
 
 func GetSearchSession(chatID int64) (*SearchSession, *Session) {
 	sess := searchSessionManager.Get(chatID)
@@ -68,16 +117,14 @@ func DeleteSearchSession(chatID int64) {
 
 func StartTorrentSearch(bot *tmsbot.Bot, chatID int64) {
 	ss := &SearchSession{}
-	setSearchSession(chatID, ss, "await_query")
-	msg := tgbotapi.NewMessage(chatID, lang.Translate("general.torrent_search.enter_query", nil))
-	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
-	bot.SendMessage(chatID, lang.Translate("general.torrent_search.enter_query", nil), ui.GetTorrentSearchKeyboard(false))
+	setSearchSession(chatID, ss, stageAwaitQuery)
+	bot.SendMessage(chatID, lang.Translate("general.torrent_search.enter_query", nil), ui.GetTorrentSearchKeyboard(false, false))
 }
 
 func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *tmsconfig.Config) {
 	chatID := update.Message.Chat.ID
 	ss, sess := GetSearchSession(chatID)
-	if sess == nil || sess.Stage != "await_query" {
+	if sess == nil || sess.Stage != stageAwaitQuery {
 		return
 	}
 	query := update.Message.Text
@@ -88,6 +135,17 @@ func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *
 	}
 	if query == "" {
 		bot.SendMessage(chatID, lang.Translate("general.torrent_search.empty_query", nil), ui.GetEmptyKeyboard())
+		return
+	}
+
+	// Try cache first.
+	if cached, ok := getCachedResults(query); ok {
+		ss.Query = query
+		ss.Results = cached
+		ss.Offset = 0
+		ss.MessageIDs = nil
+		setSearchSession(chatID, ss, stageShowResults)
+		ShowTorrentSearchResults(bot, chatID)
 		return
 	}
 
@@ -116,17 +174,21 @@ func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *
 	sort.Slice(page.Results, func(i, j int) bool {
 		return page.Results[i].Peers > page.Results[j].Peers
 	})
+
+	// Cache sorted results.
+	setCachedResults(query, page.Results)
+
 	ss.Query = query
 	ss.Results = page.Results
 	ss.Offset = 0
 	ss.MessageIDs = nil
-	setSearchSession(chatID, ss, "show_results")
+	setSearchSession(chatID, ss, stageShowResults)
 	ShowTorrentSearchResults(bot, chatID)
 }
 
 func ShowTorrentSearchResults(bot *tmsbot.Bot, chatID int64) {
 	ss, sess := GetSearchSession(chatID)
-	if sess == nil || sess.Stage != "show_results" {
+	if sess == nil || sess.Stage != stageShowResults {
 		return
 	}
 
@@ -161,9 +223,10 @@ func ShowTorrentSearchResults(bot *tmsbot.Bot, chatID int64) {
 	}
 
 	hasMore := to < len(results)
-	bot.SendMessage(chatID, lang.Translate("general.torrent_search.choose", nil), ui.GetTorrentSearchKeyboard(hasMore))
+	hasBack := true // always show Back: first page → new query, later pages → previous page
+	bot.SendMessage(chatID, lang.Translate("general.torrent_search.choose", nil), ui.GetTorrentSearchKeyboard(hasMore, hasBack))
 
-	setSearchSession(chatID, ss, "show_results")
+	setSearchSession(chatID, ss, stageShowResults)
 }
 
 func handleTorrentDownloadCallback(bot *tmsbot.Bot, chatID int64, data string, config *tmsconfig.Config) (string, error) {
@@ -202,13 +265,55 @@ func handleTorrentCancelCallback(bot *tmsbot.Bot, chatID int64) bool {
 	return true
 }
 
-func handleTorrentMoreCallback(bot *tmsbot.Bot, chatID int64) bool {
+// HandleTorrentMore advances to the next page of search results.
+func HandleTorrentMore(bot *tmsbot.Bot, chatID int64) {
+	ss, _ := GetSearchSession(chatID)
+	if ss == nil {
+		return
+	}
+	ss.Offset += displayPageSize
+	setSearchSession(chatID, ss, stageShowResults)
+	ShowTorrentSearchResults(bot, chatID)
+}
+
+// HandleTorrentBack navigates to the previous page, or back to query input on the first page.
+func HandleTorrentBack(bot *tmsbot.Bot, chatID int64) {
+	ss, _ := GetSearchSession(chatID)
+	if ss == nil {
+		return
+	}
+	if ss.Offset > 0 {
+		ss.Offset -= displayPageSize
+		if ss.Offset < 0 {
+			ss.Offset = 0
+		}
+		setSearchSession(chatID, ss, stageShowResults)
+		ShowTorrentSearchResults(bot, chatID)
+	} else {
+		// First page: go back to query input so user can search again.
+		for _, msgID := range ss.MessageIDs {
+			_ = bot.DeleteMessage(chatID, msgID)
+		}
+		ss.MessageIDs = nil
+		setSearchSession(chatID, ss, stageAwaitQuery)
+		bot.SendMessage(chatID, lang.Translate("general.torrent_search.enter_query", nil), ui.GetTorrentSearchKeyboard(false, false))
+	}
+}
+
+// HandleTorrentCancel cleans up the search session and returns to the main menu.
+func HandleTorrentCancel(bot *tmsbot.Bot, chatID int64) {
 	ss, _ := GetSearchSession(chatID)
 	if ss != nil {
-		ss.Offset += 5
-		setSearchSession(chatID, ss, "show_results")
-		ShowTorrentSearchResults(bot, chatID)
+		for _, msgID := range ss.MessageIDs {
+			_ = bot.DeleteMessage(chatID, msgID)
+		}
+		DeleteSearchSession(chatID)
 	}
+	ui.SendMainMenuNoText(bot, chatID)
+}
+
+func handleTorrentMoreCallback(bot *tmsbot.Bot, chatID int64) bool {
+	HandleTorrentMore(bot, chatID)
 	return true
 }
 
@@ -254,6 +359,11 @@ func HandleTorrentSearchCallback(
 		if update.CallbackQuery != nil {
 			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 		}
+		return true
+	}
+	if data == "torrent_search_back" {
+		HandleTorrentBack(bot, chatID)
+		bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 		return true
 	}
 	if data == "torrent_search_cancel" {
