@@ -18,14 +18,9 @@ var videoExtensions = map[string]struct{}{
 	".mkv": {}, ".mp4": {}, ".avi": {}, ".mov": {}, ".webm": {}, ".m4v": {},
 }
 
-// Extensions that typically indicate non-H.264 (VP9, AV1) — show red until probe.
+// Extensions that almost always contain a non-H.264 codec (VP9 / AV1).
 var likelyNonH264Extensions = map[string]struct{}{
 	".webm": {},
-}
-
-// Extensions that are commonly H.264 in practice — show green optimistically until probe.
-var likelyH264Extensions = map[string]struct{}{
-	".mkv": {}, ".mp4": {}, ".mov": {}, ".m4v": {},
 }
 
 // IsVideoFilePath returns true if the file path has a known video extension.
@@ -35,9 +30,11 @@ func IsVideoFilePath(path string) bool {
 	return ok
 }
 
-// CompatFromTorrentFileNames returns a preliminary TV compatibility from the first video file name in the list.
-// Used to show the circle immediately when a torrent is added (from torrent meta). Returns "" if no video file found.
-// For .mkv/.mp4/.mov/.m4v returns green (optimistic); .avi returns yellow; .webm returns red.
+// CompatFromTorrentFileNames returns a preliminary TV compatibility from torrent file paths.
+// Since torrent metadata does not contain codec information, we can only use file extensions:
+//   - .webm → red (almost always VP9/AV1);
+//   - other video extensions → yellow (unknown, will be resolved by ffprobe later);
+//   - no video files → "".
 func CompatFromTorrentFileNames(filePaths []string) string {
 	for _, p := range filePaths {
 		ext := strings.ToLower(filepath.Ext(p))
@@ -45,56 +42,57 @@ func CompatFromTorrentFileNames(filePaths []string) string {
 			continue
 		}
 		if _, bad := likelyNonH264Extensions[ext]; bad {
-			return TvCompatRed
+			return TvCompatRed // .webm is almost always VP9/AV1
 		}
-		if _, good := likelyH264Extensions[ext]; good {
-			return TvCompatGreen
-		}
-		// .avi — likely H.264 but level unknown
-		return TvCompatYellow
+		return TvCompatYellow // has video files but unknown codec
 	}
 	return ""
 }
 
-// CompatFromVcodec returns a preliminary TV compatibility from a codec string (e.g. from yt-dlp JSON: "avc1.64001f", "vp9").
-// Returns "" if unknown or empty.
+// CompatFromVcodec returns a preliminary TV compatibility from a codec string
+// (e.g. from yt-dlp JSON: "avc1.64001f", "vp9", "hevc").
+// Returns green for H.264/AVC, red for VP9/AV1/HEVC, "" if unknown or empty.
 func CompatFromVcodec(vcodec string) string {
 	v := strings.ToLower(strings.TrimSpace(vcodec))
 	if v == "" || v == "none" {
 		return ""
 	}
+	// Non-H.264 codecs → red (needs full re-encoding for old TVs).
 	if strings.Contains(v, "vp9") || strings.Contains(v, "av01") || strings.Contains(v, "av1") {
 		return TvCompatRed
 	}
+	if strings.Contains(v, "h265") || strings.Contains(v, "hevc") {
+		return TvCompatRed
+	}
+	// H.264/AVC → green (even if level is high, quick remux is enough).
 	if strings.Contains(v, "h264") || strings.Contains(v, "avc") {
-		return TvCompatYellow
+		return TvCompatGreen
 	}
 	return ""
 }
 
-// TvCompatGreen means video will play on old TV without conversion.
-// TvCompatYellow means light conversion (remux) may be needed.
-// TvCompatRed means heavy re-encoding would be needed (not implemented).
+// TvCompatGreen means H.264 confirmed — video will play on old TV (possibly after quick remux).
+// TvCompatYellow means codec is unknown / not yet determined.
+// TvCompatRed means confirmed incompatible codec (HEVC, VP9, AV1, etc.) — full re-encoding needed.
 const (
 	TvCompatGreen  = "green"
 	TvCompatYellow = "yellow"
 	TvCompatRed    = "red"
 )
 
-// ProbeTvCompatibility probes video files of the movie and returns
-// green (H.264 level <= target), yellow (H.264 level > target or unknown), red (confirmed not H.264),
-// or "" when the probe could not determine compatibility (ffprobe unavailable, files not yet on disk, etc.).
-// Returning "" allows callers to keep the previous (early) estimate instead of blindly overriding with red.
+// ProbeTvCompatibility probes video files of the movie with ffprobe and returns:
+//   - green: H.264 confirmed (any level — quick remux is enough for old TVs);
+//   - red: confirmed non-H.264 codec (HEVC, VP9, AV1, etc.);
+//   - "": probe could not determine (ffprobe unavailable, files not yet on disk, etc.).
+//
+// Returning "" allows callers to keep the previous (early) estimate.
 func ProbeTvCompatibility(
 	ctx context.Context,
 	movieID uint,
 	moviePath string,
 	db tmsdb.Database,
-	targetLevel int,
+	_ int, // targetLevel kept for API compatibility; any H.264 level is considered green now.
 ) string {
-	if targetLevel <= 0 {
-		targetLevel = 41
-	}
 	files, err := db.GetFilesByMovieID(ctx, movieID)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("movie_id", movieID).Debug("TV compatibility probe: failed to get files")
@@ -112,7 +110,7 @@ func ProbeTvCompatibility(
 			continue
 		}
 		probeAttempted = true
-		codec, level := probeCodecAndLevel(ctx, absPath)
+		codec, _ := probeCodecAndLevel(ctx, absPath)
 		if codec == "" {
 			// Probe failed (ffprobe missing, file incomplete, etc.) — try next file.
 			logutils.Log.WithFields(map[string]any{
@@ -125,13 +123,9 @@ func ProbeTvCompatibility(
 			// Confirmed non-H.264 codec — this truly needs re-encoding.
 			return TvCompatRed
 		}
-		if level <= 0 {
-			return TvCompatYellow // unknown level, light remux may help
-		}
-		if level <= targetLevel {
-			return TvCompatGreen
-		}
-		return TvCompatYellow
+		// H.264 at any level → green.
+		// Even if the level is above the target, a quick metadata remux is enough.
+		return TvCompatGreen
 	}
 	if !probeAttempted {
 		// No video files found on disk yet (still downloading) or no video extensions in DB.

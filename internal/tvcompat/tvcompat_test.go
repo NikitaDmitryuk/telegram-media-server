@@ -54,14 +54,21 @@ func TestCompatFromTorrentFileNames(t *testing.T) {
 		paths      []string
 		wantCompat string
 	}{
-		{"mkv first", []string{"Movie.mkv"}, TvCompatGreen},
-		{"mp4 first", []string{"Movie.mp4"}, TvCompatGreen},
-		{"mov first", []string{"Movie.mov"}, TvCompatGreen},
-		{"m4v first", []string{"Movie.m4v"}, TvCompatGreen},
-		{"avi first", []string{"Movie.avi"}, TvCompatYellow},
-		{"webm first", []string{"Movie.webm"}, TvCompatRed},
-		{"poster then mkv", []string{"poster.jpg", "Movie.mkv"}, TvCompatGreen},
-		{"srt then mkv", []string{"sub.srt", "Movie.mkv"}, TvCompatGreen},
+		// Video extensions → yellow (unknown codec, will be resolved by ffprobe).
+		{"mkv", []string{"Movie.mkv"}, TvCompatYellow},
+		{"mp4", []string{"Movie.mp4"}, TvCompatYellow},
+		{"mov", []string{"Movie.mov"}, TvCompatYellow},
+		{"m4v", []string{"Movie.m4v"}, TvCompatYellow},
+		{"avi", []string{"Movie.avi"}, TvCompatYellow},
+
+		// .webm → red (almost always VP9/AV1).
+		{"webm", []string{"Movie.webm"}, TvCompatRed},
+
+		// Mixed non-video + video.
+		{"poster then mkv", []string{"poster.jpg", "Movie.mkv"}, TvCompatYellow},
+		{"srt then mp4", []string{"sub.srt", "Movie.mp4"}, TvCompatYellow},
+
+		// No video files.
 		{"no video", []string{"readme.txt", "poster.jpg"}, ""},
 		{"empty", nil, ""},
 	}

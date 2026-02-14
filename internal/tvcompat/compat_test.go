@@ -10,22 +10,24 @@ func TestCompatFromVcodec(t *testing.T) {
 		vcodec     string
 		wantCompat string
 	}{
-		{"H.264 avc1", "avc1.64001f", TvCompatYellow},
-		{"H.264 simple", "h264", TvCompatYellow},
-		{"H.264 uppercase", "H264", TvCompatYellow},
-		{"AVC uppercase", "AVC1.64001f", TvCompatYellow},
+		{"H.264 avc1", "avc1.64001f", TvCompatGreen},
+		{"H.264 simple", "h264", TvCompatGreen},
+		{"H.264 uppercase", "H264", TvCompatGreen},
+		{"AVC uppercase", "AVC1.64001f", TvCompatGreen},
 		{"VP9", "vp9", TvCompatRed},
 		{"VP9 profile", "vp9.0", TvCompatRed},
 		{"AV1 short", "av1", TvCompatRed},
 		{"AV01 long", "av01.0.08M.08", TvCompatRed},
 		{"AV01 simple", "av01", TvCompatRed},
+		{"HEVC", "hevc", TvCompatRed},
+		{"H265", "h265", TvCompatRed},
+		{"H265 profile", "H265.Main10", TvCompatRed},
 		{"Empty string", "", ""},
 		{"None codec", "none", ""},
-		{"Unknown codec", "hevc", ""},
-		{"H265 unknown", "h265", ""},
+		{"Unknown codec", "opus", ""},
 		{"Whitespace only", "   ", ""},
 		{"VP9 with spaces", "  vp9  ", TvCompatRed},
-		{"H264 with spaces", " h264 ", TvCompatYellow},
+		{"H264 with spaces", " h264 ", TvCompatGreen},
 	}
 
 	for _, tt := range tests {
