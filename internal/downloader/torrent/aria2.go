@@ -273,7 +273,8 @@ func (d *Aria2Downloader) StopDownload() error {
 	d.stoppedManually = true
 	if d.cmd != nil && d.cmd.Process != nil {
 		if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
-			return fmt.Errorf("failed to send SIGINT to aria2c process: %w", err)
+			logutils.Log.WithError(err).Debug("Could not send SIGINT to aria2c (process likely already exited)")
+			return nil
 		}
 		logutils.Log.Info("Sent SIGINT to aria2c process")
 

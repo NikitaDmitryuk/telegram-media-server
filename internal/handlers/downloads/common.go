@@ -102,9 +102,6 @@ func handleDownloadCompletion(
 	}
 	if downloaderInstance.StoppedManually() {
 		logutils.Log.Info("Download was manually stopped")
-		a.Bot.SendMessage(chatID, tmslang.Translate("general.download_stopped", map[string]any{
-			"Title": videoTitle,
-		}), nil)
 	} else if err != nil {
 		logutils.Log.WithError(err).Error("Download failed")
 		if deleteErr := filemanager.DeleteMovie(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); deleteErr != nil {

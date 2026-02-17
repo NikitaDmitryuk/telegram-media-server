@@ -283,12 +283,9 @@ func (d *YTDLPDownloader) StopDownload() error {
 
 		// First try graceful termination (SIGTERM on Unix systems)
 		if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
-			logutils.Log.WithError(err).Warn("Failed to send interrupt signal, trying kill")
-			// If interrupt fails, use kill immediately
-			if killErr := d.cmd.Process.Kill(); killErr != nil {
-				logutils.Log.WithError(killErr).Warn("Failed to kill yt-dlp process")
-				return killErr
-			}
+			// Process already exited — nothing to stop
+			logutils.Log.WithError(err).Debug("Could not send interrupt signal to yt-dlp (process likely already exited)")
+			return nil
 		}
 
 		// Wait for process to exit with timeout

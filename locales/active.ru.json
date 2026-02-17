@@ -16,7 +16,7 @@
             "progress": "Загрузка {{.Name}}: {{.Progress}}%"
         },
         "video_downloading": "⬇️ Загрузка видео: {{.Title}}",
-        "download_stopped": "⏹️ Загрузка видео остановлена: {{.Title}}",
+
         "downloaded_list": "ID:{{.ID}} {{.Sticker}}[{{.Progress}}] {{.Episodes}}{{.SizeGB}} ГБ\n{{.Name}}\n",
         "first_episode_ready": "▶️ Первая серия «{{.Title}}» готова к просмотру.",
         "video_not_supported": "⚠️ Видео «{{.Title}}» не поддерживается вашим ТВ (кодек/уровень H.264). Загрузка отменена.",

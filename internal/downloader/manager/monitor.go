@@ -89,6 +89,20 @@ func (dm *DownloadManager) monitorDownload(
 
 		case progress, ok := <-job.progressChan:
 			if !ok {
+				// If the download was manually stopped, progressChan may close before
+				// errChan delivers ErrStoppedByUser. Don't treat this as successful completion:
+				// skip SetLoaded / conversion and propagate the correct signal.
+				if job.downloader.StoppedManually() {
+					if job.silentStop {
+						logutils.Log.WithField("movie_id", movieID).Info("Download stopped by deletion (progressChan closed first)")
+						outerErrChan <- downloader.ErrStoppedByDeletion
+					} else {
+						logutils.Log.WithField("movie_id", movieID).Info("Download stopped by user (progressChan closed first)")
+						outerErrChan <- nil
+					}
+					return
+				}
+
 				logutils.Log.WithFields(map[string]any{
 					"movie_id": movieID,
 					"duration": time.Since(downloadStartTime),

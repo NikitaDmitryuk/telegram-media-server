@@ -16,7 +16,7 @@
             "progress": "Downloading {{.Name}}: {{.Progress}}%"
         },
         "video_downloading": "⬇️ Downloading video: {{.Title}}",
-        "download_stopped": "⏹️ Download stopped for video: {{.Title}}",
+
         "downloaded_list": "ID:{{.ID}} {{.Sticker}}[{{.Progress}}] {{.Episodes}}{{.SizeGB}} GB\n{{.Name}}\n",
         "first_episode_ready": "▶️ First episode of «{{.Title}}» is ready to watch.",
         "video_not_supported": "⚠️ Video «{{.Title}}» is not supported by your TV (codec/H.264 level). Download cancelled.",
