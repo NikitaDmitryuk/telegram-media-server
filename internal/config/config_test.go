@@ -317,6 +317,12 @@ func TestConfigEnvironmentVariableParsing(t *testing.T) {
 			checkFn:  func(c *Config) bool { return c.Aria2Settings.SeedRatio == 1.5 },
 		},
 		{
+			name:     "YTDLP_PATH custom path",
+			envVar:   "YTDLP_PATH",
+			envValue: "/usr/local/bin/yt-dlp",
+			checkFn:  func(c *Config) bool { return c.YtdlpPath == "/usr/local/bin/yt-dlp" },
+		},
+		{
 			name:     "YTDLP_UPDATE_ON_START true",
 			envVar:   "YTDLP_UPDATE_ON_START",
 			envValue: "true",

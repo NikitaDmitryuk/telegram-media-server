@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
-	torrent "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
+	tmsfactory "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -32,7 +32,7 @@ func HandleTorrentFile(
 		return
 	}
 
-	downloaderInstance := torrent.NewAria2Downloader(doc.FileName, a.Config.MoviePath, a.Config)
+	downloaderInstance := tmsfactory.NewTorrentDownloader(doc.FileName, a.Config.MoviePath, a.Config)
 
 	if downloaderInstance == nil {
 		logutils.Log.Warn("Failed to initialize torrent downloader")

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
@@ -22,7 +23,7 @@ func TestStartPeriodicUpdater_ZeroInterval_ReturnsImmediately(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan struct{})
 	go func() {
-		StartPeriodicUpdater(ctx, 0)
+		downloader.StartPeriodicUpdater(ctx, 0, NewUpdater("yt-dlp"))
 		close(done)
 	}()
 	select {
@@ -37,7 +38,7 @@ func TestStartPeriodicUpdater_NegativeInterval_ReturnsImmediately(t *testing.T) 
 	ctx := context.Background()
 	done := make(chan struct{})
 	go func() {
-		StartPeriodicUpdater(ctx, -time.Hour)
+		downloader.StartPeriodicUpdater(ctx, -time.Hour, NewUpdater("yt-dlp"))
 		close(done)
 	}()
 	select {
@@ -52,7 +53,7 @@ func TestStartPeriodicUpdater_StopsWhenContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		StartPeriodicUpdater(ctx, 10*time.Millisecond)
+		downloader.StartPeriodicUpdater(ctx, 10*time.Millisecond, NewUpdater("yt-dlp"))
 		close(done)
 	}()
 	time.Sleep(20 * time.Millisecond)
@@ -68,14 +69,14 @@ func TestStartPeriodicUpdater_StopsWhenContextCanceled(t *testing.T) {
 func TestRunUpdate_WithCanceledContext_ReturnsWithoutPanic(_ *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	RunUpdate(ctx)
+	RunUpdate(ctx, "yt-dlp")
 	// No panic, returns quickly (may log warning)
 }
 
 func TestRunUpdate_WithTimeoutContext_ReturnsWithoutPanic(_ *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
-	RunUpdate(ctx)
+	RunUpdate(ctx, "yt-dlp")
 	// No panic; update will almost certainly not finish in 1ms
 }
 
@@ -96,7 +97,7 @@ func TestRunUpdate_Success_WithFakeYtdlp(t *testing.T) {
 	defer os.Setenv("PATH", origPath)
 	os.Setenv("PATH", tmpDir+string(filepath.ListSeparator)+origPath)
 
-	RunUpdate(context.Background())
+	RunUpdate(context.Background(), scriptPath)
 	// No panic; fake script exits 0
 }
 
@@ -117,6 +118,6 @@ func TestRunUpdate_ExitFailure_WithFakeYtdlp(t *testing.T) {
 	defer os.Setenv("PATH", origPath)
 	os.Setenv("PATH", tmpDir+string(filepath.ListSeparator)+origPath)
 
-	RunUpdate(context.Background())
+	RunUpdate(context.Background(), scriptPath)
 	// No panic; RunUpdate logs failure but does not crash
 }

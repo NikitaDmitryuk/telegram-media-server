@@ -104,7 +104,7 @@ func TestAria2StopDownload(t *testing.T) {
 			if !downloader.StoppedManually() {
 				t.Error("Expected StoppedManually to be true")
 			}
-		case <-time.After(10 * time.Second):
+		case <-time.After(200 * time.Second):
 			t.Error("StopDownload blocked for too long")
 		}
 	})

@@ -126,9 +126,6 @@ Create a `.env` file based on `.env.example` and configure the required paramete
 Docker: если торренты «стоят» без пиров, попробуйте `network_mode: host` в `docker-compose.yml` (aria2 сможет принимать входящие). Порты 6881–6999 (TCP/UDP) должны быть открыты.  
 Docker: if torrents get no peers, try `network_mode: host` in `docker-compose.yml` so aria2 can accept incoming connections. Ensure ports 6881–6999 (TCP/UDP) are open.
 
-Порядок файлов: многофайловые торренты скачиваются по алфавиту (первый файл готов раньше). Для максимальной скорости — `ARIA2_SEQUENTIAL_MULTI_FILE=false`.  
-File order: multi-file torrents download alphabetically by default (first file ready sooner). For max speed set `ARIA2_SEQUENTIAL_MULTI_FILE=false`.
-
 Совместимость с ТВ: если видео не воспроизводится — `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости пройдут remux. Опции: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — отклонять несовместимое видео.  
 TV compatibility: if video won't play on your TV, set `VIDEO_COMPATIBILITY_MODE=true`. Files may be remuxed. Options: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — reject incompatible video.
 

@@ -52,3 +52,4 @@ telegram-media-server
 *.torrent
 
 .mypy_cache/
+logs.txt

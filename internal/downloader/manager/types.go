@@ -26,6 +26,8 @@ const (
 type Service interface {
 	StartDownload(dl downloader.Downloader, chatID int64) (uint, chan float64, chan error, error)
 	StopDownload(movieID uint) error
+	// StopDownloadSilent stops the download without triggering "download stopped" user notification (e.g. when stopping from deletion queue).
+	StopDownloadSilent(movieID uint) error
 	StopAllDownloads()
 	GetNotificationChan() <-chan QueueNotification
 }
@@ -40,7 +42,7 @@ type conversionJob struct {
 
 type DownloadManager struct {
 	mu               sync.RWMutex
-	jobs             map[uint]downloadJob
+	jobs             map[uint]*downloadJob
 	queue            []queuedDownload
 	semaphore        chan struct{}
 	downloadSettings config.DownloadConfig
@@ -57,13 +59,13 @@ type downloadJob struct {
 	progressChan         chan float64
 	errChan              chan error
 	episodesChan         <-chan int
-	episodeAckChan       chan struct{} // non-nil for sequential multi-file; manager sends ack after re-acquiring semaphore
 	ctx                  context.Context
 	cancel               context.CancelFunc
 	chatID               int64
 	title                string
 	totalEpisodes        int  // > 1 for series (multi-file); only then we send "first_episode_ready"
 	rejectedIncompatible bool // set when we cancel due to red + RejectIncompatible
+	silentStop           bool // if true, monitor sends ErrStoppedByDeletion so handler does not notify user
 }
 
 type queuedDownload struct {

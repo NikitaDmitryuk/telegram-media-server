@@ -17,7 +17,7 @@ func newQueueTestManager(t *testing.T) *DownloadManager {
 	// Build the manager manually without starting the background processQueue
 	// goroutine, because tests add queuedDownload items with nil downloader.
 	return &DownloadManager{
-		jobs:             make(map[uint]downloadJob),
+		jobs:             make(map[uint]*downloadJob),
 		queue:            make([]queuedDownload, 0),
 		semaphore:        make(chan struct{}, cfg.GetDownloadSettings().MaxConcurrentDownloads),
 		downloadSettings: cfg.GetDownloadSettings(),
@@ -218,8 +218,8 @@ func TestGetActiveDownloads_WithJobs(t *testing.T) {
 	dm := newQueueTestManager(t)
 
 	dm.mu.Lock()
-	dm.jobs[10] = downloadJob{title: "Movie A"}
-	dm.jobs[20] = downloadJob{title: "Movie B"}
+	dm.jobs[10] = &downloadJob{title: "Movie A"}
+	dm.jobs[20] = &downloadJob{title: "Movie B"}
 	dm.mu.Unlock()
 
 	downloads := dm.GetActiveDownloads()
@@ -240,9 +240,9 @@ func TestGetDownloadCount_WithJobs(t *testing.T) {
 	dm := newQueueTestManager(t)
 
 	dm.mu.Lock()
-	dm.jobs[1] = downloadJob{}
-	dm.jobs[2] = downloadJob{}
-	dm.jobs[3] = downloadJob{}
+	dm.jobs[1] = &downloadJob{}
+	dm.jobs[2] = &downloadJob{}
+	dm.jobs[3] = &downloadJob{}
 	dm.mu.Unlock()
 
 	if count := dm.GetDownloadCount(); count != 3 {
@@ -255,8 +255,8 @@ func TestGetTotalDownloads_Mixed(t *testing.T) {
 
 	// 2 active jobs.
 	dm.mu.Lock()
-	dm.jobs[1] = downloadJob{}
-	dm.jobs[2] = downloadJob{}
+	dm.jobs[1] = &downloadJob{}
+	dm.jobs[2] = &downloadJob{}
 	dm.mu.Unlock()
 
 	// 3 queued.

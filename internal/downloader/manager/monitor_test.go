@@ -54,7 +54,7 @@ func TestStagnantProgress_NormalCloseBeforeThreshold(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{} // occupy semaphore so cleanup works
 
@@ -109,7 +109,7 @@ func TestEpisodeChanResetsStagnantTimer(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -160,7 +160,7 @@ func TestProgressChanClose_CompletesDownload(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -202,7 +202,7 @@ func TestErrChanReceivesError(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -240,7 +240,7 @@ func TestContextCancellation(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -284,7 +284,7 @@ func TestEpisodeChanClosed_DoesNotPanic(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -335,7 +335,7 @@ func TestDownloadTimeout_FromMonitor(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -375,7 +375,7 @@ func TestErrChanNilError(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -414,7 +414,7 @@ func TestProgressOver100_IsClamped(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -463,7 +463,7 @@ func TestMultipleEpisodes_SequentialCompletion(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
@@ -512,7 +512,7 @@ func TestNoEpisodesChan_NilHandling(t *testing.T) {
 	}
 
 	dm.mu.Lock()
-	dm.jobs[1] = job
+	dm.jobs[1] = &job
 	dm.mu.Unlock()
 	dm.semaphore <- struct{}{}
 
