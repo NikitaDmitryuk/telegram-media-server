@@ -456,6 +456,39 @@ def build_full_config(outbound: dict) -> dict:
 # Main
 # ---------------------------------------------------------------------------
 
+def check_proxy_connectivity() -> tuple[str | None, str | None]:
+    """Return (direct_ip, proxy_ip) by querying an external IP service."""
+    ip_services = [
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip",
+        "https://icanhazip.com",
+    ]
+
+    def fetch_ip(proxy_url: str | None) -> str | None:
+        for url in ip_services:
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
+                if proxy_url:
+                    handler = urllib.request.ProxyHandler({
+                        "http": proxy_url,
+                        "https": proxy_url,
+                    })
+                    opener = urllib.request.build_opener(handler)
+                else:
+                    opener = urllib.request.build_opener(
+                        urllib.request.ProxyHandler({})
+                    )
+                with opener.open(req, timeout=10) as resp:
+                    return resp.read().decode().strip()
+            except Exception:
+                continue
+        return None
+
+    direct_ip = fetch_ip(None)
+    proxy_ip = fetch_ip("http://127.0.0.1:10809")
+    return direct_ip, proxy_ip
+
+
 def print_summary(config_path: str) -> None:
     log("")
     log("=== Setup complete ===")
@@ -464,6 +497,30 @@ def print_summary(config_path: str) -> None:
     log(f"  HTTP   : 127.0.0.1:10809")
     log(f"  Status : systemctl status xray")
     log(f"  Logs   : journalctl -u xray -f")
+    log("")
+
+    log("=== Connectivity check ===")
+    direct_ip, proxy_ip = check_proxy_connectivity()
+
+    if direct_ip:
+        log(f"  Your IP (direct) : {direct_ip}")
+    else:
+        log("  Your IP (direct) : could not determine")
+
+    if proxy_ip:
+        log(f"  Your IP (proxy)  : {proxy_ip}")
+        if direct_ip and direct_ip != proxy_ip:
+            log("  Proxy is working — IPs are different.")
+        elif direct_ip and direct_ip == proxy_ip:
+            log("  WARNING: IPs are the same — proxy may not be working!")
+    else:
+        log("  Your IP (proxy)  : connection failed")
+        log("  WARNING: could not connect through proxy.")
+        log("  Check: systemctl status xray / journalctl -u xray -f")
+
+    log("")
+    log("To use with telegram-media-server, add to .env:")
+    log("  TELEGRAM_PROXY=socks5://127.0.0.1:10808")
     log("")
 
 
@@ -502,6 +559,16 @@ def main() -> None:
     )
     args = ap.parse_args()
     link = args.link.strip()
+
+    # Guard: if the shell split the URL on '&', only the part before the
+    # first '&' reaches us.  Detect this and give a clear hint.
+    if link.lower().startswith("vless://") and "&" not in link and "?" in link:
+        raise SystemExit(
+            "Error: the URL appears truncated (no '&' found after '?').\n"
+            "Shell splits unquoted URLs on '&' characters.\n"
+            "Please wrap the link in single quotes:\n\n"
+            f"  {sys.argv[0]} '{link}...'\n"
+        )
 
     # -- 1. Resolve the vless link -------------------------------------------
     if link.startswith("http://") or link.startswith("https://"):
