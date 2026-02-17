@@ -1,0 +1,561 @@
+#!/usr/bin/env python3
+"""
+Full Xray client setup from a 3x-ui link.
+
+What it does (in order):
+  1. Accepts a 3x-ui subscription URL or a raw vless:// share link.
+  2. Checks whether Xray is installed; installs it if missing
+     (pacman on Arch Linux, official XTLS script elsewhere).
+  3. Writes the client config to the detected config path
+     (e.g. /etc/xray/config.json on Arch).
+  4. Enables the systemd service and (re)starts Xray.
+
+Usage (root required for system setup):
+  sudo ./setup-proxy 'https://panel/sub/TOKEN'
+  sudo ./setup-proxy 'vless://uuid@host:443?type=tcp&...'
+
+Options:
+  --dry-run      Show what would be done without changing anything.
+  --no-install   Exit with error if Xray is not installed (skip auto-install).
+  --config-only  Only write the config; do not touch systemd.
+  -o PATH        Override config output path.  Use  -o -  to print to stdout.
+"""
+
+import argparse
+import base64
+import json
+import os
+import pwd
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.parse
+import urllib.request
+
+# ---------------------------------------------------------------------------
+# Local inbound proxies (clients connect here)
+# ---------------------------------------------------------------------------
+INBOUNDS = [
+    {
+        "listen": "127.0.0.1",
+        "port": 10808,
+        "protocol": "socks",
+        "settings": {"udp": True},
+        "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+    },
+    {
+        "listen": "127.0.0.1",
+        "port": 10809,
+        "protocol": "http",
+        "settings": {},
+    },
+]
+
+XTLS_INSTALL_SCRIPT = (
+    "https://github.com/XTLS/Xray-install/raw/main/install-release.sh"
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def log(msg: str) -> None:
+    print(msg, file=sys.stderr)
+
+
+def run(
+    cmd: list[str],
+    check: bool = True,
+    capture: bool = False,
+    **kwargs,
+) -> subprocess.CompletedProcess:
+    if capture:
+        kwargs.setdefault("stdout", subprocess.PIPE)
+        kwargs.setdefault("stderr", subprocess.PIPE)
+        kwargs.setdefault("text", True)
+    try:
+        return subprocess.run(cmd, check=check, **kwargs)
+    except FileNotFoundError:
+        raise SystemExit(f"command not found: {cmd[0]}")
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(
+            f"command failed (exit {exc.returncode}): {' '.join(cmd)}"
+        )
+
+
+def is_root() -> bool:
+    return os.geteuid() == 0
+
+
+# ---------------------------------------------------------------------------
+# Distro detection
+# ---------------------------------------------------------------------------
+
+def is_arch_linux() -> bool:
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("ID=") and "arch" in line.lower():
+                    return True
+    except OSError:
+        pass
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Xray binary / package detection
+# ---------------------------------------------------------------------------
+
+def find_xray_binary() -> str | None:
+    for p in ("/usr/bin/xray", "/usr/local/bin/xray"):
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return shutil.which("xray")
+
+
+def xray_installed() -> bool:
+    return find_xray_binary() is not None
+
+
+# ---------------------------------------------------------------------------
+# Config path detection (works with both Arch and XTLS-script layouts)
+# ---------------------------------------------------------------------------
+
+_SYSTEMD_UNIT_DIRS = (
+    "/etc/systemd/system",
+    "/usr/lib/systemd/system",
+)
+
+
+def _config_path_from_unit(unit_name: str) -> str | None:
+    """Parse ExecStart from a systemd unit to find the config path."""
+    for d in _SYSTEMD_UNIT_DIRS:
+        path = os.path.join(d, unit_name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line.startswith("ExecStart"):
+                        continue
+
+                    # -config /path/to/config.json
+                    m = re.search(r"-config\s+(\S+)", line)
+                    if m:
+                        val = m.group(1)
+                        if val.endswith(".json"):
+                            return val
+                        return os.path.join(val, "config.json")
+
+                    # -confdir /path/to/dir/
+                    m = re.search(r"-confdir\s+(\S+)", line)
+                    if m:
+                        return os.path.join(m.group(1).rstrip("/"), "config.json")
+        except OSError:
+            continue
+    return None
+
+
+def detect_config_path() -> str:
+    """Return full path to config.json based on the installed layout."""
+    for unit in ("xray.service", "xray@.service"):
+        p = _config_path_from_unit(unit)
+        if p:
+            return p
+
+    # Fallback: check common directories
+    for d in ("/etc/xray", "/usr/local/etc/xray"):
+        if os.path.isdir(d):
+            return os.path.join(d, "config.json")
+
+    return "/usr/local/etc/xray/config.json"
+
+
+# ---------------------------------------------------------------------------
+# Service user detection (for file ownership)
+# ---------------------------------------------------------------------------
+
+def _service_user() -> str | None:
+    """Read User= from xray.service."""
+    for d in _SYSTEMD_UNIT_DIRS:
+        path = os.path.join(d, "xray.service")
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    m = re.match(r"\s*User\s*=\s*(\S+)", line)
+                    if m:
+                        return m.group(1)
+        except OSError:
+            continue
+    return None
+
+
+def _uid_gid(username: str) -> tuple[int, int] | None:
+    try:
+        pw = pwd.getpwnam(username)
+        return pw.pw_uid, pw.pw_gid
+    except KeyError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Installation
+# ---------------------------------------------------------------------------
+
+def install_xray(dry_run: bool) -> None:
+    if is_arch_linux():
+        _install_xray_pacman(dry_run)
+    else:
+        _install_xray_xtls_script(dry_run)
+
+
+def _install_xray_pacman(dry_run: bool) -> None:
+    if dry_run:
+        log("[dry-run] would run: pacman -S --noconfirm xray")
+        return
+    log("Installing xray via pacman ...")
+    run(["pacman", "-S", "--noconfirm", "xray"])
+
+
+def _install_xray_xtls_script(dry_run: bool) -> None:
+    if dry_run:
+        log("[dry-run] would install Xray via official XTLS script")
+        return
+    log("Downloading official Xray install script ...")
+    try:
+        req = urllib.request.Request(
+            XTLS_INSTALL_SCRIPT,
+            headers={"User-Agent": "curl/8"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            script = r.read().decode("utf-8", errors="replace")
+    except Exception as exc:
+        raise SystemExit(f"failed to download install script: {exc}")
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".sh", delete=False
+    ) as f:
+        f.write(script)
+        tmp = f.name
+    try:
+        run(["bash", tmp, "install"])
+    finally:
+        os.unlink(tmp)
+
+
+# ---------------------------------------------------------------------------
+# Config writing
+# ---------------------------------------------------------------------------
+
+def write_config(config_path: str, config: dict, dry_run: bool) -> None:
+    d = os.path.dirname(config_path)
+
+    if dry_run:
+        if not os.path.isdir(d):
+            log(f"[dry-run] would create directory {d}")
+        log(f"[dry-run] would write config to {config_path}")
+        return
+
+    os.makedirs(d, mode=0o755, exist_ok=True)
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    log(f"Config written: {config_path}")
+
+    # Fix ownership to match the service user
+    svc_user = _service_user()
+    if svc_user:
+        ids = _uid_gid(svc_user)
+        if ids:
+            uid, gid = ids
+            os.chown(config_path, uid, gid)
+            os.chown(d, uid, gid)
+            log(f"Ownership set to {svc_user} ({uid}:{gid})")
+
+
+# ---------------------------------------------------------------------------
+# Systemd management
+# ---------------------------------------------------------------------------
+
+def _detect_service_name() -> str:
+    """Pick the right systemd unit to enable.
+
+    On Arch the main xray.service uses -confdir, so a plain
+    'config.json' in that directory is picked up automatically.
+    On systems installed via XTLS script, xray.service uses -config.
+    """
+    return "xray"
+
+
+def enable_and_start(dry_run: bool) -> None:
+    svc = _detect_service_name()
+    if dry_run:
+        log(f"[dry-run] would run: systemctl daemon-reload")
+        log(f"[dry-run] would run: systemctl enable --now {svc}")
+        return
+
+    run(["systemctl", "daemon-reload"])
+    run(["systemctl", "enable", svc])
+
+    # restart to pick up a potentially new config
+    run(["systemctl", "restart", svc])
+
+    result = run(
+        ["systemctl", "is-active", "--quiet", svc],
+        check=False,
+    )
+    if result.returncode == 0:
+        log(f"Service '{svc}' is enabled and running.")
+    else:
+        log(f"WARNING: service '{svc}' failed to start. Check: journalctl -u {svc}")
+
+
+# ---------------------------------------------------------------------------
+# Subscription / link handling
+# ---------------------------------------------------------------------------
+
+def fetch_subscription(url: str) -> str:
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Xray-Config-Builder/1"}
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        raw = r.read().decode("utf-8", errors="ignore").strip()
+
+    # 3x-ui returns base64-encoded newline-separated share links
+    try:
+        decoded = base64.b64decode(raw).decode("utf-8", errors="ignore")
+    except Exception:
+        raise SystemExit("Failed to base64-decode subscription response.")
+    return decoded
+
+
+def first_vless_from_text(text: str) -> str:
+    for line in text.replace("\r", "").split("\n"):
+        line = line.strip()
+        if line.lower().startswith("vless://"):
+            return line
+    raise SystemExit("No vless:// link found in the subscription.")
+
+
+# ---------------------------------------------------------------------------
+# vless:// URI → Xray outbound JSON
+#
+# Format (standard v2ray share-link spec):
+#   vless://UUID@HOST:PORT?type=tcp&security=reality&pbk=...&fp=...&sni=...&sid=...&spx=%2F&flow=xtls-rprx-vision#TAG
+#
+# No maintained, easily installable CLI tool exists for this conversion
+# (Xray-Link-Json needs Go; vless-link2xray-config needs git clone),
+# so we do the straightforward URL parsing here.
+# ---------------------------------------------------------------------------
+
+def parse_vless_link(link: str) -> dict:
+    link = link.strip()
+    if not link.lower().startswith("vless://"):
+        raise SystemExit("Link must start with vless://")
+
+    parsed = urllib.parse.urlparse(link)
+    query = urllib.parse.parse_qs(parsed.query)
+
+    m = re.match(r"([^@]+)@([^:]+):(\d+)", parsed.netloc)
+    if not m:
+        raise SystemExit(
+            f"Bad vless link format (expected uuid@host:port): {parsed.netloc}"
+        )
+    uuid, address, port = m.group(1), m.group(2), int(m.group(3))
+
+    def q(key: str, default: str = "") -> str:
+        return (query.get(key) or [default])[0]
+
+    security = q("security", "reality")
+    sni = q("sni")
+    fp = q("fp", "chrome")
+    pbk = q("pbk")
+    sid = q("sid")
+    spx = urllib.parse.unquote(q("spx", "/"))
+    flow = q("flow")
+    network = q("type", "tcp")
+    encryption = q("encryption", "none")
+
+    user: dict = {"id": uuid, "encryption": encryption}
+    if flow:
+        user["flow"] = flow
+
+    stream: dict = {"network": network, "security": security}
+
+    if security == "reality":
+        stream["realitySettings"] = {
+            "serverName": sni or address,
+            "fingerprint": fp,
+            "publicKey": pbk,
+            "shortId": sid,
+            "spiderX": spx or "/",
+        }
+    elif security == "tls":
+        tls_settings: dict = {}
+        if sni:
+            tls_settings["serverName"] = sni
+        if fp:
+            tls_settings["fingerprint"] = fp
+        alpn = q("alpn")
+        if alpn:
+            tls_settings["alpn"] = alpn.split(",")
+        if tls_settings:
+            stream["tlsSettings"] = tls_settings
+
+    if network == "ws":
+        ws: dict = {}
+        path = q("path")
+        if path:
+            ws["path"] = urllib.parse.unquote(path)
+        host = q("host")
+        if host:
+            ws["headers"] = {"Host": host}
+        if ws:
+            stream["wsSettings"] = ws
+    elif network == "grpc":
+        svc_name = q("serviceName")
+        if svc_name:
+            stream["grpcSettings"] = {"serviceName": svc_name}
+    elif network == "h2" or network == "http":
+        h2: dict = {}
+        path = q("path")
+        if path:
+            h2["path"] = urllib.parse.unquote(path)
+        host = q("host")
+        if host:
+            h2["host"] = host.split(",")
+        if h2:
+            stream["httpSettings"] = h2
+
+    return {
+        "protocol": "vless",
+        "settings": {
+            "vnext": [
+                {"address": address, "port": port, "users": [user]}
+            ]
+        },
+        "streamSettings": stream,
+    }
+
+
+def build_full_config(outbound: dict) -> dict:
+    return {
+        "log": {"loglevel": "warning"},
+        "inbounds": INBOUNDS,
+        "outbounds": [outbound],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def print_summary(config_path: str) -> None:
+    log("")
+    log("=== Setup complete ===")
+    log(f"  Config : {config_path}")
+    log(f"  SOCKS5 : 127.0.0.1:10808")
+    log(f"  HTTP   : 127.0.0.1:10809")
+    log(f"  Status : systemctl status xray")
+    log(f"  Logs   : journalctl -u xray -f")
+    log("")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(
+        description=(
+            "Set up an Xray client from a 3x-ui subscription URL or "
+            "a vless:// share link.  Installs Xray if missing, writes "
+            "the config, and enables the systemd service."
+        ),
+    )
+    ap.add_argument("link", help="3x-ui subscription URL or vless:// link")
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="show what would be done without changing the system",
+    )
+    ap.add_argument(
+        "--no-install",
+        action="store_true",
+        help="do not install Xray; exit with error if not found",
+    )
+    ap.add_argument(
+        "--config-only",
+        action="store_true",
+        help="only write the config; do not touch systemd",
+    )
+    ap.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help=(
+            "override config output path (default: auto-detect). "
+            "Use -o - to print config to stdout."
+        ),
+    )
+    args = ap.parse_args()
+    link = args.link.strip()
+
+    # -- 1. Resolve the vless link -------------------------------------------
+    if link.startswith("http://") or link.startswith("https://"):
+        log("Fetching subscription ...")
+        sub_text = fetch_subscription(link)
+        vless_link = first_vless_from_text(sub_text)
+        log("Using the first vless:// node from the subscription.")
+    elif link.lower().startswith("vless://"):
+        vless_link = link
+    else:
+        raise SystemExit(
+            "Unrecognized input.  Provide a subscription URL (https://...) "
+            "or a vless:// share link."
+        )
+
+    outbound = parse_vless_link(vless_link)
+    config = build_full_config(outbound)
+
+    # -- 2. Print to stdout and exit if requested ----------------------------
+    if args.output == "-":
+        print(json.dumps(config, indent=2, ensure_ascii=False))
+        return
+
+    # -- 3. System setup (requires root) -------------------------------------
+    if not args.dry_run and not is_root():
+        raise SystemExit(
+            "Root privileges required.  Run with sudo or as root."
+        )
+
+    # -- 3a. Install Xray if needed ------------------------------------------
+    if not xray_installed():
+        if args.no_install:
+            raise SystemExit(
+                "Xray is not installed.  Install manually or run "
+                "without --no-install."
+            )
+        install_xray(args.dry_run)
+
+    # -- 3b. Determine config path -------------------------------------------
+    config_path = args.output if args.output else detect_config_path()
+    log(f"Target config: {config_path}")
+
+    # -- 3c. Write config ----------------------------------------------------
+    write_config(config_path, config, args.dry_run)
+
+    # -- 3d. Enable & (re)start ----------------------------------------------
+    if not args.config_only:
+        enable_and_start(args.dry_run)
+
+    if not args.dry_run:
+        print_summary(config_path)
+    else:
+        log("[dry-run] finished; no changes were made.")
+
+
+if __name__ == "__main__":
+    main()
