@@ -15,43 +15,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// MockMoviesBot implements bot.Service for testing.
-type MockMoviesBot struct {
-	SentMessages []MockMessage
-}
-
-type MockMessage struct {
-	ChatID   int64
-	Text     string
-	Keyboard any
-}
-
-func (b *MockMoviesBot) SendMessage(chatID int64, text string, keyboard any) {
-	b.SentMessages = append(b.SentMessages, MockMessage{
-		ChatID:   chatID,
-		Text:     text,
-		Keyboard: keyboard,
-	})
-}
-
-func (*MockMoviesBot) SendMessageReturningID(_ int64, _ string, _ any) (int, error) {
-	return 0, nil
-}
-
-func (*MockMoviesBot) DownloadFile(_, _ string) error { return nil }
-
-func (*MockMoviesBot) AnswerCallbackQuery(_ tgbotapi.CallbackConfig) {}
-
-func (*MockMoviesBot) DeleteMessage(_ int64, _ int) error { return nil }
-
-func (*MockMoviesBot) SaveFile(_ string, _ []byte) error { return nil }
-
-func (*MockMoviesBot) EditMessageTextAndMarkup(_ int64, _ int, _ string, _ tgbotapi.InlineKeyboardMarkup) error {
-	return nil
-}
-
 // newTestApp builds an *app.App with the given dependencies.
-func newTestApp(bot *MockMoviesBot, db database.Database, cfg *tmsconfig.Config) *app.App {
+func newTestApp(bot *testutils.MockBot, db database.Database, cfg *tmsconfig.Config) *app.App {
 	return &app.App{
 		Bot:    bot,
 		DB:     db,
@@ -59,83 +24,11 @@ func newTestApp(bot *MockMoviesBot, db database.Database, cfg *tmsconfig.Config)
 	}
 }
 
-// Minimal MovieReader mock for tests that only need GetMovieList (e.g. empty list).
-type mockMovieReaderEmpty struct{}
-
-func (*mockMovieReaderEmpty) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return nil, nil
-}
-func (*mockMovieReaderEmpty) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
-	return database.Movie{}, nil
-}
-func (*mockMovieReaderEmpty) GetFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-func (*mockMovieReaderEmpty) GetTempFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-func (*mockMovieReaderEmpty) MovieExistsId(_ context.Context, _ uint) (bool, error) {
-	return false, nil
-}
-func (*mockMovieReaderEmpty) MovieExistsFiles(_ context.Context, _ []string) (bool, error) {
-	return false, nil
-}
-func (*mockMovieReaderEmpty) MovieExistsUploadedFile(_ context.Context, _ string) (bool, error) {
-	return false, nil
-}
-
-// emptyDatabaseStub is a full database.Database stub that always returns empty/nil results.
-// It embeds mockMovieReaderEmpty for MovieReader methods and adds stubs for the rest.
-type emptyDatabaseStub struct {
-	mockMovieReaderEmpty
-}
-
-func (*emptyDatabaseStub) Init(_ *tmsconfig.Config) error { return nil }
-func (*emptyDatabaseStub) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
-	return 0, nil
-}
-func (*emptyDatabaseStub) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error { return nil }
-func (*emptyDatabaseStub) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*emptyDatabaseStub) SetLoaded(_ context.Context, _ uint) error   { return nil }
-func (*emptyDatabaseStub) RemoveMovie(_ context.Context, _ uint) error { return nil }
-func (*emptyDatabaseStub) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
-	return nil
-}
-func (*emptyDatabaseStub) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*emptyDatabaseStub) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
-func (*emptyDatabaseStub) RemoveFilesByMovieID(_ context.Context, _ uint) error         { return nil }
-func (*emptyDatabaseStub) RemoveTempFilesByMovieID(_ context.Context, _ uint) error     { return nil }
-func (*emptyDatabaseStub) Login(_ context.Context, _ string, _ int64, _ string, _ *tmsconfig.Config) (bool, error) {
-	return false, nil
-}
-func (*emptyDatabaseStub) GetUserRole(_ context.Context, _ int64) (database.UserRole, error) {
-	return "", nil
-}
-func (*emptyDatabaseStub) IsUserAccessAllowed(_ context.Context, _ int64) (allowed bool, role database.UserRole, err error) {
-	return false, "", nil
-}
-func (*emptyDatabaseStub) AssignTemporaryPassword(_ context.Context, _ string, _ int64) error {
-	return nil
-}
-func (*emptyDatabaseStub) ExtendTemporaryUser(_ context.Context, _ int64, _ time.Time) error {
-	return nil
-}
-func (*emptyDatabaseStub) GenerateTemporaryPassword(_ context.Context, _ time.Duration) (string, error) {
-	return "", nil
-}
-func (*emptyDatabaseStub) GetUserByChatID(_ context.Context, _ int64) (database.User, error) {
-	return database.User{}, nil
-}
-
 func TestListMoviesHandler_EmptyList(t *testing.T) {
-	bot := &MockMoviesBot{}
+	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
-	a := newTestApp(bot, &emptyDatabaseStub{}, cfg)
+	a := newTestApp(bot, &testutils.DatabaseStub{}, cfg)
 	update := &tgbotapi.Update{
 		Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}},
 	}
@@ -148,36 +41,25 @@ func TestListMoviesHandler_EmptyList(t *testing.T) {
 	if bot.SentMessages[0].ChatID != 123 {
 		t.Errorf("Expected chat ID 123, got %d", bot.SentMessages[0].ChatID)
 	}
-	// English locale: "📭 The list is empty"
 	if !strings.Contains(bot.SentMessages[0].Text, "empty") {
 		t.Errorf("Expected empty list message, got: %s", bot.SentMessages[0].Text)
 	}
 }
 
-// mockDatabaseWithMovies returns two movies for testing.
+// mockDatabaseWithMovies returns two movies.
 type mockDatabaseWithMovies struct {
-	emptyDatabaseStub
+	testutils.DatabaseStub
 }
 
 func (*mockDatabaseWithMovies) GetMovieList(_ context.Context) ([]database.Movie, error) {
 	return []database.Movie{
-		{
-			ID:                   1,
-			Name:                 "Test Movie 1",
-			FileSize:             1073741824, // 1GB
-			DownloadedPercentage: 75,
-		},
-		{
-			ID:                   2,
-			Name:                 "Test Movie 2",
-			FileSize:             2147483648, // 2GB
-			DownloadedPercentage: 100,
-		},
+		{ID: 1, Name: "Test Movie 1", FileSize: 1073741824, DownloadedPercentage: 75},
+		{ID: 2, Name: "Test Movie 2", FileSize: 2147483648, DownloadedPercentage: 100},
 	}, nil
 }
 
 func TestListMoviesHandler_WithMovies(t *testing.T) {
-	bot := &MockMoviesBot{}
+	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
 	a := newTestApp(bot, &mockDatabaseWithMovies{}, cfg)
@@ -196,17 +78,7 @@ func TestListMoviesHandler_WithMovies(t *testing.T) {
 		t.Errorf("Expected chat ID 123, got %d", msg.ChatID)
 	}
 
-	// TestConfig sets CompatibilityMode=true → progress format is download/conversion.
-	expectedSubstrings := []string{
-		"Test Movie 1",
-		"Test Movie 2",
-		"[75/0]",
-		"[100/0]",
-		"1.00",
-		"2.00",
-	}
-
-	for _, sub := range expectedSubstrings {
+	for _, sub := range []string{"Test Movie 1", "Test Movie 2", "[75/0]", "[100/0]", "1.00", "2.00"} {
 		if !strings.Contains(msg.Text, sub) {
 			t.Errorf("Expected message to contain %q, got: %s", sub, msg.Text)
 		}
@@ -215,7 +87,7 @@ func TestListMoviesHandler_WithMovies(t *testing.T) {
 
 // mockErrorDatabase returns an error from GetMovieList.
 type mockErrorDatabase struct {
-	emptyDatabaseStub
+	testutils.DatabaseStub
 }
 
 func (*mockErrorDatabase) GetMovieList(_ context.Context) ([]database.Movie, error) {
@@ -223,7 +95,7 @@ func (*mockErrorDatabase) GetMovieList(_ context.Context) ([]database.Movie, err
 }
 
 func TestListMoviesHandler_DatabaseError(t *testing.T) {
-	bot := &MockMoviesBot{}
+	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
 	a := newTestApp(bot, &mockErrorDatabase{}, cfg)
@@ -238,32 +110,24 @@ func TestListMoviesHandler_DatabaseError(t *testing.T) {
 	}
 
 	msg := bot.SentMessages[0]
-	// English locale: "An error occurred while fetching the movie list..."
 	if !strings.Contains(msg.Text, "error") && !strings.Contains(msg.Text, "fetch") {
 		t.Errorf("Expected error message, got: %s", msg.Text)
 	}
 }
 
-// mockDatabaseWithSeries returns one series (TotalEpisodes > 1) for testing episodes display.
+// mockDatabaseWithSeries returns one series (TotalEpisodes > 1).
 type mockDatabaseWithSeries struct {
-	emptyDatabaseStub
+	testutils.DatabaseStub
 }
 
 func (*mockDatabaseWithSeries) GetMovieList(_ context.Context) ([]database.Movie, error) {
 	return []database.Movie{
-		{
-			ID:                   1,
-			Name:                 "Test Series S01",
-			FileSize:             1073741824,
-			DownloadedPercentage: 25,
-			TotalEpisodes:        8,
-			CompletedEpisodes:    2,
-		},
+		{ID: 1, Name: "Test Series S01", FileSize: 1073741824, DownloadedPercentage: 25, TotalEpisodes: 8, CompletedEpisodes: 2},
 	}, nil
 }
 
 func TestListMoviesHandler_WithSeries(t *testing.T) {
-	bot := &MockMoviesBot{}
+	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
 	a := newTestApp(bot, &mockDatabaseWithSeries{}, cfg)
@@ -278,20 +142,17 @@ func TestListMoviesHandler_WithSeries(t *testing.T) {
 	}
 
 	msg := bot.SentMessages[0]
-	if msg.ChatID != 123 {
-		t.Errorf("Expected chat ID 123, got %d", msg.ChatID)
-	}
 	if !strings.Contains(msg.Text, "2/8") {
-		t.Errorf("Expected message to contain '2/8' for series, got: %s", msg.Text)
+		t.Errorf("Expected '2/8' for series, got: %s", msg.Text)
 	}
 	if !strings.Contains(msg.Text, "Test Series S01") {
-		t.Errorf("Expected message to contain series name, got: %s", msg.Text)
+		t.Errorf("Expected series name, got: %s", msg.Text)
 	}
 }
 
-// mockDatabaseWithCompatMovie returns one movie with conversion fields set (for compatibility mode list test).
+// mockDatabaseWithCompatMovie returns one movie with conversion fields.
 type mockDatabaseWithCompatMovie struct {
-	emptyDatabaseStub
+	testutils.DatabaseStub
 }
 
 func (*mockDatabaseWithCompatMovie) GetMovieList(_ context.Context) ([]database.Movie, error) {
@@ -308,7 +169,7 @@ func (*mockDatabaseWithCompatMovie) GetMovieList(_ context.Context) ([]database.
 }
 
 func TestListMoviesHandler_CompatibilityMode(t *testing.T) {
-	bot := &MockMoviesBot{}
+	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 	cfg.VideoSettings.CompatibilityMode = true
 
@@ -324,36 +185,26 @@ func TestListMoviesHandler_CompatibilityMode(t *testing.T) {
 	}
 
 	msg := bot.SentMessages[0]
-	if msg.ChatID != 123 {
-		t.Errorf("Expected chat ID 123, got %d", msg.ChatID)
-	}
 	if !strings.Contains(msg.Text, "100/100") {
-		t.Errorf("Expected message to contain '100/100' in compatibility mode, got: %s", msg.Text)
+		t.Errorf("Expected '100/100' in compat mode, got: %s", msg.Text)
 	}
 	if !strings.Contains(msg.Text, "🟢") {
-		t.Errorf("Expected green sticker for TvCompatibility=green, got: %s", msg.Text)
+		t.Errorf("Expected green sticker, got: %s", msg.Text)
 	}
 	if !strings.Contains(msg.Text, "TV Ready Movie") {
-		t.Errorf("Expected message to contain movie name, got: %s", msg.Text)
+		t.Errorf("Expected movie name, got: %s", msg.Text)
 	}
 }
 
-// unused constant kept for mock consistency with other test files in the package.
+// Exported mock types kept for integration_test.go in the same package.
+
 const mockTempPassword = "temp123"
 
-// Kept for backward compatibility with the integration test file that uses models.AdminRole via these full mocks.
-type MockDatabaseWithSeries struct{ emptyDatabaseStub }
+type MockDatabaseWithSeries struct{ testutils.DatabaseStub }
 
 func (*MockDatabaseWithSeries) GetMovieList(_ context.Context) ([]database.Movie, error) {
 	return []database.Movie{
-		{
-			ID:                   1,
-			Name:                 "Test Series S01",
-			FileSize:             1073741824,
-			DownloadedPercentage: 25,
-			TotalEpisodes:        8,
-			CompletedEpisodes:    2,
-		},
+		{ID: 1, Name: "Test Series S01", FileSize: 1073741824, DownloadedPercentage: 25, TotalEpisodes: 8, CompletedEpisodes: 2},
 	}, nil
 }
 func (*MockDatabaseWithSeries) GetUserRole(_ context.Context, _ int64) (database.UserRole, error) {
@@ -366,7 +217,7 @@ func (*MockDatabaseWithSeries) GenerateTemporaryPassword(_ context.Context, _ ti
 	return mockTempPassword, nil
 }
 
-type MockDatabaseWithCompatMovie struct{ emptyDatabaseStub }
+type MockDatabaseWithCompatMovie struct{ testutils.DatabaseStub }
 
 func (*MockDatabaseWithCompatMovie) GetMovieList(_ context.Context) ([]database.Movie, error) {
 	return []database.Movie{
@@ -390,22 +241,12 @@ func (*MockDatabaseWithCompatMovie) GenerateTemporaryPassword(_ context.Context,
 	return mockTempPassword, nil
 }
 
-type MockDatabaseWithMovies struct{ emptyDatabaseStub }
+type MockDatabaseWithMovies struct{ testutils.DatabaseStub }
 
 func (*MockDatabaseWithMovies) GetMovieList(_ context.Context) ([]database.Movie, error) {
 	return []database.Movie{
-		{
-			ID:                   1,
-			Name:                 "Test Movie 1",
-			FileSize:             1073741824,
-			DownloadedPercentage: 75,
-		},
-		{
-			ID:                   2,
-			Name:                 "Test Movie 2",
-			FileSize:             2147483648,
-			DownloadedPercentage: 100,
-		},
+		{ID: 1, Name: "Test Movie 1", FileSize: 1073741824, DownloadedPercentage: 75},
+		{ID: 2, Name: "Test Movie 2", FileSize: 2147483648, DownloadedPercentage: 100},
 	}, nil
 }
 func (*MockDatabaseWithMovies) GetUserRole(_ context.Context, _ int64) (database.UserRole, error) {
@@ -418,7 +259,7 @@ func (*MockDatabaseWithMovies) GenerateTemporaryPassword(_ context.Context, _ ti
 	return mockTempPassword, nil
 }
 
-type MockErrorDatabase struct{ emptyDatabaseStub }
+type MockErrorDatabase struct{ testutils.DatabaseStub }
 
 func (*MockErrorDatabase) GetMovieList(_ context.Context) ([]database.Movie, error) {
 	return nil, fmt.Errorf("database error")

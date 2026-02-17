@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/models"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// MockDatabase implements database.Database interface for testing
+// MockDatabase implements database.Database for middleware testing.
+// It embeds testutils.DatabaseStub for all no-op methods and overrides IsUserAccessAllowed.
 type MockDatabase struct {
+	testutils.DatabaseStub
 	users             map[int64]*models.User
 	shouldReturnError bool
 	accessCheckError  error
@@ -41,96 +41,6 @@ func (m *MockDatabase) IsUserAccessAllowed(_ context.Context, chatID int64) (boo
 	}
 
 	return m.accessAllowed, m.userRole, nil
-}
-
-// Add other required methods to satisfy the database.Database interface
-func (*MockDatabase) Init(_ *tmsconfig.Config) error {
-	return nil
-}
-
-func (*MockDatabase) Login(_ context.Context, _ string, _ int64, _ string, _ *tmsconfig.Config) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabase) GetUserRole(_ context.Context, _ int64) (models.UserRole, error) {
-	return "", nil
-}
-
-func (*MockDatabase) GenerateTemporaryPassword(_ context.Context, _ time.Duration) (string, error) {
-	return "", nil
-}
-
-func (*MockDatabase) GetUserByChatID(_ context.Context, _ int64) (database.User, error) {
-	return database.User{}, nil
-}
-
-func (*MockDatabase) AssignTemporaryPassword(_ context.Context, _ string, _ int64) error {
-	return nil
-}
-
-func (*MockDatabase) ExtendTemporaryUser(_ context.Context, _ int64, _ time.Time) error {
-	return nil
-}
-
-func (*MockDatabase) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
-	return 0, nil
-}
-
-func (*MockDatabase) RemoveMovie(_ context.Context, _ uint) error {
-	return nil
-}
-
-func (*MockDatabase) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return nil, nil
-}
-
-func (*MockDatabase) GetTempFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-
-func (*MockDatabase) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*MockDatabase) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-
-func (*MockDatabase) SetLoaded(_ context.Context, _ uint) error {
-	return nil
-}
-func (*MockDatabase) UpdateConversionStatus(_ context.Context, _ uint, _ string) error  { return nil }
-func (*MockDatabase) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error { return nil }
-func (*MockDatabase) SetTvCompatibility(_ context.Context, _ uint, _ string) error      { return nil }
-func (*MockDatabase) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
-	return database.Movie{}, nil
-}
-
-func (*MockDatabase) MovieExistsFiles(_ context.Context, _ []string) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabase) MovieExistsId(_ context.Context, _ uint) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabase) MovieExistsUploadedFile(_ context.Context, _ string) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabase) GetFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-
-func (*MockDatabase) RemoveFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
-}
-
-func (*MockDatabase) RemoveTempFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
-}
-
-func (*MockDatabase) Close() error {
-	return nil
 }
 
 func TestAuthMiddleware(t *testing.T) {

@@ -12,14 +12,6 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
-var GlobalDownloadManager *DownloadManager
-
-// InitDownloadManager creates the download manager and assigns it to GlobalDownloadManager.
-// Caller must pass db (e.g. database.GlobalDB after InitDatabase) so manager does not depend on database package globals.
-func InitDownloadManager(cfg *config.Config, db database.Database) {
-	GlobalDownloadManager = NewDownloadManager(cfg, db)
-}
-
 func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManager {
 	dm := &DownloadManager{
 		jobs:             make(map[uint]downloadJob),

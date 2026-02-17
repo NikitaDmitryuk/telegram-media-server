@@ -40,10 +40,10 @@ func main() {
 		go tmsvideo.RunUpdate(context.Background())
 	}
 
-	if dbErr := database.InitDatabase(config); dbErr != nil {
+	db, dbErr := database.NewDatabase(config)
+	if dbErr != nil {
 		logutils.Log.WithError(dbErr).Fatal("Failed to initialize the database")
 	}
-	db := database.GlobalDB
 
 	if langErr := lang.InitLocalizer(config); langErr != nil {
 		logutils.Log.WithError(langErr).Fatal("Failed to initialize localizer")
