@@ -45,15 +45,15 @@ func IsEmptyDirectory(dir string) bool {
 	return len(entries) == 0
 }
 
-func DeleteTemporaryFilesByMovieID(movieID uint, moviePath string, db tmsdb.Database, downloadManager *tmsdmanager.DownloadManager) error {
-	return deleteFilesByType(movieID, true, moviePath, db, downloadManager)
+func DeleteTemporaryFilesByMovieID(movieID uint, moviePath string, db tmsdb.Database, _ tmsdmanager.Service) error {
+	return deleteFilesByType(movieID, true, moviePath, db)
 }
 
-func DeleteMainFilesByMovieID(movieID uint, moviePath string, db tmsdb.Database, downloadManager *tmsdmanager.DownloadManager) error {
-	return deleteFilesByType(movieID, false, moviePath, db, downloadManager)
+func DeleteMainFilesByMovieID(movieID uint, moviePath string, db tmsdb.Database, _ tmsdmanager.Service) error {
+	return deleteFilesByType(movieID, false, moviePath, db)
 }
 
-func DeleteMovie(movieID uint, moviePath string, db tmsdb.Database, downloadManager *tmsdmanager.DownloadManager) error {
+func DeleteMovie(movieID uint, moviePath string, db tmsdb.Database, downloadManager tmsdmanager.Service) error {
 	exist, err := db.MovieExistsId(context.Background(), movieID)
 	if !exist {
 		logutils.Log.WithError(err).Warn("Movie not found")
@@ -83,7 +83,7 @@ func DeleteMovie(movieID uint, moviePath string, db tmsdb.Database, downloadMana
 	return nil
 }
 
-func deleteFilesByType(movieID uint, isTemp bool, moviePath string, db tmsdb.Database, _ *tmsdmanager.DownloadManager) error {
+func deleteFilesByType(movieID uint, isTemp bool, moviePath string, db tmsdb.Database) error {
 	var files []tmsdb.MovieFile
 	var err error
 

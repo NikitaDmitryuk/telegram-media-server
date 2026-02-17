@@ -13,6 +13,19 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+// Service defines the interface for all bot operations.
+// Implementations must support sending messages, handling callbacks,
+// managing files, and editing messages.
+type Service interface {
+	SendMessage(chatID int64, text string, keyboard any)
+	SendMessageReturningID(chatID int64, text string, keyboard any) (int, error)
+	DownloadFile(fileID, fileName string) error
+	AnswerCallbackQuery(callbackConfig tgbotapi.CallbackConfig)
+	DeleteMessage(chatID int64, messageID int) error
+	SaveFile(fileName string, data []byte) error
+	EditMessageTextAndMarkup(chatID int64, messageID int, text string, markup tgbotapi.InlineKeyboardMarkup) error
+}
+
 type Bot struct {
 	Api    *tgbotapi.BotAPI
 	Config *tmsconfig.Config
@@ -114,5 +127,34 @@ func (b *Bot) SaveFile(fileName string, data []byte) error {
 		return err
 	}
 	logutils.Log.Infof("File saved: %s", path)
+	return nil
+}
+
+func (b *Bot) SendMessageReturningID(chatID int64, text string, keyboard any) (int, error) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	if keyboard != nil {
+		switch k := keyboard.(type) {
+		case tgbotapi.ReplyKeyboardMarkup:
+			msg.ReplyMarkup = k
+		case tgbotapi.ReplyKeyboardRemove:
+			msg.ReplyMarkup = k
+		case tgbotapi.InlineKeyboardMarkup:
+			msg.ReplyMarkup = k
+		}
+	}
+	m, err := b.Api.Send(msg)
+	if err != nil {
+		logutils.Log.WithError(err).Errorf("Message not sent: %s", text)
+		return 0, err
+	}
+	return m.MessageID, nil
+}
+
+func (b *Bot) EditMessageTextAndMarkup(chatID int64, messageID int, text string, markup tgbotapi.InlineKeyboardMarkup) error {
+	editMsg := tgbotapi.NewEditMessageTextAndMarkup(chatID, messageID, text, markup)
+	if _, err := b.Api.Send(editMsg); err != nil {
+		logutils.Log.WithError(err).Errorf("Failed to edit message %d in chat %d", messageID, chatID)
+		return err
+	}
 	return nil
 }

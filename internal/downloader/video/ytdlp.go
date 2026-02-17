@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
@@ -36,7 +35,6 @@ const (
 )
 
 type YTDLPDownloader struct {
-	bot             *bot.Bot
 	url             string
 	title           string
 	outputFileName  string
@@ -46,8 +44,8 @@ type YTDLPDownloader struct {
 	config          *tmsconfig.Config
 }
 
-func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string, config *tmsconfig.Config) downloader.Downloader {
-	videoTitle, err := getVideoTitle(botInstance, videoURL, config)
+func NewYTDLPDownloader(videoURL string, config *tmsconfig.Config) downloader.Downloader {
+	videoTitle, err := getVideoTitle(videoURL, config)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to retrieve video title, generating fallback title")
 		videoTitle, _ = extractVideoID(videoURL)
@@ -58,7 +56,6 @@ func NewYTDLPDownloader(botInstance *bot.Bot, videoURL string, config *tmsconfig
 
 	outputFileName := tmsutils.GenerateFileName(videoTitle)
 	return &YTDLPDownloader{
-		bot:            botInstance,
 		url:            videoURL,
 		title:          videoTitle,
 		outputFileName: outputFileName,
@@ -623,7 +620,7 @@ func shouldUseProxy(rawURL string, cfg *tmsconfig.Config) (bool, error) {
 	return false, nil
 }
 
-func getVideoTitle(_ *bot.Bot, videoURL string, cfg *tmsconfig.Config) (string, error) {
+func getVideoTitle(videoURL string, cfg *tmsconfig.Config) (string, error) {
 	useProxy, err := shouldUseProxy(videoURL, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to determine proxy usage: %w", err)

@@ -1,18 +1,19 @@
 package downloads
 
 import (
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
-func InitNotificationHandler(bot *tmsbot.Bot, downloadManager *tmsdmanager.DownloadManager) {
-	go handleQueueNotifications(bot, downloadManager)
+func InitNotificationHandler(a *app.App) {
+	go handleQueueNotifications(a.Bot, a.DownloadManager)
 }
 
-func handleQueueNotifications(bot *tmsbot.Bot, downloadManager *tmsdmanager.DownloadManager) {
-	notificationChan := downloadManager.GetNotificationChan()
+func handleQueueNotifications(bot tmsbot.Service, dm tmsdmanager.Service) {
+	notificationChan := dm.GetNotificationChan()
 
 	for notification := range notificationChan {
 		switch notification.Type {
@@ -30,7 +31,7 @@ func handleQueueNotifications(bot *tmsbot.Bot, downloadManager *tmsdmanager.Down
 	}
 }
 
-func sendFirstEpisodeReadyNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
+func sendFirstEpisodeReadyNotification(bot tmsbot.Service, notification *tmsdmanager.QueueNotification) {
 	message := lang.Translate("general.first_episode_ready", map[string]any{
 		"Title": notification.Title,
 	})
@@ -42,7 +43,7 @@ func sendFirstEpisodeReadyNotification(bot *tmsbot.Bot, notification *tmsdmanage
 	}).Info("Sent first episode ready notification")
 }
 
-func sendVideoNotSupportedNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
+func sendVideoNotSupportedNotification(bot tmsbot.Service, notification *tmsdmanager.QueueNotification) {
 	message := lang.Translate("general.video_not_supported", map[string]any{
 		"Title": notification.Title,
 	})
@@ -54,7 +55,7 @@ func sendVideoNotSupportedNotification(bot *tmsbot.Bot, notification *tmsdmanage
 	}).Info("Sent video not supported notification")
 }
 
-func sendQueuedNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
+func sendQueuedNotification(bot tmsbot.Service, notification *tmsdmanager.QueueNotification) {
 	message := lang.Translate("general.download_queued", map[string]any{
 		"Title":         notification.Title,
 		"Position":      notification.Position,
@@ -71,7 +72,7 @@ func sendQueuedNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNoti
 	}).Info("Sent queued notification")
 }
 
-func sendStartedNotification(bot *tmsbot.Bot, notification *tmsdmanager.QueueNotification) {
+func sendStartedNotification(bot tmsbot.Service, notification *tmsdmanager.QueueNotification) {
 	message := lang.Translate("general.download_started_from_queue", map[string]any{
 		"Title": notification.Title,
 	})

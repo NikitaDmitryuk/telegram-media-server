@@ -16,7 +16,19 @@ const (
 	QueueProcessingDelay        = 100 * time.Millisecond
 )
 
-const ConversionQueueSize = 100
+const (
+	ConversionQueueSize     = 100
+	ProgressChannelBuffSize = 100
+)
+
+// Service defines the external interface for the download manager.
+// Consumers outside the manager package should depend on this interface.
+type Service interface {
+	StartDownload(dl downloader.Downloader, chatID int64) (uint, chan float64, chan error, error)
+	StopDownload(movieID uint) error
+	StopAllDownloads()
+	GetNotificationChan() <-chan QueueNotification
+}
 
 // conversionJob is sent to the conversion worker; Done is closed when conversion (or skip) is finished.
 type conversionJob struct {
@@ -54,11 +66,13 @@ type downloadJob struct {
 }
 
 type queuedDownload struct {
-	downloader downloader.Downloader
-	movieID    uint
-	title      string
-	addedAt    time.Time
-	chatID     int64
+	downloader   downloader.Downloader
+	movieID      uint
+	title        string
+	addedAt      time.Time
+	chatID       int64
+	progressChan chan float64 // Channel to forward progress to the caller
+	errChan      chan error   // Channel to forward errors to the caller
 }
 
 type QueueNotification struct {

@@ -1,10 +1,7 @@
 package utils
 
 import (
-	"context"
 	"errors"
-
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/models"
 )
 
 var (
@@ -43,15 +40,4 @@ func WrapError(err error, message string, ctx map[string]any) error {
 		Message: message,
 		Context: ctx,
 	}
-}
-
-type DownloadService interface {
-	StartDownload(ctx context.Context, url string) (uint, chan float64, chan error, error)
-	StopDownload(movieID uint) error
-	GetDownloadStatus(movieID uint) (float64, error)
-}
-
-type AuthService interface {
-	Authenticate(chatID int64, password string) (bool, models.UserRole, error)
-	CheckAccess(chatID int64) (bool, models.UserRole, error)
 }

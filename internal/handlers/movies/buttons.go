@@ -1,8 +1,10 @@
 package movies
 
 import (
+	"context"
 	"strconv"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -24,14 +26,22 @@ func CreateDeleteMovieMenuMarkup(movies []database.Movie) tgbotapi.InlineKeyboar
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
 
-func SendDeleteMovieMenu(bot *tmsbot.Bot, chatID int64, movies []database.Movie) {
+func SendDeleteMovieMenu(bot tmsbot.Service, chatID int64, movies []database.Movie) {
 	if len(movies) == 0 {
 		bot.SendMessage(chatID, lang.Translate("general.user_prompts.no_movies_to_delete", nil), nil)
 		return
 	}
 
 	buttons := CreateDeleteMovieMenuMarkup(movies)
-	msg := tgbotapi.NewMessage(chatID, lang.Translate("general.user_prompts.delete_prompt", nil))
-	msg.ReplyMarkup = buttons
-	bot.SendMessage(chatID, msg.Text, msg.ReplyMarkup)
+	bot.SendMessage(chatID, lang.Translate("general.user_prompts.delete_prompt", nil), buttons)
+}
+
+// SendDeleteMovieMenuFromDB fetches the movie list from DB and sends the delete menu.
+func SendDeleteMovieMenuFromDB(a *app.App, chatID int64) {
+	movieList, err := a.DB.GetMovieList(context.Background())
+	if err != nil {
+		a.Bot.SendMessage(chatID, lang.Translate("error.movies.fetch_error", nil), nil)
+		return
+	}
+	SendDeleteMovieMenu(a.Bot, chatID, movieList)
 }
