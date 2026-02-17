@@ -88,6 +88,14 @@ func (dm *DownloadManager) startDownloadImmediately(
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// For sequential multi-file downloaders, inject the episode ack channel
+	// BEFORE starting the download so the goroutine can use it immediately.
+	var episodeAckChan chan struct{}
+	if acker, ok := dl.(downloader.EpisodeAcker); ok && dl.TotalEpisodes() > 1 {
+		episodeAckChan = make(chan struct{}, 1)
+		acker.SetEpisodeAck(episodeAckChan)
+	}
+
 	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
 	if err != nil {
 		cancel()
@@ -110,16 +118,17 @@ func (dm *DownloadManager) startDownloadImmediately(
 	outerErrChan = make(chan error, 1)
 
 	job := downloadJob{
-		downloader:    dl,
-		startTime:     dm.getCurrentTime(),
-		progressChan:  progressChan,
-		errChan:       errChan,
-		episodesChan:  episodesChan,
-		ctx:           ctx,
-		cancel:        cancel,
-		chatID:        chatID,
-		title:         movieTitle,
-		totalEpisodes: dl.TotalEpisodes(),
+		downloader:     dl,
+		startTime:      dm.getCurrentTime(),
+		progressChan:   progressChan,
+		errChan:        errChan,
+		episodesChan:   episodesChan,
+		episodeAckChan: episodeAckChan,
+		ctx:            ctx,
+		cancel:         cancel,
+		chatID:         chatID,
+		title:          movieTitle,
+		totalEpisodes:  dl.TotalEpisodes(),
 	}
 
 	dm.mu.Lock()

@@ -8,27 +8,17 @@ import (
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/models"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// newTestApp builds an *app.App with the given dependencies.
-func newTestApp(bot *testutils.MockBot, db database.Database, cfg *tmsconfig.Config) *app.App {
-	return &app.App{
-		Bot:    bot,
-		DB:     db,
-		Config: cfg,
-	}
-}
-
 func TestListMoviesHandler_EmptyList(t *testing.T) {
 	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
-	a := newTestApp(bot, &testutils.DatabaseStub{}, cfg)
+	a := &app.App{Bot: bot, DB: &testutils.DatabaseStub{}, Config: cfg}
 	update := &tgbotapi.Update{
 		Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}},
 	}
@@ -46,23 +36,11 @@ func TestListMoviesHandler_EmptyList(t *testing.T) {
 	}
 }
 
-// mockDatabaseWithMovies returns two movies.
-type mockDatabaseWithMovies struct {
-	testutils.DatabaseStub
-}
-
-func (*mockDatabaseWithMovies) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return []database.Movie{
-		{ID: 1, Name: "Test Movie 1", FileSize: 1073741824, DownloadedPercentage: 75},
-		{ID: 2, Name: "Test Movie 2", FileSize: 2147483648, DownloadedPercentage: 100},
-	}, nil
-}
-
 func TestListMoviesHandler_WithMovies(t *testing.T) {
 	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
-	a := newTestApp(bot, &mockDatabaseWithMovies{}, cfg)
+	a := &app.App{Bot: bot, DB: &MockDatabaseWithMovies{}, Config: cfg}
 	update := &tgbotapi.Update{
 		Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}},
 	}
@@ -85,20 +63,11 @@ func TestListMoviesHandler_WithMovies(t *testing.T) {
 	}
 }
 
-// mockErrorDatabase returns an error from GetMovieList.
-type mockErrorDatabase struct {
-	testutils.DatabaseStub
-}
-
-func (*mockErrorDatabase) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return nil, fmt.Errorf("database error")
-}
-
 func TestListMoviesHandler_DatabaseError(t *testing.T) {
 	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
-	a := newTestApp(bot, &mockErrorDatabase{}, cfg)
+	a := &app.App{Bot: bot, DB: &MockErrorDatabase{}, Config: cfg}
 	update := &tgbotapi.Update{
 		Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}},
 	}
@@ -115,22 +84,11 @@ func TestListMoviesHandler_DatabaseError(t *testing.T) {
 	}
 }
 
-// mockDatabaseWithSeries returns one series (TotalEpisodes > 1).
-type mockDatabaseWithSeries struct {
-	testutils.DatabaseStub
-}
-
-func (*mockDatabaseWithSeries) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return []database.Movie{
-		{ID: 1, Name: "Test Series S01", FileSize: 1073741824, DownloadedPercentage: 25, TotalEpisodes: 8, CompletedEpisodes: 2},
-	}, nil
-}
-
 func TestListMoviesHandler_WithSeries(t *testing.T) {
 	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 
-	a := newTestApp(bot, &mockDatabaseWithSeries{}, cfg)
+	a := &app.App{Bot: bot, DB: &MockDatabaseWithSeries{}, Config: cfg}
 	update := &tgbotapi.Update{
 		Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}},
 	}
@@ -150,30 +108,12 @@ func TestListMoviesHandler_WithSeries(t *testing.T) {
 	}
 }
 
-// mockDatabaseWithCompatMovie returns one movie with conversion fields.
-type mockDatabaseWithCompatMovie struct {
-	testutils.DatabaseStub
-}
-
-func (*mockDatabaseWithCompatMovie) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return []database.Movie{
-		{
-			ID:                   1,
-			Name:                 "TV Ready Movie",
-			FileSize:             1073741824,
-			DownloadedPercentage: 100,
-			ConversionPercentage: 100,
-			TvCompatibility:      "green",
-		},
-	}, nil
-}
-
 func TestListMoviesHandler_CompatibilityMode(t *testing.T) {
 	bot := &testutils.MockBot{}
 	cfg := testutils.TestConfig(t.TempDir())
 	cfg.VideoSettings.CompatibilityMode = true
 
-	a := newTestApp(bot, &mockDatabaseWithCompatMovie{}, cfg)
+	a := &app.App{Bot: bot, DB: &MockDatabaseWithCompatMovie{}, Config: cfg}
 	update := &tgbotapi.Update{
 		Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}},
 	}

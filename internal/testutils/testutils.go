@@ -492,7 +492,8 @@ func WaitForCondition(t *testing.T, condition func() bool, timeout time.Duration
 	}
 }
 
-// MockDownloader implements the downloader interface for testing
+// MockDownloader implements the downloader interface for testing.
+// It also implements downloader.EpisodeAcker for sequential multi-file tests.
 type MockDownloader struct {
 	ShouldBlock  bool
 	ShouldError  bool
@@ -506,6 +507,17 @@ type MockDownloader struct {
 	// TotalEps overrides TotalEpisodes() return value when > 0.
 	TotalEps        int
 	stoppedManually bool
+	episodeAck      <-chan struct{}
+}
+
+// SetEpisodeAck implements downloader.EpisodeAcker.
+func (m *MockDownloader) SetEpisodeAck(ack <-chan struct{}) {
+	m.episodeAck = ack
+}
+
+// EpisodeAck returns the ack channel set by the manager (useful for tests).
+func (m *MockDownloader) EpisodeAck() <-chan struct{} {
+	return m.episodeAck
 }
 
 func (m *MockDownloader) GetTitle() (string, error) {

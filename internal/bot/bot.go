@@ -20,6 +20,7 @@ import (
 type Service interface {
 	SendMessage(chatID int64, text string, keyboard any)
 	SendMessageReturningID(chatID int64, text string, keyboard any) (int, error)
+	SendDocument(chatID int64, fileName string, data []byte) error
 	DownloadFile(fileID, fileName string) error
 	AnswerCallbackQuery(callbackConfig tgbotapi.CallbackConfig)
 	DeleteMessage(chatID int64, messageID int) error
@@ -82,6 +83,19 @@ func (b *Bot) SendMessage(chatID int64, text string, keyboard any) {
 	if _, err := b.Api.Send(msg); err != nil {
 		logutils.Log.WithError(err).Errorf("Message not sent: %s", text)
 	}
+}
+
+func (b *Bot) SendDocument(chatID int64, fileName string, data []byte) error {
+	doc := tgbotapi.NewDocument(chatID, tgbotapi.FileBytes{
+		Name:  fileName,
+		Bytes: data,
+	})
+	if _, err := b.Api.Send(doc); err != nil {
+		logutils.Log.WithError(err).Errorf("Failed to send document %s to chat %d", fileName, chatID)
+		return err
+	}
+	logutils.Log.Infof("Document sent: %s", fileName)
+	return nil
 }
 
 func (b *Bot) DownloadFile(fileID, fileName string) error {

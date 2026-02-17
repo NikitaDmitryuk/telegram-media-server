@@ -57,6 +57,7 @@ type downloadJob struct {
 	progressChan         chan float64
 	errChan              chan error
 	episodesChan         <-chan int
+	episodeAckChan       chan struct{} // non-nil for sequential multi-file; manager sends ack after re-acquiring semaphore
 	ctx                  context.Context
 	cancel               context.CancelFunc
 	chatID               int64

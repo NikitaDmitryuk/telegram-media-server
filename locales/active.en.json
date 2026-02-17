@@ -1,7 +1,8 @@
 {
     "general": {
         "commands": {
-            "start": "<file.torrent> - download a torrent\n<URL> - stream video\n/ls - list files\n/rm <ID> - delete a movie, 'all' to delete all"
+            "start": "<file.torrent> - download a torrent\n<URL> - stream video\n/ls - list files\n/rm <ID> - delete a movie, 'all' to delete all",
+            "logs_empty": "📭 No logs for the last day"
         },
         "status_messages": {
             "empty_list": "📭 The list is empty",
@@ -60,7 +61,8 @@
         },
         "commands": {
             "unknown_command": "Unknown command. Use /start to see available commands.",
-            "invalid_format": "Invalid command format."
+            "invalid_format": "Invalid command format.",
+            "logs_error": "Error retrieving logs"
         },
         "movies": {
             "fetch_error": "An error occurred while fetching the movie list. Please try again later.",

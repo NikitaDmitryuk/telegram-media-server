@@ -43,6 +43,15 @@ type Downloader interface {
 	StopDownload() error
 }
 
+// EpisodeAcker is an optional interface for sequential multi-file downloaders.
+// When the download manager detects this interface, it injects an acknowledgment
+// channel via SetEpisodeAck. The downloader must block on this channel between
+// episodes, giving the manager a chance to release and re-acquire the semaphore
+// slot so that other queued downloads can proceed.
+type EpisodeAcker interface {
+	SetEpisodeAck(ack <-chan struct{})
+}
+
 // EarlyCompatDownloader is an optional interface. If a Downloader implements it,
 // the manager calls GetEarlyTvCompatibility after StartDownload to show the TV compatibility circle
 // immediately from metadata (torrent file list or yt-dlp format info) without waiting for the first bytes.

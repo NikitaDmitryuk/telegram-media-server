@@ -19,11 +19,15 @@ func (dm *DownloadManager) monitorDownload(
 	job *downloadJob,
 	outerErrChan chan error,
 ) {
+	holdingSlot := true
+
 	defer func() {
 		dm.mu.Lock()
 		delete(dm.jobs, movieID)
 		dm.mu.Unlock()
-		<-dm.semaphore
+		if holdingSlot {
+			<-dm.semaphore
+		}
 	}()
 
 	var (
@@ -85,6 +89,36 @@ func (dm *DownloadManager) monitorDownload(
 							job.cancel()
 						}
 					}
+				}
+			}
+
+			// Release and re-acquire the semaphore between episodes so that
+			// queued downloads (e.g. a movie) get a fair chance to start
+			// instead of waiting for the entire series to finish.
+			if job.episodeAckChan != nil {
+				<-dm.semaphore
+				holdingSlot = false
+
+				// Yield to give processQueue a chance to grab the freed slot.
+				select {
+				case <-time.After(QueueProcessingDelay + 50*time.Millisecond):
+				case <-job.ctx.Done():
+					return
+				}
+
+				// Re-acquire a slot for the next episode (may block if all slots are occupied).
+				select {
+				case dm.semaphore <- struct{}{}:
+					holdingSlot = true
+				case <-job.ctx.Done():
+					return
+				}
+
+				// Signal the downloader to start the next episode.
+				select {
+				case job.episodeAckChan <- struct{}{}:
+				case <-job.ctx.Done():
+					return
 				}
 			}
 
