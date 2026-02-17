@@ -80,7 +80,7 @@ func TestVideoDownloadIntegration(t *testing.T) {
 		server := testutils.MockYTDLPServer(t)
 		testURL := server.URL + "/test-video"
 
-		downloader := NewYTDLPDownloader(nil, testURL, cfg)
+		downloader := NewYTDLPDownloader(testURL, cfg)
 
 		// Test basic operations (these will fail without yt-dlp but shouldn't crash)
 		title, err := downloader.GetTitle()
@@ -122,7 +122,7 @@ func TestVideoConfigurationOptions(t *testing.T) {
 
 	t.Run("DefaultConfiguration", func(t *testing.T) {
 		cfg := *baseConfig
-		downloader := NewYTDLPDownloader(nil, testURL, &cfg).(*YTDLPDownloader)
+		downloader := NewYTDLPDownloader(testURL, &cfg).(*YTDLPDownloader)
 
 		outputPath := filepath.Join(cfg.MoviePath, "%(title)s.%(ext)s")
 		args := downloader.buildYTDLPArgs(outputPath)
@@ -150,7 +150,7 @@ func TestVideoConfigurationOptions(t *testing.T) {
 		cfg.VideoSettings.OutputFormat = "mp4"
 		cfg.VideoSettings.FFmpegExtraArgs = "-crf 23"
 
-		downloader := NewYTDLPDownloader(nil, testURL, &cfg).(*YTDLPDownloader)
+		downloader := NewYTDLPDownloader(testURL, &cfg).(*YTDLPDownloader)
 		outputPath := filepath.Join(cfg.MoviePath, "%(title)s.%(ext)s")
 		args := downloader.buildYTDLPArgs(outputPath)
 
@@ -180,7 +180,7 @@ func TestVideoConfigurationOptions(t *testing.T) {
 		cfg.Proxy = "http://proxy.example.com:8080"
 		cfg.ProxyDomains = "example.com,youtube.com"
 
-		downloader := NewYTDLPDownloader(nil, testURL, &cfg).(*YTDLPDownloader)
+		downloader := NewYTDLPDownloader(testURL, &cfg).(*YTDLPDownloader)
 		outputPath := filepath.Join(cfg.MoviePath, "%(title)s.%(ext)s")
 		args := downloader.buildYTDLPArgs(outputPath)
 
@@ -204,7 +204,7 @@ func TestVideoConfigurationOptions(t *testing.T) {
 		cfg := *baseConfig
 		cfg.VideoSettings.QualitySelector = "best[height<=720]"
 
-		downloader := NewYTDLPDownloader(nil, testURL, &cfg).(*YTDLPDownloader)
+		downloader := NewYTDLPDownloader(testURL, &cfg).(*YTDLPDownloader)
 		outputPath := filepath.Join(cfg.MoviePath, "%(title)s.%(ext)s")
 		args := downloader.buildYTDLPArgs(outputPath)
 
@@ -246,7 +246,7 @@ func TestVideoErrorHandling(t *testing.T) {
 					url = "empty"
 				}
 
-				downloader := NewYTDLPDownloader(nil, url, cfg)
+				downloader := NewYTDLPDownloader(url, cfg)
 
 				// These should either fail gracefully or handle the error
 				_, err := downloader.GetTitle()
@@ -262,7 +262,7 @@ func TestVideoErrorHandling(t *testing.T) {
 		timeoutURL := "http://192.0.2.0:12345/video" // Non-routable IP
 
 		cfg.DownloadSettings.DownloadTimeout = 1 * time.Second
-		downloader := NewYTDLPDownloader(nil, timeoutURL, cfg)
+		downloader := NewYTDLPDownloader(timeoutURL, cfg)
 
 		// This should timeout or fail quickly
 		start := time.Now()
@@ -283,7 +283,7 @@ func TestVideoErrorHandling(t *testing.T) {
 		invalidDir := "/invalid/nonexistent/directory/path"
 		cfg.MoviePath = invalidDir
 
-		downloader := NewYTDLPDownloader(nil, "https://example.com/video", cfg)
+		downloader := NewYTDLPDownloader("https://example.com/video", cfg)
 
 		// This should handle the invalid directory gracefully
 		_, _, err := downloader.GetFiles()
@@ -312,7 +312,7 @@ func TestVideoFileOperations(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.url, func(t *testing.T) {
-				downloader := NewYTDLPDownloader(nil, tc.url, cfg).(*YTDLPDownloader)
+				downloader := NewYTDLPDownloader(tc.url, cfg).(*YTDLPDownloader)
 
 				outputPath := filepath.Join(cfg.MoviePath, "%(title)s.%(ext)s")
 				args := downloader.buildYTDLPArgs(outputPath)
@@ -342,7 +342,7 @@ func TestVideoFileOperations(t *testing.T) {
 		nestedDir := filepath.Join(tempDir, "videos", "downloads", "test")
 		cfg.MoviePath = nestedDir
 
-		downloader := NewYTDLPDownloader(nil, "https://example.com/video", cfg)
+		downloader := NewYTDLPDownloader("https://example.com/video", cfg)
 
 		// This should handle directory creation (or at least not crash)
 		_, _, err := downloader.GetFiles()
@@ -362,7 +362,7 @@ func TestVideoFileOperations(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.url, func(t *testing.T) {
-				downloader := NewYTDLPDownloader(nil, tc.url, cfg)
+				downloader := NewYTDLPDownloader(tc.url, cfg)
 
 				// Test title extraction
 				title, err := downloader.GetTitle()
@@ -397,7 +397,7 @@ func TestVideoConcurrency(t *testing.T) {
 		// Create downloaders concurrently
 		for i := range numGoroutines {
 			go func(url string) {
-				downloader := NewYTDLPDownloader(nil, url, cfg)
+				downloader := NewYTDLPDownloader(url, cfg)
 				_, err := downloader.GetTitle()
 				results <- err
 			}(urls[i])

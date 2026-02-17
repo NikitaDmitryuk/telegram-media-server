@@ -156,6 +156,20 @@ linters:
           - mnd
           - lll
 
+      # G704: SSRF false positive -- URL comes from trusted Telegram Bot API.
+      - path: internal/bot/bot\.go
+        linters: [gosec]
+        text: "G704:"
+
+      # G117: struct fields named Password/ApiKey are domain models, not hardcoded secrets.
+      - linters: [gosec]
+        text: "G117:"
+
+      # G101: test-only fake credentials in testutils.
+      - path: internal/testutils/
+        linters: [gosec]
+        text: "G101:"
+
       # Based on existing code, the modifications should be limited to make maintenance easier.
       - path: pkg/golinters/unused/unused.go
         linters: [gocritic]

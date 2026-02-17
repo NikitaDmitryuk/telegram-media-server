@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -15,22 +13,22 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.MovieReader, config *tmsconfig.Config) {
+func ListMoviesHandler(a *app.App, update *tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 
-	movies, err := db.GetMovieList(context.Background())
+	movies, err := a.DB.GetMovieList(context.Background())
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to retrieve movie list")
-		bot.SendMessage(chatID, lang.Translate("error.movies.fetch_error", nil), ui.GetMainMenuKeyboard())
+		a.Bot.SendMessage(chatID, lang.Translate("error.movies.fetch_error", nil), ui.GetMainMenuKeyboard())
 		return
 	}
 
 	if len(movies) == 0 {
-		bot.SendMessage(chatID, lang.Translate("general.status_messages.empty_list", nil), ui.GetMainMenuKeyboard())
+		a.Bot.SendMessage(chatID, lang.Translate("general.status_messages.empty_list", nil), ui.GetMainMenuKeyboard())
 		return
 	}
 
-	compatMode := config.VideoSettings.CompatibilityMode
+	compatMode := a.Config.VideoSettings.CompatibilityMode
 	var messages []string
 	for i := range movies {
 		movie := &movies[i]
@@ -63,7 +61,7 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Mov
 		}))
 	}
 
-	availableSpaceGB, err := filemanager.GetAvailableSpaceGB(config.MoviePath)
+	availableSpaceGB, err := filemanager.GetAvailableSpaceGB(a.Config.MoviePath)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to get available disk space")
 		availableSpaceGB = 0
@@ -76,5 +74,5 @@ func ListMoviesHandler(bot *tmsbot.Bot, update *tgbotapi.Update, db database.Mov
 	}))
 
 	message := strings.Join(messages, "\n")
-	bot.SendMessage(chatID, message, ui.GetMainMenuKeyboard())
+	a.Bot.SendMessage(chatID, message, ui.GetMainMenuKeyboard())
 }

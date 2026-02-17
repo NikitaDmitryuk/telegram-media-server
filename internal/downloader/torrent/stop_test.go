@@ -22,7 +22,7 @@ func TestAria2StopDownload(t *testing.T) {
 	t.Run("StopNonExistentProcess", func(t *testing.T) {
 		torrentPath := testutils.CreateRealTestTorrent(t, tempDir, "test-stop")
 
-		downloader := NewAria2Downloader(nil, filepath.Base(torrentPath), cfg.MoviePath, cfg).(*Aria2Downloader)
+		downloader := NewAria2Downloader(filepath.Base(torrentPath), cfg.MoviePath, cfg).(*Aria2Downloader)
 
 		// Try to stop before starting - should not panic
 		err := downloader.StopDownload()
@@ -40,7 +40,7 @@ func TestAria2StopDownload(t *testing.T) {
 
 		torrentPath := testutils.CreateRealTestTorrent(t, tempDir, "test-active-stop")
 
-		downloader := NewAria2Downloader(nil, filepath.Base(torrentPath), cfg.MoviePath, cfg).(*Aria2Downloader)
+		downloader := NewAria2Downloader(filepath.Base(torrentPath), cfg.MoviePath, cfg).(*Aria2Downloader)
 
 		// Start download
 		ctx, cancel := context.WithCancel(context.Background())
@@ -122,7 +122,7 @@ func TestAria2ProcessCleanup(t *testing.T) {
 	t.Run("ProcessCleanupAfterStop", func(t *testing.T) {
 		torrentPath := testutils.CreateRealTestTorrent(t, tempDir, "test-cleanup")
 
-		downloader := NewAria2Downloader(nil, filepath.Base(torrentPath), cfg.MoviePath, cfg).(*Aria2Downloader)
+		downloader := NewAria2Downloader(filepath.Base(torrentPath), cfg.MoviePath, cfg).(*Aria2Downloader)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

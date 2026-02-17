@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
@@ -33,7 +32,6 @@ const (
 )
 
 type Aria2Downloader struct {
-	bot             *bot.Bot
 	torrentFileName string
 	downloadDir     string
 	cmd             *exec.Cmd
@@ -41,9 +39,8 @@ type Aria2Downloader struct {
 	config          *config.Config
 }
 
-func NewAria2Downloader(botInstance *bot.Bot, torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
+func NewAria2Downloader(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
 	return &Aria2Downloader{
-		bot:             botInstance,
 		torrentFileName: torrentFileName,
 		downloadDir:     moviePath,
 		config:          cfg,
@@ -83,7 +80,6 @@ func (d *Aria2Downloader) runSingleDownload(
 	progressChan chan float64,
 	errChan chan error,
 ) {
-	defer close(progressChan)
 	defer close(errChan)
 
 	cmdArgs := d.buildAria2Args(torrentPath, aria2Cfg, nil)
@@ -91,15 +87,18 @@ func (d *Aria2Downloader) runSingleDownload(
 
 	stdout, pipeErr := d.cmd.StdoutPipe()
 	if pipeErr != nil {
+		close(progressChan)
 		errChan <- fmt.Errorf("failed to capture stdout: %w", pipeErr)
 		return
 	}
 	stderr, pipeErr := d.cmd.StderrPipe()
 	if pipeErr != nil {
+		close(progressChan)
 		errChan <- fmt.Errorf("failed to capture stderr: %w", pipeErr)
 		return
 	}
 	if startErr := d.cmd.Start(); startErr != nil {
+		close(progressChan)
 		errChan <- fmt.Errorf("failed to start aria2c: %w", startErr)
 		return
 	}
@@ -111,7 +110,8 @@ func (d *Aria2Downloader) runSingleDownload(
 		}
 	}()
 
-	go d.parseProgress(stdout, progressChan)
+	// parseProgress will close progressChan when done
+	go d.parseProgressAndClose(stdout, progressChan)
 
 	waitErr := d.cmd.Wait()
 	if waitErr != nil && !d.stoppedManually {
@@ -134,7 +134,6 @@ func (d *Aria2Downloader) runMultiFileDownload(
 	errChan chan error,
 	episodesChan chan int,
 ) {
-	defer close(progressChan)
 	defer close(errChan)
 	if episodesChan != nil {
 		defer close(episodesChan)
@@ -142,6 +141,7 @@ func (d *Aria2Downloader) runMultiFileDownload(
 
 	indices, sizes, isVideo, totalSize := sortedFileIndicesByPath(meta)
 	if totalSize == 0 {
+		close(progressChan)
 		errChan <- nil
 		return
 	}
@@ -167,6 +167,7 @@ func (d *Aria2Downloader) runMultiFileDownload(
 			errChan,
 			episodesChan,
 		)
+		close(progressChan)
 		return
 	}
 
@@ -184,15 +185,18 @@ func (d *Aria2Downloader) runMultiFileDownload(
 
 	stdout, pipeErr := cmd.StdoutPipe()
 	if pipeErr != nil {
+		close(progressChan)
 		errChan <- fmt.Errorf("failed to capture stdout: %w", pipeErr)
 		return
 	}
 	stderr, pipeErr := cmd.StderrPipe()
 	if pipeErr != nil {
+		close(progressChan)
 		errChan <- fmt.Errorf("failed to capture stderr: %w", pipeErr)
 		return
 	}
 	if startErr := cmd.Start(); startErr != nil {
+		close(progressChan)
 		errChan <- fmt.Errorf("failed to start aria2c: %w", startErr)
 		return
 	}
@@ -204,7 +208,8 @@ func (d *Aria2Downloader) runMultiFileDownload(
 		}
 	}()
 
-	go d.parseProgress(stdout, progressChan)
+	// parseProgressAndClose will close progressChan when done
+	go d.parseProgressAndClose(stdout, progressChan)
 
 	waitErr := cmd.Wait()
 	if waitErr != nil && !d.stoppedManually {
@@ -389,6 +394,13 @@ func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
 	if err := scanner.Err(); err != nil {
 		logutils.Log.WithError(err).Error("error reading aria2c output")
 	}
+}
+
+// parseProgressAndClose parses progress and closes the channel when done.
+// This ensures the channel is closed only after all progress updates are sent.
+func (d *Aria2Downloader) parseProgressAndClose(r io.Reader, progressChan chan float64) {
+	defer close(progressChan)
+	d.parseProgress(r, progressChan)
 }
 
 func (d *Aria2Downloader) StopDownload() error {

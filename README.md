@@ -123,14 +123,15 @@ All available configuration parameters are thoroughly documented in the [`.env.e
 Создайте файл `.env` на основе `.env.example` и настройте необходимые параметры.  
 Create a `.env` file based on `.env.example` and configure the required parameters.
 
-**Docker и торренты / Docker and torrents**: если в контейнере торренты «стоят» без пиров, попробуйте `network_mode: host` в `docker-compose.yml` для сервиса `telegram-media-server` (aria2 сможет принимать входящие соединения). Убедитесь, что на хосте открыты порты 6881–6999 (TCP и UDP).  
-If torrents in the container get no peers, try `network_mode: host` for the `telegram-media-server` service in `docker-compose.yml` so aria2 can accept incoming connections. Ensure ports 6881–6999 (TCP and UDP) are open on the host.
+Docker: если торренты «стоят» без пиров, попробуйте `network_mode: host` в `docker-compose.yml` (aria2 сможет принимать входящие). Порты 6881–6999 (TCP/UDP) должны быть открыты.  
+Docker: if torrents get no peers, try `network_mode: host` in `docker-compose.yml` so aria2 can accept incoming connections. Ensure ports 6881–6999 (TCP/UDP) are open.
 
-**Порядок файлов в торренте / Torrent file order**: по умолчанию файлы в многофайловом торренте скачиваются в лексикографическом порядке по пути (первый по имени — первым готов). Это может замедлить общую скорость загрузки; для максимальной скорости задайте в `.env` `ARIA2_SEQUENTIAL_MULTI_FILE=false` (одна сессия aria2 на все файлы).  
-By default, files in a multi-file torrent are downloaded in lexicographic (alphabetical) order by path so the first file by name is ready sooner. This may slow down total download speed; to maximize throughput set `ARIA2_SEQUENTIAL_MULTI_FILE=false` in `.env` (single aria2 run for all files).
+Порядок файлов: многофайловые торренты скачиваются по алфавиту (первый файл готов раньше). Для максимальной скорости — `ARIA2_SEQUENTIAL_MULTI_FILE=false`.  
+File order: multi-file torrents download alphabetically by default (first file ready sooner). For max speed set `ARIA2_SEQUENTIAL_MULTI_FILE=false`.
 
-**Режим совместимости с ТВ / TV compatibility mode**: если видео не воспроизводится на телевизоре (любой модели), в `.env` задайте `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости проходят лёгкую переконвертацию (remux). Опции: `VIDEO_TV_H264_LEVEL=4.0` или `4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — не загружать и сразу уведомлять, если видео не подойдёт под ТВ.  
-If video does not play on your TV, set `VIDEO_COMPATIBILITY_MODE=true` in `.env`. Files may be remuxed for compatibility. The “First episode ready” Options: `VIDEO_TV_H264_LEVEL=4.0` or `4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — cancel download and notify when the file would not play on your TV.
+Совместимость с ТВ: если видео не воспроизводится — `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости пройдут remux. Опции: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — отклонять несовместимое видео.  
+TV compatibility: if video won't play on your TV, set `VIDEO_COMPATIBILITY_MODE=true`. Files may be remuxed. Options: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — reject incompatible video.
+
 ---
 
 ## Использование / Usage
@@ -238,6 +239,14 @@ See the full list in the [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp
    PROWLARR_API_KEY=your_prowlarr_api_key
    ```
    If variables are not set, integration will be disabled.
+
+---
+
+## Архитектура / Architecture
+
+![Architecture](images/architecture.svg)
+
+---
 
 ### Pre-commit hooks
 

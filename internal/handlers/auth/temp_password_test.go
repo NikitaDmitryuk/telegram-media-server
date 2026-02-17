@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// MockDatabaseTempPassword extends MockDatabase for temp password testing
+// MockDatabaseTempPassword embeds DatabaseStub and overrides GenerateTemporaryPassword.
 type MockDatabaseTempPassword struct {
-	*MockDatabase
+	testutils.DatabaseStub
 	generateResult     string
 	generateError      error
 	generateCallCount  int
@@ -28,7 +27,6 @@ type GenerateCall struct {
 
 func NewMockDatabaseTempPassword() *MockDatabaseTempPassword {
 	return &MockDatabaseTempPassword{
-		MockDatabase:       NewMockDatabase(),
 		generatedPasswords: make([]string, 0),
 	}
 }
@@ -48,90 +46,6 @@ func (m *MockDatabaseTempPassword) GenerateTemporaryPassword(_ context.Context, 
 
 	m.generatedPasswords = append(m.generatedPasswords, password)
 	return password, nil
-}
-
-// Add other required methods to satisfy the database.Database interface
-func (*MockDatabaseTempPassword) Init(_ *tmsconfig.Config) error {
-	return nil
-}
-
-func (*MockDatabaseTempPassword) Login(_ context.Context, _ string, _ int64, _ string, _ *tmsconfig.Config) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabaseTempPassword) AssignTemporaryPassword(_ context.Context, _ string, _ int64) error {
-	return nil
-}
-
-func (*MockDatabaseTempPassword) ExtendTemporaryUser(_ context.Context, _ int64, _ time.Time) error {
-	return nil
-}
-
-func (*MockDatabaseTempPassword) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
-	return 0, nil
-}
-
-func (*MockDatabaseTempPassword) RemoveMovie(_ context.Context, _ uint) error {
-	return nil
-}
-
-func (*MockDatabaseTempPassword) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return nil, nil
-}
-
-func (*MockDatabaseTempPassword) GetTempFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-
-func (*MockDatabaseTempPassword) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*MockDatabaseTempPassword) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-
-func (*MockDatabaseTempPassword) SetLoaded(_ context.Context, _ uint) error {
-	return nil
-}
-func (*MockDatabaseTempPassword) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
-	return nil
-}
-func (*MockDatabaseTempPassword) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*MockDatabaseTempPassword) SetTvCompatibility(_ context.Context, _ uint, _ string) error {
-	return nil
-}
-func (*MockDatabaseTempPassword) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
-	return database.Movie{}, nil
-}
-
-func (*MockDatabaseTempPassword) MovieExistsFiles(_ context.Context, _ []string) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabaseTempPassword) MovieExistsId(_ context.Context, _ uint) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabaseTempPassword) MovieExistsUploadedFile(_ context.Context, _ string) (bool, error) {
-	return false, nil
-}
-
-func (*MockDatabaseTempPassword) GetFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-
-func (*MockDatabaseTempPassword) RemoveFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
-}
-
-func (*MockDatabaseTempPassword) RemoveTempFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
-}
-
-func (*MockDatabaseTempPassword) GetUserByChatID(_ context.Context, _ int64) (database.User, error) {
-	return database.User{}, nil
 }
 
 //nolint:gocyclo // Test functions can be complex
@@ -271,7 +185,7 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			bot := &MockBot{}
+			bot := &testutils.MockBot{}
 			db := NewMockDatabaseTempPassword()
 
 			if tt.mockSetup != nil {
@@ -403,7 +317,7 @@ func TestGenerateTempPasswordHandler_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bot := &MockBot{}
+			bot := &testutils.MockBot{}
 			db := NewMockDatabaseTempPassword()
 			_ = db // Suppress unused variable warning
 
@@ -427,7 +341,7 @@ func TestGenerateTempPasswordHandler_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Test concurrent password generation
-	bot := &MockBot{}
+	bot := &testutils.MockBot{}
 	db := NewMockDatabaseTempPassword()
 	db.generateResult = "concurrent123"
 
@@ -470,7 +384,7 @@ func TestGenerateTempPasswordHandler_PasswordUniqueness(t *testing.T) {
 	}
 
 	// Test that multiple calls generate different passwords (if using real generation)
-	bot := &MockBot{}
+	bot := &testutils.MockBot{}
 	_ = NewMockDatabaseTempPassword() // Suppress unused variable warning
 
 	// Don't set generateResult to test actual generation

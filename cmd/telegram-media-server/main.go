@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
@@ -39,10 +40,10 @@ func main() {
 		go tmsvideo.RunUpdate(context.Background())
 	}
 
-	if dbErr := database.InitDatabase(config); dbErr != nil {
+	db, dbErr := database.NewDatabase(config)
+	if dbErr != nil {
 		logutils.Log.WithError(dbErr).Fatal("Failed to initialize the database")
 	}
-	db := database.GlobalDB
 
 	if langErr := lang.InitLocalizer(config); langErr != nil {
 		logutils.Log.WithError(langErr).Fatal("Failed to initialize localizer")
@@ -56,7 +57,14 @@ func main() {
 		logutils.Log.WithError(err).Fatal("Bot initialization failed")
 	}
 
-	downloads.InitNotificationHandler(botInstance, downloadManager)
+	a := &app.App{
+		Bot:             botInstance,
+		DB:              db,
+		Config:          config,
+		DownloadManager: downloadManager,
+	}
+
+	downloads.InitNotificationHandler(a)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -68,7 +76,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	go processUpdates(ctx, botInstance, db, config, downloadManager)
+	go processUpdates(ctx, a, botInstance)
 
 	logutils.Log.Info("Telegram Media Server started successfully")
 
@@ -77,7 +85,7 @@ func main() {
 
 	cancel()
 
-	downloadManager.StopAllDownloads()
+	a.DownloadManager.StopAllDownloads()
 	logutils.Log.Info("All downloads stopped")
 
 	logutils.Log.Info("Telegram Media Server shutdown complete")
@@ -85,19 +93,17 @@ func main() {
 
 func processUpdates(
 	ctx context.Context,
-	bot *tmsbot.Bot,
-	db database.Database,
-	config *tmsconfig.Config,
-	downloadManager *tmsdownloadmanager.DownloadManager,
+	a *app.App,
+	botInstance *tmsbot.Bot,
 ) {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
-	updates := bot.Api.GetUpdatesChan(u)
+	updates := botInstance.Api.GetUpdatesChan(u)
 
 	for {
 		select {
 		case update := <-updates:
-			common.Router(bot, &update, db, config, downloadManager)
+			common.Router(a, &update)
 		case <-ctx.Done():
 			logutils.Log.Info("Stopping update processing")
 			return

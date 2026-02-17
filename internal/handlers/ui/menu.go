@@ -6,11 +6,11 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func SendMainMenu(bot *tmsbot.Bot, chatID int64, message string) {
+func SendMainMenu(bot tmsbot.Service, chatID int64, message string) {
 	bot.SendMessage(chatID, message, GetMainMenuKeyboard())
 }
 
-func SendMainMenuNoText(bot *tmsbot.Bot, chatID int64) {
+func SendMainMenuNoText(bot tmsbot.Service, chatID int64) {
 	bot.SendMessage(chatID, tmslang.Translate("general.interface.main_menu", nil), GetMainMenuKeyboard())
 }
 

@@ -52,16 +52,13 @@ type Database interface {
 	AuthStore
 }
 
-var GlobalDB Database
-
-func InitDatabase(config *tmsconfig.Config) error {
+func NewDatabase(config *tmsconfig.Config) (Database, error) {
 	database := NewSQLiteDatabase()
 	if err := database.Init(config); err != nil {
 		logutils.Log.WithError(err).Error("Failed to initialize the database")
-		return err
+		return nil, err
 	}
 
-	GlobalDB = database
 	logutils.Log.Info("Database initialized successfully")
-	return nil
+	return database, nil
 }

@@ -8,10 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
-	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	torrent "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
@@ -115,13 +113,13 @@ func DeleteSearchSession(chatID int64) {
 	searchSessionManager.Delete(chatID)
 }
 
-func StartTorrentSearch(bot *tmsbot.Bot, chatID int64) {
+func StartTorrentSearch(bot tmsbot.Service, chatID int64) {
 	ss := &SearchSession{}
 	setSearchSession(chatID, ss, stageAwaitQuery)
 	bot.SendMessage(chatID, lang.Translate("general.torrent_search.enter_query", nil), ui.GetTorrentSearchKeyboard(false, false))
 }
 
-func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *tmsconfig.Config) {
+func HandleTorrentSearchQuery(a *app.App, update *tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	ss, sess := GetSearchSession(chatID)
 	if sess == nil || sess.Stage != stageAwaitQuery {
@@ -130,11 +128,11 @@ func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *
 	query := update.Message.Text
 	if query == lang.Translate("general.torrent_search.cancel", nil) {
 		DeleteSearchSession(chatID)
-		ui.SendMainMenuNoText(bot, chatID)
+		ui.SendMainMenuNoText(a.Bot, chatID)
 		return
 	}
 	if query == "" {
-		bot.SendMessage(chatID, lang.Translate("general.torrent_search.empty_query", nil), ui.GetEmptyKeyboard())
+		a.Bot.SendMessage(chatID, lang.Translate("general.torrent_search.empty_query", nil), ui.GetEmptyKeyboard())
 		return
 	}
 
@@ -145,29 +143,29 @@ func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *
 		ss.Offset = 0
 		ss.MessageIDs = nil
 		setSearchSession(chatID, ss, stageShowResults)
-		ShowTorrentSearchResults(bot, chatID)
+		ShowTorrentSearchResults(a.Bot, chatID)
 		return
 	}
 
-	if config.ProwlarrURL == "" || config.ProwlarrAPIKey == "" {
-		bot.SendMessage(chatID, lang.Translate("general.torrent_search.not_configured", nil), ui.GetEmptyKeyboard())
+	if a.Config.ProwlarrURL == "" || a.Config.ProwlarrAPIKey == "" {
+		a.Bot.SendMessage(chatID, lang.Translate("general.torrent_search.not_configured", nil), ui.GetEmptyKeyboard())
 		DeleteSearchSession(chatID)
-		ui.SendMainMenuNoText(bot, chatID)
+		ui.SendMainMenuNoText(a.Bot, chatID)
 		return
 	}
-	client := prowlarr.NewProwlarr(config.ProwlarrURL, config.ProwlarrAPIKey)
+	client := prowlarr.NewProwlarr(a.Config.ProwlarrURL, a.Config.ProwlarrAPIKey)
 	page, err := client.SearchTorrents(query, 0, searchPageSize, nil, nil)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Prowlarr search failed")
-		bot.SendMessage(chatID, lang.Translate("general.torrent_search.failed", nil), ui.GetEmptyKeyboard())
+		a.Bot.SendMessage(chatID, lang.Translate("general.torrent_search.failed", nil), ui.GetEmptyKeyboard())
 		DeleteSearchSession(chatID)
-		ui.SendMainMenuNoText(bot, chatID)
+		ui.SendMainMenuNoText(a.Bot, chatID)
 		return
 	}
 	if len(page.Results) == 0 {
-		bot.SendMessage(chatID, lang.Translate("general.torrent_search.not_found", nil), ui.GetEmptyKeyboard())
+		a.Bot.SendMessage(chatID, lang.Translate("general.torrent_search.not_found", nil), ui.GetEmptyKeyboard())
 		DeleteSearchSession(chatID)
-		ui.SendMainMenuNoText(bot, chatID)
+		ui.SendMainMenuNoText(a.Bot, chatID)
 		return
 	}
 
@@ -183,10 +181,10 @@ func HandleTorrentSearchQuery(bot *tmsbot.Bot, update *tgbotapi.Update, config *
 	ss.Offset = 0
 	ss.MessageIDs = nil
 	setSearchSession(chatID, ss, stageShowResults)
-	ShowTorrentSearchResults(bot, chatID)
+	ShowTorrentSearchResults(a.Bot, chatID)
 }
 
-func ShowTorrentSearchResults(bot *tmsbot.Bot, chatID int64) {
+func ShowTorrentSearchResults(bot tmsbot.Service, chatID int64) {
 	ss, sess := GetSearchSession(chatID)
 	if sess == nil || sess.Stage != stageShowResults {
 		return
@@ -216,20 +214,18 @@ func ShowTorrentSearchResults(bot *tmsbot.Bot, chatID int64) {
 				),
 			),
 		)
-		msg := tgbotapi.NewMessage(chatID, text)
-		msg.ReplyMarkup = btn
-		m, _ := bot.Api.Send(msg)
-		ss.MessageIDs = append(ss.MessageIDs, m.MessageID)
+		msgID, _ := bot.SendMessageReturningID(chatID, text, btn)
+		ss.MessageIDs = append(ss.MessageIDs, msgID)
 	}
 
 	hasMore := to < len(results)
-	hasBack := true // always show Back: first page → new query, later pages → previous page
+	hasBack := true // always show Back: first page -> new query, later pages -> previous page
 	bot.SendMessage(chatID, lang.Translate("general.torrent_search.choose", nil), ui.GetTorrentSearchKeyboard(hasMore, hasBack))
 
 	setSearchSession(chatID, ss, stageShowResults)
 }
 
-func handleTorrentDownloadCallback(bot *tmsbot.Bot, chatID int64, data string, config *tmsconfig.Config) (string, error) {
+func handleTorrentDownloadCallback(bot tmsbot.Service, chatID int64, data string, a *app.App) (string, error) {
 	ss, _ := GetSearchSession(chatID)
 	if ss == nil {
 		return "", errors.New(lang.Translate("general.torrent_search.session_expired", nil))
@@ -240,7 +236,7 @@ func handleTorrentDownloadCallback(bot *tmsbot.Bot, chatID int64, data string, c
 		return "", errors.New(lang.Translate("general.torrent_search.invalid_choice", nil))
 	}
 	candidate := ss.Results[idx]
-	client := prowlarr.NewProwlarr(config.ProwlarrURL, config.ProwlarrAPIKey)
+	client := prowlarr.NewProwlarr(a.Config.ProwlarrURL, a.Config.ProwlarrAPIKey)
 	fileBytes, err := client.GetTorrentFile(candidate.TorrentURL)
 	if err != nil {
 		return "", errors.New(lang.Translate("general.torrent_search.download_failed", nil))
@@ -253,7 +249,7 @@ func handleTorrentDownloadCallback(bot *tmsbot.Bot, chatID int64, data string, c
 	return fileName, nil
 }
 
-func handleTorrentCancelCallback(bot *tmsbot.Bot, chatID int64) bool {
+func handleTorrentCancelCallback(bot tmsbot.Service, chatID int64) bool {
 	ss, _ := GetSearchSession(chatID)
 	if ss != nil {
 		for _, msgID := range ss.MessageIDs {
@@ -266,7 +262,7 @@ func handleTorrentCancelCallback(bot *tmsbot.Bot, chatID int64) bool {
 }
 
 // HandleTorrentMore advances to the next page of search results.
-func HandleTorrentMore(bot *tmsbot.Bot, chatID int64) {
+func HandleTorrentMore(bot tmsbot.Service, chatID int64) {
 	ss, _ := GetSearchSession(chatID)
 	if ss == nil {
 		return
@@ -277,7 +273,7 @@ func HandleTorrentMore(bot *tmsbot.Bot, chatID int64) {
 }
 
 // HandleTorrentBack navigates to the previous page, or back to query input on the first page.
-func HandleTorrentBack(bot *tmsbot.Bot, chatID int64) {
+func HandleTorrentBack(bot tmsbot.Service, chatID int64) {
 	ss, _ := GetSearchSession(chatID)
 	if ss == nil {
 		return
@@ -301,7 +297,7 @@ func HandleTorrentBack(bot *tmsbot.Bot, chatID int64) {
 }
 
 // HandleTorrentCancel cleans up the search session and returns to the main menu.
-func HandleTorrentCancel(bot *tmsbot.Bot, chatID int64) {
+func HandleTorrentCancel(bot tmsbot.Service, chatID int64) {
 	ss, _ := GetSearchSession(chatID)
 	if ss != nil {
 		for _, msgID := range ss.MessageIDs {
@@ -312,17 +308,14 @@ func HandleTorrentCancel(bot *tmsbot.Bot, chatID int64) {
 	ui.SendMainMenuNoText(bot, chatID)
 }
 
-func handleTorrentMoreCallback(bot *tmsbot.Bot, chatID int64) bool {
+func handleTorrentMoreCallback(bot tmsbot.Service, chatID int64) bool {
 	HandleTorrentMore(bot, chatID)
 	return true
 }
 
 func HandleTorrentSearchCallback(
-	bot *tmsbot.Bot,
+	a *app.App,
 	update *tgbotapi.Update,
-	config *tmsconfig.Config,
-	db database.Database,
-	downloadManager *tmsdmanager.DownloadManager,
 ) bool {
 	if update.CallbackQuery == nil {
 		return false
@@ -331,46 +324,46 @@ func HandleTorrentSearchCallback(
 	chatID := update.CallbackQuery.Message.Chat.ID
 
 	if strings.HasPrefix(data, "torrent_search_download:") {
-		fileName, err := handleTorrentDownloadCallback(bot, chatID, data, config)
+		fileName, err := handleTorrentDownloadCallback(a.Bot, chatID, data, a)
 		if err != nil {
-			bot.SendMessage(chatID, err.Error(), ui.GetEmptyKeyboard())
+			a.Bot.SendMessage(chatID, err.Error(), ui.GetEmptyKeyboard())
 			if update.CallbackQuery != nil {
-				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+				a.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 			}
 			return true
 		}
 		ss, _ := GetSearchSession(chatID)
 		if ss != nil {
 			for _, msgID := range ss.MessageIDs {
-				_ = bot.DeleteMessage(chatID, msgID)
+				_ = a.Bot.DeleteMessage(chatID, msgID)
 			}
 		}
-		downloaderInstance := torrent.NewAria2Downloader(bot, fileName, config.MoviePath, config)
+		downloaderInstance := torrent.NewAria2Downloader(fileName, a.Config.MoviePath, a.Config)
 		if downloaderInstance == nil {
-			bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), ui.GetEmptyKeyboard())
+			a.Bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), ui.GetEmptyKeyboard())
 			if update.CallbackQuery != nil {
-				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+				a.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 			}
 			return true
 		}
 		DeleteSearchSession(chatID)
-		downloads.HandleDownload(bot, chatID, downloaderInstance, config, db, downloadManager)
-		ui.SendMainMenuNoText(bot, chatID)
+		downloads.HandleDownload(a, chatID, downloaderInstance)
+		ui.SendMainMenuNoText(a.Bot, chatID)
 		if update.CallbackQuery != nil {
-			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+			a.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 		}
 		return true
 	}
 	if data == "torrent_search_back" {
-		HandleTorrentBack(bot, chatID)
-		bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+		HandleTorrentBack(a.Bot, chatID)
+		a.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 		return true
 	}
 	if data == "torrent_search_cancel" {
-		return handleTorrentCancelCallback(bot, chatID)
+		return handleTorrentCancelCallback(a.Bot, chatID)
 	}
 	if data == "torrent_search_more" {
-		return handleTorrentMoreCallback(bot, chatID)
+		return handleTorrentMoreCallback(a.Bot, chatID)
 	}
 	return false
 }

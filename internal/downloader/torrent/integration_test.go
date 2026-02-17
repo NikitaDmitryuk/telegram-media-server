@@ -28,7 +28,7 @@ func TestTorrentDownloadIntegration(t *testing.T) {
 	t.Run("ValidTorrentFile", func(t *testing.T) {
 		torrentPath := testutils.CreateRealTestTorrent(t, tempDir, "test-movie")
 
-		downloader := NewAria2Downloader(nil, torrentPath, cfg.MoviePath, cfg).(*Aria2Downloader)
+		downloader := NewAria2Downloader(torrentPath, cfg.MoviePath, cfg).(*Aria2Downloader)
 
 		// Test basic initialization
 		title, err := downloader.GetTitle()
@@ -57,7 +57,7 @@ func TestTorrentDownloadIntegration(t *testing.T) {
 		// Test with real torrent structure
 		torrentPath := testutils.CreateRealTestTorrent(t, tempDir, "validation-test")
 
-		_ = NewAria2Downloader(nil, torrentPath, cfg.MoviePath, cfg).(*Aria2Downloader)
+		_ = NewAria2Downloader(torrentPath, cfg.MoviePath, cfg).(*Aria2Downloader)
 
 		// This should not fail validation
 		err := ValidateTorrentFile(torrentPath)
@@ -69,7 +69,7 @@ func TestTorrentDownloadIntegration(t *testing.T) {
 	t.Run("InvalidTorrentFile", func(t *testing.T) {
 		htmlPath := testutils.CreateInvalidTorrent(t, tempDir, "invalid-test")
 
-		_ = NewAria2Downloader(nil, htmlPath, tempDir, cfg).(*Aria2Downloader)
+		_ = NewAria2Downloader(htmlPath, tempDir, cfg).(*Aria2Downloader)
 
 		// This should fail validation
 		err := ValidateTorrentFile(htmlPath)
@@ -83,7 +83,7 @@ func TestTorrentDownloadIntegration(t *testing.T) {
 	t.Run("MagnetLinkFile", func(t *testing.T) {
 		magnetPath := testutils.CreateMagnetLink(t, tempDir, "magnet-test")
 
-		_ = NewAria2Downloader(nil, magnetPath, tempDir, cfg).(*Aria2Downloader)
+		_ = NewAria2Downloader(magnetPath, tempDir, cfg).(*Aria2Downloader)
 
 		// This should fail validation
 		err := ValidateTorrentFile(magnetPath)
@@ -159,7 +159,7 @@ func TestTorrentDownloadManager(t *testing.T) {
 		torrentPath := testutils.CreateRealTestTorrent(t, tempDir, "manager-test")
 
 		// Test that downloader can be created and initialized
-		downloader := NewAria2Downloader(nil, torrentPath, cfg.MoviePath, cfg).(*Aria2Downloader)
+		downloader := NewAria2Downloader(torrentPath, cfg.MoviePath, cfg).(*Aria2Downloader)
 
 		// Test file operations
 		_, err := downloader.GetTitle()
@@ -246,7 +246,7 @@ func TestTorrentErrorHandling(t *testing.T) {
 	t.Run("NonExistentFile", func(t *testing.T) {
 		nonExistentPath := filepath.Join(tempDir, "nonexistent.torrent")
 
-		downloader := NewAria2Downloader(nil, nonExistentPath, cfg.MoviePath, cfg)
+		downloader := NewAria2Downloader(nonExistentPath, cfg.MoviePath, cfg)
 
 		_, err := downloader.GetTitle()
 		if err == nil {

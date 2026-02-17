@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
@@ -118,11 +117,8 @@ func TestDeleteTemporaryFilesByMovieID(t *testing.T) {
 	tempDir := t.TempDir()
 	db := testutils.TestDatabase(t)
 
-	// We can't easily test the download manager integration without complex setup
-	// So we'll test with a nil download manager for basic functionality
-	// For testing file manager functions, we can use nil download manager
-	// as the actual download manager logic is tested elsewhere
-	downloadManager := (*tmsdmanager.DownloadManager)(nil)
+	// DeleteTemporaryFilesByMovieID does not use the download manager internally,
+	// so a nil Service is safe here.
 
 	// Add a test movie
 	movieID, err := db.AddMovie(context.Background(), "Test Movie", 1024,
@@ -140,8 +136,8 @@ func TestDeleteTemporaryFilesByMovieID(t *testing.T) {
 		}
 	}
 
-	// Test deleting temporary files
-	err = DeleteTemporaryFilesByMovieID(movieID, tempDir, db, downloadManager)
+	// Test deleting temporary files.
+	err = DeleteTemporaryFilesByMovieID(movieID, tempDir, db, nil)
 	if err != nil {
 		t.Errorf("DeleteTemporaryFilesByMovieID failed: %v", err)
 	}
@@ -155,9 +151,8 @@ func TestDeleteMainFilesByMovieID(t *testing.T) {
 
 	tempDir := t.TempDir()
 	db := testutils.TestDatabase(t)
-	// For testing file manager functions, we can use nil download manager
-	// as the actual download manager logic is tested elsewhere
-	downloadManager := (*tmsdmanager.DownloadManager)(nil)
+	// DeleteMainFilesByMovieID does not use the download manager internally,
+	// so a nil Service is safe here.
 
 	// Add a test movie
 	movieID, err := db.AddMovie(context.Background(), "Test Movie", 1024,
@@ -175,8 +170,8 @@ func TestDeleteMainFilesByMovieID(t *testing.T) {
 		}
 	}
 
-	// Test deleting main files
-	err = DeleteMainFilesByMovieID(movieID, tempDir, db, downloadManager)
+	// Test deleting main files.
+	err = DeleteMainFilesByMovieID(movieID, tempDir, db, nil)
 	if err != nil {
 		t.Errorf("DeleteMainFilesByMovieID failed: %v", err)
 	}

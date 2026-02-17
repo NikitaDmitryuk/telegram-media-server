@@ -25,14 +25,14 @@ func (dm *DownloadManager) processQueue() {
 			dm.queue = dm.queue[1:]
 			dm.queueMutex.Unlock()
 
-			dm.startQueuedDownload(queued)
+			dm.startQueuedDownload(&queued)
 		default:
 			dm.queueMutex.Unlock()
 		}
 	}
 }
 
-func (dm *DownloadManager) startQueuedDownload(queued queuedDownload) {
+func (dm *DownloadManager) startQueuedDownload(queued *queuedDownload) {
 	logutils.Log.WithFields(map[string]any{
 		"movie_id": queued.movieID,
 		"title":    queued.title,
@@ -46,7 +46,7 @@ func (dm *DownloadManager) startQueuedDownload(queued queuedDownload) {
 		MaxConcurrent: dm.downloadSettings.MaxConcurrentDownloads,
 	}
 
-	movieID, progressChan, outerErrChan, err := dm.startDownloadImmediately(
+	_, innerProgressChan, innerErrChan, err := dm.startDownloadImmediately(
 		queued.movieID,
 		queued.downloader,
 		queued.title,
@@ -58,19 +58,54 @@ func (dm *DownloadManager) startQueuedDownload(queued queuedDownload) {
 			"title":    queued.title,
 		}).Error("Failed to start queued download")
 
+		// Forward error to the original caller's channel
 		select {
-		case outerErrChan <- err:
+		case queued.errChan <- err:
 		default:
 		}
+		close(queued.progressChan)
+		close(queued.errChan)
 		<-dm.semaphore
-	} else {
-		logutils.Log.WithFields(map[string]any{
-			"movie_id": movieID,
-			"title":    queued.title,
-		}).Info("Successfully started queued download")
-
-		_ = progressChan
+		return
 	}
+
+	logutils.Log.WithFields(map[string]any{
+		"movie_id": queued.movieID,
+		"title":    queued.title,
+	}).Info("Successfully started queued download")
+
+	// Forward progress and errors from inner channels to the original caller's channels
+	go func() {
+		defer close(queued.progressChan)
+		defer close(queued.errChan)
+
+		// Use select to handle both channels concurrently
+		// This prevents deadlock if errChan receives value before progressChan closes
+		progressDone := false
+		errDone := false
+
+		for !progressDone || !errDone {
+			select {
+			case progress, ok := <-innerProgressChan:
+				if !ok {
+					progressDone = true
+					continue
+				}
+				select {
+				case queued.progressChan <- progress:
+				default:
+					// Drop progress if channel is full (non-blocking)
+				}
+			case innerErr, ok := <-innerErrChan:
+				if !ok {
+					errDone = true
+					continue
+				}
+				queued.errChan <- innerErr
+				errDone = true
+			}
+		}
+	}()
 }
 
 func (dm *DownloadManager) addToQueue(
@@ -79,16 +114,20 @@ func (dm *DownloadManager) addToQueue(
 	movieTitle string,
 	chatID int64,
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error) {
-	progressChan = make(chan float64, 1)
+	// Create channels that will be used by the caller to track progress
+	// These channels will be forwarded to when the download actually starts
+	progressChan = make(chan float64, ProgressChannelBuffSize)
 	outerErrChan = make(chan error, 1)
 
 	dm.queueMutex.Lock()
 	dm.queue = append(dm.queue, queuedDownload{
-		downloader: dl,
-		movieID:    movieID,
-		title:      movieTitle,
-		addedAt:    time.Now(),
-		chatID:     chatID,
+		downloader:   dl,
+		movieID:      movieID,
+		title:        movieTitle,
+		addedAt:      time.Now(),
+		chatID:       chatID,
+		progressChan: progressChan,
+		errChan:      outerErrChan,
 	})
 	queuePosition := len(dm.queue)
 	dm.queueMutex.Unlock()
@@ -111,53 +150,39 @@ func (dm *DownloadManager) addToQueue(
 		MaxConcurrent: dm.downloadSettings.MaxConcurrentDownloads,
 	}
 
+	// Start a goroutine to monitor queue timeout only
+	// Note: We do NOT close channels here - they will be closed by startQueuedDownload
+	// when the download actually starts, or by the timeout handler
 	go func() {
-		defer close(progressChan)
-		defer close(outerErrChan)
-
-		updateTicker := time.NewTicker(QueueProgressUpdateInterval)
-		defer updateTicker.Stop()
-
-		var timeoutTimer *time.Timer
-		var timeoutChan <-chan time.Time
-		if dm.downloadSettings.DownloadTimeout > 0 {
-			timeoutTimer = time.NewTimer(dm.downloadSettings.DownloadTimeout)
-			timeoutChan = timeoutTimer.C
-			defer timeoutTimer.Stop()
+		if dm.downloadSettings.DownloadTimeout <= 0 {
+			return
 		}
 
-		for {
-			select {
-			case <-updateTicker.C:
-				dm.queueMutex.Lock()
-				currentPosition := -1
-				for i, item := range dm.queue {
-					if item.movieID == movieID {
-						currentPosition = i + 1
-						break
-					}
-				}
-				dm.queueMutex.Unlock()
+		timeoutTimer := time.NewTimer(dm.downloadSettings.DownloadTimeout)
+		defer timeoutTimer.Stop()
 
-				if currentPosition == -1 {
-					return
-				}
+		<-timeoutTimer.C
 
-			case <-timeoutChan:
-				if timeoutChan != nil {
-					dm.queueMutex.Lock()
-					for i, item := range dm.queue {
-						if item.movieID == movieID {
-							dm.queue = append(dm.queue[:i], dm.queue[i+1:]...)
-							break
-						}
-					}
-					dm.queueMutex.Unlock()
-
-					outerErrChan <- fmt.Errorf("download timeout in queue")
-					return
-				}
+		// Check if still in queue (not started yet)
+		dm.queueMutex.Lock()
+		stillInQueue := false
+		for i, item := range dm.queue {
+			if item.movieID == movieID {
+				dm.queue = append(dm.queue[:i], dm.queue[i+1:]...)
+				stillInQueue = true
+				break
 			}
+		}
+		dm.queueMutex.Unlock()
+
+		if stillInQueue {
+			logutils.Log.WithField("movie_id", movieID).Warn("Download timed out while in queue")
+			select {
+			case outerErrChan <- fmt.Errorf("download timeout in queue"):
+			default:
+			}
+			close(progressChan)
+			close(outerErrChan)
 		}
 	}()
 

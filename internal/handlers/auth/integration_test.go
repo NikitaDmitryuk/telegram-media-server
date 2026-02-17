@@ -11,6 +11,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/models"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -224,7 +225,7 @@ func TestAuthenticationFlow_Integration(t *testing.T) {
 			db := setupIntegrationTestDB(t)
 			defer closeIntegrationTestDB(db)
 
-			bot := &MockBot{}
+			bot := &testutils.MockBot{}
 			cfg := &config.Config{
 				AdminPassword:   "admin123",
 				RegularPassword: "regular456",
@@ -404,7 +405,7 @@ func TestUserExpiration_Integration(t *testing.T) {
 	db := setupIntegrationTestDB(t)
 	defer closeIntegrationTestDB(db)
 
-	bot := &MockBot{}
+	bot := &testutils.MockBot{}
 	cfg := &config.Config{
 		AdminPassword:   "admin123",
 		RegularPassword: "regular456",
@@ -488,7 +489,7 @@ func TestConcurrentAuthentication_Integration(t *testing.T) {
 				done <- true
 			}()
 
-			bot := &MockBot{}
+			bot := &testutils.MockBot{}
 			update := &tgbotapi.Update{
 				Message: &tgbotapi.Message{
 					Chat: &tgbotapi.Chat{ID: userID},

@@ -5,24 +5,19 @@ import (
 	"testing"
 	"time"
 
-	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
-// firstEpisodeMockDB implements database.Database for first_episode_ready test.
+// firstEpisodeMockDB embeds DatabaseStub and records UpdateEpisodesProgress calls.
 type firstEpisodeMockDB struct {
+	testutils.DatabaseStub
 	updateEpisodesCalls []struct {
 		movieID   uint
 		completed int
 	}
 }
 
-func (*firstEpisodeMockDB) Init(_ *tmsconfig.Config) error { return nil }
-func (*firstEpisodeMockDB) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
-	return 1, nil
-}
 func (m *firstEpisodeMockDB) UpdateEpisodesProgress(_ context.Context, movieID uint, completed int) error {
 	m.updateEpisodesCalls = append(m.updateEpisodesCalls, struct {
 		movieID   uint
@@ -30,65 +25,13 @@ func (m *firstEpisodeMockDB) UpdateEpisodesProgress(_ context.Context, movieID u
 	}{movieID, completed})
 	return nil
 }
-func (*firstEpisodeMockDB) RemoveMovie(_ context.Context, _ uint) error { return nil }
-func (*firstEpisodeMockDB) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return nil, nil
+
+func (*firstEpisodeMockDB) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
+	return 1, nil
 }
-func (*firstEpisodeMockDB) GetTempFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-func (*firstEpisodeMockDB) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*firstEpisodeMockDB) SetLoaded(_ context.Context, _ uint) error { return nil }
-func (*firstEpisodeMockDB) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
-	return nil
-}
-func (*firstEpisodeMockDB) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*firstEpisodeMockDB) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
-func (*firstEpisodeMockDB) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
-	return database.Movie{}, nil
-}
-func (*firstEpisodeMockDB) MovieExistsFiles(_ context.Context, _ []string) (bool, error) {
-	return false, nil
-}
+
 func (*firstEpisodeMockDB) MovieExistsId(_ context.Context, _ uint) (bool, error) {
 	return true, nil
-}
-func (*firstEpisodeMockDB) GetFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
-}
-func (*firstEpisodeMockDB) RemoveFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
-}
-func (*firstEpisodeMockDB) RemoveTempFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
-}
-func (*firstEpisodeMockDB) MovieExistsUploadedFile(_ context.Context, _ string) (bool, error) {
-	return false, nil
-}
-func (*firstEpisodeMockDB) Login(_ context.Context, _ string, _ int64, _ string, _ *tmsconfig.Config) (bool, error) {
-	return false, nil
-}
-func (*firstEpisodeMockDB) GetUserRole(_ context.Context, _ int64) (database.UserRole, error) {
-	return "", nil
-}
-func (*firstEpisodeMockDB) IsUserAccessAllowed(_ context.Context, _ int64) (allowed bool, role database.UserRole, err error) {
-	return false, "", nil
-}
-func (*firstEpisodeMockDB) AssignTemporaryPassword(_ context.Context, _ string, _ int64) error {
-	return nil
-}
-func (*firstEpisodeMockDB) ExtendTemporaryUser(_ context.Context, _ int64, _ time.Time) error {
-	return nil
-}
-func (*firstEpisodeMockDB) GenerateTemporaryPassword(_ context.Context, _ time.Duration) (string, error) {
-	return "", nil
-}
-func (*firstEpisodeMockDB) GetUserByChatID(_ context.Context, _ int64) (database.User, error) {
-	return database.User{}, nil
 }
 
 // firstEpisodeDownloader sends episode 1 first, then progress after delay so monitor sees first_episode_ready.
