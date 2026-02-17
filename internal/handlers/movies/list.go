@@ -23,6 +23,8 @@ func ListMoviesHandler(a *app.App, update *tgbotapi.Update) {
 		return
 	}
 
+	movies = FilterOutPendingDeletion(movies, a.DeleteQueue)
+
 	if len(movies) == 0 {
 		a.Bot.SendMessage(chatID, lang.Translate("general.status_messages.empty_list", nil), ui.GetMainMenuKeyboard())
 		return

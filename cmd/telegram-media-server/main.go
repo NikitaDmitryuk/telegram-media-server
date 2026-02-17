@@ -10,8 +10,9 @@ import (
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/deletion"
+	tmsfactory "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
 	tmsdownloadmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
-	tmsvideo "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/video"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/common"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -36,9 +37,7 @@ func main() {
 		"build_time": BuildTime,
 	}).Info("Starting Telegram Media Server")
 
-	if config.YtdlpUpdateOnStart {
-		go tmsvideo.RunUpdate(context.Background())
-	}
+	tmsfactory.RunUpdatersOnStart(context.Background(), config)
 
 	db, dbErr := database.NewDatabase(config)
 	if dbErr != nil {
@@ -52,6 +51,8 @@ func main() {
 	downloadManager := tmsdownloadmanager.NewDownloadManager(config, db)
 	logutils.Log.Info("Download manager initialized")
 
+	deleteQueue := deletion.NewQueue(config.MoviePath, db, downloadManager)
+
 	botInstance, err := tmsbot.InitBot(config)
 	if err != nil {
 		logutils.Log.WithError(err).Fatal("Bot initialization failed")
@@ -62,6 +63,7 @@ func main() {
 		DB:              db,
 		Config:          config,
 		DownloadManager: downloadManager,
+		DeleteQueue:     deleteQueue,
 	}
 
 	downloads.InitNotificationHandler(a)
@@ -69,9 +71,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if config.YtdlpUpdateInterval > 0 {
-		go tmsvideo.StartPeriodicUpdater(ctx, config.YtdlpUpdateInterval)
-	}
+	tmsfactory.StartPeriodicUpdaters(ctx, config)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

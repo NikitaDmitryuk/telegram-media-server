@@ -30,9 +30,17 @@ const (
 	gracefulStopTimeout = 5 * time.Second
 	forceKillTimeout    = 2 * time.Second
 	// minProbeSize is the minimum file size (bytes) for ffprobe to read headers; used for early TV compatibility probe.
-	minProbeSize      = 256 * 1024
-	probePollInterval = 2 * time.Second
+	minProbeSize       = 256 * 1024
+	probePollInterval  = 2 * time.Second
+	defaultYtdlpBinary = "/usr/bin/yt-dlp"
 )
+
+func ytdlpBinary(cfg *tmsconfig.Config) string {
+	if cfg != nil && cfg.YtdlpPath != "" {
+		return cfg.YtdlpPath
+	}
+	return defaultYtdlpBinary
+}
 
 type YTDLPDownloader struct {
 	url             string
@@ -82,7 +90,10 @@ func (d *YTDLPDownloader) fetchVcodecFromMetadata(ctx context.Context) (string, 
 	if useProxy, _ := shouldUseProxy(d.url, d.config); useProxy && d.config.Proxy != "" {
 		args = append([]string{"--proxy", d.config.Proxy}, args...)
 	}
-	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	cmd := exec.CommandContext(
+		ctx,
+		ytdlpBinary(d.config),
+		args...) // #nosec G204 -- binary from config, args built from URL and fixed options
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("yt-dlp -j: %w", err)
@@ -129,7 +140,10 @@ func (d *YTDLPDownloader) StartDownload(
 		logutils.Log.Infof("No proxy used for URL: %s", d.url)
 	}
 
-	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
+	cmd := exec.CommandContext(
+		ctx,
+		ytdlpBinary(d.config),
+		cmdArgs...) // #nosec G204 -- binary from config, cmdArgs built from URL and options
 	d.cmd = cmd
 
 	stdout, err := cmd.StdoutPipe()
@@ -419,7 +433,10 @@ func (d *YTDLPDownloader) GetFileSize() (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ytdlpTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
+	cmd := exec.CommandContext(
+		ctx,
+		ytdlpBinary(d.config),
+		cmdArgs...) // #nosec G204 -- binary from config, cmdArgs built from URL and options
 	output, err := cmd.Output()
 	if err != nil {
 		logutils.Log.WithError(err).Warn("Failed to get video metadata for file size")
@@ -634,7 +651,7 @@ func getVideoTitle(videoURL string, cfg *tmsconfig.Config) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), ytdlpTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	cmd := exec.CommandContext(ctx, ytdlpBinary(cfg), args...) // #nosec G204 -- binary from config, args built from URL and fixed options
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get video title: %w", err)

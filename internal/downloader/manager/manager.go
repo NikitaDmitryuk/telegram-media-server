@@ -14,7 +14,7 @@ import (
 
 func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManager {
 	dm := &DownloadManager{
-		jobs:             make(map[uint]downloadJob),
+		jobs:             make(map[uint]*downloadJob),
 		queue:            make([]queuedDownload, 0),
 		semaphore:        make(chan struct{}, cfg.GetDownloadSettings().MaxConcurrentDownloads),
 		downloadSettings: cfg.GetDownloadSettings(),
@@ -88,14 +88,6 @@ func (dm *DownloadManager) startDownloadImmediately(
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// For sequential multi-file downloaders, inject the episode ack channel
-	// BEFORE starting the download so the goroutine can use it immediately.
-	var episodeAckChan chan struct{}
-	if acker, ok := dl.(downloader.EpisodeAcker); ok && dl.TotalEpisodes() > 1 {
-		episodeAckChan = make(chan struct{}, 1)
-		acker.SetEpisodeAck(episodeAckChan)
-	}
-
 	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
 	if err != nil {
 		cancel()
@@ -117,25 +109,24 @@ func (dm *DownloadManager) startDownloadImmediately(
 
 	outerErrChan = make(chan error, 1)
 
-	job := downloadJob{
-		downloader:     dl,
-		startTime:      dm.getCurrentTime(),
-		progressChan:   progressChan,
-		errChan:        errChan,
-		episodesChan:   episodesChan,
-		episodeAckChan: episodeAckChan,
-		ctx:            ctx,
-		cancel:         cancel,
-		chatID:         chatID,
-		title:          movieTitle,
-		totalEpisodes:  dl.TotalEpisodes(),
+	job := &downloadJob{
+		downloader:    dl,
+		startTime:     dm.getCurrentTime(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		episodesChan:  episodesChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		chatID:        chatID,
+		title:         movieTitle,
+		totalEpisodes: dl.TotalEpisodes(),
 	}
 
 	dm.mu.Lock()
 	dm.jobs[movieID] = job
 	dm.mu.Unlock()
 
-	go dm.monitorDownload(movieID, &job, outerErrChan)
+	go dm.monitorDownload(movieID, job, outerErrChan)
 
 	return movieID, progressChan, outerErrChan, nil
 }
@@ -154,6 +145,28 @@ func (dm *DownloadManager) StopDownload(movieID uint) error {
 		return nil
 	}
 
+	return dm.stopDownloadNotFound(movieID)
+}
+
+func (dm *DownloadManager) StopDownloadSilent(movieID uint) error {
+	dm.mu.Lock()
+	job, exists := dm.jobs[movieID]
+	dm.mu.Unlock()
+
+	if exists {
+		job.silentStop = true
+		logutils.Log.WithField("movie_id", movieID).Info("Stopping active download")
+		if err := job.downloader.StopDownload(); err != nil {
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader (may have stopped anyway)")
+		}
+		job.cancel()
+		return nil
+	}
+
+	return dm.stopDownloadNotFound(movieID)
+}
+
+func (dm *DownloadManager) stopDownloadNotFound(movieID uint) error {
 	if dm.RemoveFromQueue(movieID) {
 		logutils.Log.WithField("movie_id", movieID).Info("Removed download from queue")
 		return nil
@@ -166,7 +179,7 @@ func (dm *DownloadManager) StopDownload(movieID uint) error {
 
 func (dm *DownloadManager) StopAllDownloads() {
 	dm.mu.Lock()
-	jobs := make(map[uint]downloadJob)
+	jobs := make(map[uint]*downloadJob)
 	for k := range dm.jobs {
 		jobs[k] = dm.jobs[k]
 	}

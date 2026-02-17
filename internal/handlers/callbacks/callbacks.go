@@ -83,36 +83,27 @@ func handleDeleteMovieCallback(
 		logutils.Log.WithError(err).Errorf("Invalid movie ID: %s", movieIDStr)
 		return
 	}
+	id := uint(movieID)
 
-	logutils.Log.WithFields(map[string]any{
-		"callback_data": callbackData,
-		"chat_id":       chatID,
-		"action":        "delete_callback_started",
-	}).Info("Starting delete from callback")
+	movieList, err := a.DB.GetMovieList(context.Background())
+	if err != nil {
+		logutils.Log.WithError(err).Error("Failed to get movie list for menu update")
+		return
+	}
 
-	go func() {
-		movies.DeleteMovieByID(a, chatID, callbackData)
-
-		logutils.Log.WithFields(map[string]any{
-			"chat_id": chatID,
-			"action":  "delete_callback_completed",
-		}).Info("Delete completed, updating menu")
-
-		movieList, err := a.DB.GetMovieList(context.Background())
-		if err != nil {
-			logutils.Log.WithError(err).Error("Failed to get movie list for menu update")
-			return
+	filtered := movies.FilterOutPendingDeletion(movieList, a.DeleteQueue)
+	var remainingMovies []database.Movie
+	for i := range filtered {
+		if filtered[i].ID != id {
+			remainingMovies = append(remainingMovies, filtered[i])
 		}
+	}
 
-		var remainingMovies []database.Movie
-		for i := range movieList {
-			if movieList[i].ID != uint(movieID) {
-				remainingMovies = append(remainingMovies, movieList[i])
-			}
-		}
+	updateDeleteMenuWithMovies(a, chatID, update.CallbackQuery.Message.MessageID, remainingMovies)
 
-		updateDeleteMenuWithMovies(a, chatID, update.CallbackQuery.Message.MessageID, remainingMovies)
-	}()
+	if a.DeleteQueue != nil {
+		a.DeleteQueue.Enqueue(id)
+	}
 }
 
 func updateDeleteMenuWithMovies(a *app.App, chatID int64, messageID int, movieList []database.Movie) {

@@ -170,8 +170,8 @@ func TestBuildAria2Args(t *testing.T) {
 		RetryWait:               0,
 	}
 
-	t.Run("Basic args without file selection", func(t *testing.T) {
-		args := d.buildAria2Args("/tmp/test.torrent", baseCfg, nil)
+	t.Run("Basic args", func(t *testing.T) {
+		args := d.buildAria2Args("/tmp/test.torrent", baseCfg)
 
 		if args[len(args)-1] != "/tmp/test.torrent" {
 			t.Errorf("Last arg should be torrent path, got %s", args[len(args)-1])
@@ -181,33 +181,18 @@ func TestBuildAria2Args(t *testing.T) {
 		assertContainsArg(t, args, "--summary-interval=3")
 	})
 
-	t.Run("With file selection", func(t *testing.T) {
-		args := d.buildAria2Args("/tmp/test.torrent", baseCfg, []int{1, 3, 5})
-
-		found := false
-		for _, arg := range args {
-			if arg == "--select-file=1,3,5" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Error("Expected --select-file=1,3,5 in args")
-		}
-	})
-
 	t.Run("DHT enabled", func(t *testing.T) {
 		cfgDHT := *baseCfg
 		cfgDHT.EnableDHT = true
 		cfgDHT.DHTPorts = "6881-6999"
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgDHT, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgDHT)
 		assertContainsArg(t, args, "--enable-dht=true")
 	})
 
 	t.Run("DHT disabled", func(t *testing.T) {
 		cfgNoDHT := *baseCfg
 		cfgNoDHT.EnableDHT = false
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgNoDHT, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgNoDHT)
 		assertContainsArg(t, args, "--enable-dht=false")
 	})
 
@@ -215,7 +200,7 @@ func TestBuildAria2Args(t *testing.T) {
 		cfgProxy := *baseCfg
 		cfgProxy.HTTPProxy = "http://proxy:8080"
 		cfgProxy.AllProxy = "socks5://proxy:1080"
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgProxy, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgProxy)
 		assertContainsArg(t, args, "--http-proxy=http://proxy:8080")
 		assertContainsArg(t, args, "--all-proxy=socks5://proxy:1080")
 	})
@@ -223,21 +208,21 @@ func TestBuildAria2Args(t *testing.T) {
 	t.Run("User agent", func(t *testing.T) {
 		cfgUA := *baseCfg
 		cfgUA.UserAgent = "TestAgent/1.0"
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgUA, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgUA)
 		assertContainsArg(t, args, "--user-agent=TestAgent/1.0")
 	})
 
 	t.Run("Peer exchange enabled", func(t *testing.T) {
 		cfgPex := *baseCfg
 		cfgPex.EnablePeerExchange = true
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgPex, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgPex)
 		assertContainsArg(t, args, "--enable-peer-exchange=true")
 	})
 
 	t.Run("Local peer discovery disabled", func(t *testing.T) {
 		cfgLpd := *baseCfg
 		cfgLpd.EnableLocalPeerDiscovery = false
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgLpd, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgLpd)
 		assertContainsArg(t, args, "--bt-enable-lpd=false")
 	})
 
@@ -245,7 +230,7 @@ func TestBuildAria2Args(t *testing.T) {
 		cfgCrypto := *baseCfg
 		cfgCrypto.BTRequireCrypto = true
 		cfgCrypto.BTMinCryptoLevel = "arc4"
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgCrypto, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgCrypto)
 		assertContainsArg(t, args, "--bt-require-crypto=true")
 		assertContainsArg(t, args, "--bt-min-crypto-level=arc4")
 	})
@@ -253,7 +238,7 @@ func TestBuildAria2Args(t *testing.T) {
 	t.Run("Continue download", func(t *testing.T) {
 		cfgCont := *baseCfg
 		cfgCont.ContinueDownload = true
-		args := d.buildAria2Args("/tmp/test.torrent", &cfgCont, nil)
+		args := d.buildAria2Args("/tmp/test.torrent", &cfgCont)
 		assertContainsArg(t, args, "--continue=true")
 	})
 }

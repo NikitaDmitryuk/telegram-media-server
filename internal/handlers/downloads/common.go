@@ -2,6 +2,7 @@ package downloads
 
 import (
 	"context"
+	"errors"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsdownloader "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
@@ -95,6 +96,10 @@ func handleDownloadCompletion(
 	for range progressChan {
 	}
 	err := <-errChan
+	if errors.Is(err, tmsdownloader.ErrStoppedByDeletion) {
+		logutils.Log.Info("Download stopped by deletion queue (no user notification)")
+		return
+	}
 	if downloaderInstance.StoppedManually() {
 		logutils.Log.Info("Download was manually stopped")
 		a.Bot.SendMessage(chatID, tmslang.Translate("general.download_stopped", map[string]any{

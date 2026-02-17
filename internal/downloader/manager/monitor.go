@@ -19,15 +19,11 @@ func (dm *DownloadManager) monitorDownload(
 	job *downloadJob,
 	outerErrChan chan error,
 ) {
-	holdingSlot := true
-
 	defer func() {
 		dm.mu.Lock()
 		delete(dm.jobs, movieID)
 		dm.mu.Unlock()
-		if holdingSlot {
-			<-dm.semaphore
-		}
+		<-dm.semaphore
 	}()
 
 	var (
@@ -55,8 +51,7 @@ func (dm *DownloadManager) monitorDownload(
 				job.episodesChan = nil
 				continue
 			}
-			// Episode completion means the download is progressing; reset stagnation timer
-			// to avoid false 30-minute timeouts between sequential batches.
+			// Episode completion means the download is progressing; reset stagnation timer.
 			progressStagnantTime = time.Time{}
 			if updateErr := dm.db.UpdateEpisodesProgress(context.Background(), movieID, completed); updateErr != nil {
 				logutils.Log.WithError(updateErr).WithField("movie_id", movieID).Error("Failed to update episodes progress")
@@ -89,36 +84,6 @@ func (dm *DownloadManager) monitorDownload(
 							job.cancel()
 						}
 					}
-				}
-			}
-
-			// Release and re-acquire the semaphore between episodes so that
-			// queued downloads (e.g. a movie) get a fair chance to start
-			// instead of waiting for the entire series to finish.
-			if job.episodeAckChan != nil {
-				<-dm.semaphore
-				holdingSlot = false
-
-				// Yield to give processQueue a chance to grab the freed slot.
-				select {
-				case <-time.After(QueueProcessingDelay + 50*time.Millisecond):
-				case <-job.ctx.Done():
-					return
-				}
-
-				// Re-acquire a slot for the next episode (may block if all slots are occupied).
-				select {
-				case dm.semaphore <- struct{}{}:
-					holdingSlot = true
-				case <-job.ctx.Done():
-					return
-				}
-
-				// Signal the downloader to start the next episode.
-				select {
-				case job.episodeAckChan <- struct{}{}:
-				case <-job.ctx.Done():
-					return
 				}
 			}
 
@@ -190,7 +155,11 @@ func (dm *DownloadManager) monitorDownload(
 
 			if errors.Is(err, downloader.ErrStoppedByUser) {
 				logutils.Log.WithField("movie_id", movieID).Info("Download stopped by user")
-				outerErrChan <- nil
+				if job.silentStop {
+					outerErrChan <- downloader.ErrStoppedByDeletion
+				} else {
+					outerErrChan <- nil
+				}
 				return
 			}
 			if err != nil {
@@ -229,14 +198,13 @@ func (dm *DownloadManager) monitorDownload(
 		case <-updateTicker.C:
 			// Periodic logging for debugging
 			dm.mu.RLock()
-			if job, exists := dm.jobs[movieID]; exists {
+			if _, exists := dm.jobs[movieID]; exists {
 				elapsed := time.Since(downloadStartTime)
 				logutils.Log.WithFields(map[string]any{
 					"movie_id":      movieID,
 					"elapsed":       elapsed,
 					"last_progress": lastProgress,
 				}).Debug("Download status update")
-				_ = job
 			}
 			dm.mu.RUnlock()
 

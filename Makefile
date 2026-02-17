@@ -125,7 +125,7 @@ uninstall:
 format:
 	@echo "Running code formatter..."
 	golines --max-len=140 -w .
-	gofmt -s -w .
+	go run golang.org/x/tools/cmd/goimports@latest -w .
 	go mod tidy
 
 .PHONY: lint

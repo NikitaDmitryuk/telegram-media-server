@@ -10,7 +10,7 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
-	torrent "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
+	tmsfactory "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -338,7 +338,7 @@ func HandleTorrentSearchCallback(
 				_ = a.Bot.DeleteMessage(chatID, msgID)
 			}
 		}
-		downloaderInstance := torrent.NewAria2Downloader(fileName, a.Config.MoviePath, a.Config)
+		downloaderInstance := tmsfactory.NewTorrentDownloader(fileName, a.Config.MoviePath, a.Config)
 		if downloaderInstance == nil {
 			a.Bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), ui.GetEmptyKeyboard())
 			if update.CallbackQuery != nil {

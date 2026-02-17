@@ -56,7 +56,6 @@ func TestConfig(tempDir string) *config.Config {
 			BTMaxPeers:               50,
 			BTRequestPeerSpeedLimit:  "0",
 			BTMaxOpenFiles:           10,
-			SequentialMultiFile:      true,
 			MaxOverallUploadLimit:    "100K",
 			MaxUploadLimit:           "50K",
 			SeedRatio:                0.0,
@@ -493,7 +492,7 @@ func WaitForCondition(t *testing.T, condition func() bool, timeout time.Duration
 }
 
 // MockDownloader implements the downloader interface for testing.
-// It also implements downloader.EpisodeAcker for sequential multi-file tests.
+// It provides methods for controlling download behavior in tests.
 type MockDownloader struct {
 	ShouldBlock  bool
 	ShouldError  bool
@@ -507,17 +506,6 @@ type MockDownloader struct {
 	// TotalEps overrides TotalEpisodes() return value when > 0.
 	TotalEps        int
 	stoppedManually bool
-	episodeAck      <-chan struct{}
-}
-
-// SetEpisodeAck implements downloader.EpisodeAcker.
-func (m *MockDownloader) SetEpisodeAck(ack <-chan struct{}) {
-	m.episodeAck = ack
-}
-
-// EpisodeAck returns the ack channel set by the manager (useful for tests).
-func (m *MockDownloader) EpisodeAck() <-chan struct{} {
-	return m.episodeAck
 }
 
 func (m *MockDownloader) GetTitle() (string, error) {

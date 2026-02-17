@@ -1,173 +1,169 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 880" font-family="Segoe UI, Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 980" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif" font-size="13">
   <defs>
-    <marker id="a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#555"/>
+    <marker id="arr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#334155"/>
     </marker>
-    <marker id="ad" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#999"/>
+    <marker id="arrOpt" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#94a3b8"/>
     </marker>
-    <marker id="ab" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#1976d2"/>
-    </marker>
-    <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#2e7d32"/>
+    <marker id="arrUp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#2563eb"/>
     </marker>
   </defs>
 
-  <!-- Background -->
-  <rect width="880" height="880" rx="12" fill="#fafafa" stroke="#e0e0e0"/>
+  <rect width="1360" height="980" fill="#f8fafc"/>
 
-  <!-- ==================== Telegram User ==================== -->
-  <rect x="330" y="16" width="200" height="42" rx="21" fill="#2196f3" stroke="#1976d2"/>
-  <text x="430" y="42" text-anchor="middle" fill="#fff" font-weight="600">Telegram User</text>
+  <!-- User -->
+  <rect x="580" y="24" width="200" height="52" rx="26" fill="#3b82f6" stroke="#2563eb"/>
+  <text x="680" y="56" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Telegram User</text>
 
-  <!-- Arrows: User <-> Bot -->
-  <line x1="380" y1="58" x2="380" y2="102" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
-  <text x="372" y="85" text-anchor="end" fill="#888" font-size="9">links / .torrent / commands</text>
+  <!-- Bot -->
+  <rect x="120" y="106" width="1120" height="144" rx="12" fill="#eaf2ff" stroke="#93c5fd"/>
+  <text x="680" y="138" text-anchor="middle" fill="#1e40af" font-size="16" font-weight="700">Bot</text>
+  <text x="680" y="156" text-anchor="middle" fill="#2563eb" font-size="11" font-style="italic">bot.Service</text>
 
-  <line x1="480" y1="102" x2="480" y2="58" stroke="#1976d2" stroke-width="1.2" marker-end="url(#ab)"/>
-  <text x="488" y="85" fill="#1976d2" font-size="9">notifications</text>
+  <rect x="150" y="178" width="200" height="42" rx="8" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="250" y="204" text-anchor="middle" fill="#1e3a8a" font-size="12" font-weight="600">Auth</text>
 
-  <!-- ==================== Bot group ==================== -->
-  <rect x="100" y="104" width="620" height="110" rx="10" fill="#e3f2fd" stroke="#90caf9"/>
-  <text x="430" y="124" text-anchor="middle" font-weight="700" fill="#1565c0" font-size="14">Bot</text>
-  <text x="430" y="138" text-anchor="middle" fill="#1976d2" font-size="10" font-style="italic">bot.Service</text>
+  <rect x="380" y="178" width="200" height="42" rx="8" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="480" y="204" text-anchor="middle" fill="#1e3a8a" font-size="12" font-weight="600">Router</text>
 
-  <!-- Auth -->
-  <rect x="120" y="148" width="120" height="34" rx="6" fill="#fff" stroke="#90caf9"/>
-  <text x="180" y="170" text-anchor="middle" fill="#555" font-size="11" font-weight="600">Auth</text>
+  <rect x="610" y="178" width="200" height="42" rx="8" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="710" y="204" text-anchor="middle" fill="#1e3a8a" font-size="12" font-weight="600">Handlers</text>
 
-  <!-- Router -->
-  <rect x="260" y="148" width="120" height="34" rx="6" fill="#fff" stroke="#90caf9"/>
-  <text x="320" y="170" text-anchor="middle" fill="#555" font-size="11" font-weight="600">Router</text>
+  <rect x="840" y="178" width="200" height="42" rx="8" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="940" y="204" text-anchor="middle" fill="#1e3a8a" font-size="12" font-weight="600">Sessions</text>
 
-  <!-- Handlers -->
-  <rect x="400" y="148" width="160" height="34" rx="6" fill="#fff" stroke="#90caf9"/>
-  <text x="480" y="170" text-anchor="middle" fill="#555" font-size="11" font-weight="600">Handlers</text>
+  <text x="250" y="236" text-anchor="middle" fill="#64748b" font-size="10">login, roles, temp pwd</text>
+  <text x="710" y="236" text-anchor="middle" fill="#64748b" font-size="10">/ls /rm /start /temp, callbacks</text>
 
-  <!-- Session -->
-  <rect x="580" y="148" width="124" height="34" rx="6" fill="#fff" stroke="#90caf9"/>
-  <text x="642" y="170" text-anchor="middle" fill="#555" font-size="11" font-weight="600">Sessions</text>
+  <!-- App -->
+  <rect x="500" y="282" width="360" height="62" rx="10" fill="#e7fbff" stroke="#67e8f9"/>
+  <text x="680" y="309" text-anchor="middle" fill="#0f766e" font-size="15" font-weight="700">App</text>
+  <text x="680" y="327" text-anchor="middle" fill="#0891b2" font-size="11">Bot + DB + Config + DownloadManager</text>
 
-  <!-- Sub-labels under bot -->
-  <text x="142" y="198" fill="#888" font-size="9">login | roles | temp pwd</text>
-  <text x="456" y="198" fill="#888" font-size="9">/ls /rm /start /temp | callbacks</text>
+  <!-- Core -->
+  <rect x="80" y="380" width="250" height="120" rx="10" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="205" y="410" text-anchor="middle" fill="#c2410c" font-size="14" font-weight="700">Database</text>
+  <text x="205" y="430" text-anchor="middle" fill="#ea580c" font-size="11" font-style="italic">database.Database</text>
+  <text x="205" y="450" text-anchor="middle" fill="#64748b" font-size="11">SQLite</text>
+  <text x="205" y="474" text-anchor="middle" fill="#64748b" font-size="10">MovieReader | MovieWriter | AuthStore</text>
 
-  <!-- ==================== App struct ==================== -->
-  <rect x="280" y="226" width="300" height="44" rx="8" fill="#e0f7fa" stroke="#4dd0e1" stroke-width="1.5"/>
-  <text x="430" y="248" text-anchor="middle" font-weight="700" fill="#00695c" font-size="13">App</text>
-  <text x="430" y="262" text-anchor="middle" fill="#00897b" font-size="9">Bot + DB + Config + DownloadManager</text>
+  <rect x="400" y="380" width="560" height="120" rx="12" fill="#ecfdf3" stroke="#86efac"/>
+  <text x="680" y="410" text-anchor="middle" fill="#166534" font-size="16" font-weight="700">Download Manager</text>
+  <text x="680" y="430" text-anchor="middle" fill="#15803d" font-size="11" font-style="italic">manager.Service</text>
 
-  <!-- Arrow: Bot -> App -->
-  <line x1="430" y1="214" x2="430" y2="224" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="430" y="448" width="150" height="36" rx="8" fill="#ffffff" stroke="#86efac"/>
+  <text x="505" y="471" text-anchor="middle" fill="#166534" font-size="11">Queue</text>
+  <rect x="605" y="448" width="170" height="36" rx="8" fill="#ffffff" stroke="#86efac"/>
+  <text x="690" y="471" text-anchor="middle" fill="#166534" font-size="11">Semaphore</text>
+  <rect x="800" y="448" width="130" height="36" rx="8" fill="#ffffff" stroke="#86efac"/>
+  <text x="865" y="471" text-anchor="middle" fill="#166534" font-size="11">Monitor</text>
 
-  <!-- ==================== Prowlarr (optional) ==================== -->
-  <rect x="710" y="222" width="148" height="50" rx="8" fill="#fff" stroke="#bbb" stroke-dasharray="5,3"/>
-  <text x="784" y="240" text-anchor="middle" fill="#aaa" font-size="10">optional</text>
-  <text x="784" y="256" text-anchor="middle" fill="#555" font-weight="600">Prowlarr</text>
-  <line x1="642" y1="182" x2="724" y2="224" stroke="#999" stroke-width="1.1" stroke-dasharray="5,3" marker-end="url(#ad)"/>
-  <text x="700" y="200" fill="#999" font-size="9">search</text>
+  <rect x="1030" y="380" width="250" height="120" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="1155" y="406" text-anchor="middle" fill="#94a3b8" font-size="10">optional</text>
+  <text x="1155" y="432" text-anchor="middle" fill="#334155" font-size="14" font-weight="700">Prowlarr</text>
+  <text x="1155" y="452" text-anchor="middle" fill="#6b7280" font-size="11">torrent search</text>
 
-  <!-- ==================== Database ==================== -->
-  <rect x="22" y="300" width="168" height="82" rx="8" fill="#fff3e0" stroke="#ffcc80"/>
-  <text x="106" y="322" text-anchor="middle" font-weight="600" fill="#e65100">Database</text>
-  <text x="106" y="338" text-anchor="middle" fill="#e65100" font-size="10" font-style="italic">database.Database</text>
-  <text x="106" y="354" text-anchor="middle" fill="#999" font-size="10">SQLite</text>
-  <text x="106" y="370" text-anchor="middle" fill="#999" font-size="9">MovieReader | MovieWriter | AuthStore</text>
+  <!-- Downloaders -->
+  <rect x="210" y="540" width="260" height="88" rx="10" fill="#faf5ff" stroke="#d8b4fe"/>
+  <text x="340" y="572" text-anchor="middle" fill="#6b21a8" font-size="15" font-weight="700">yt-dlp</text>
+  <text x="340" y="592" text-anchor="middle" fill="#6b7280" font-size="11">streaming video</text>
+  <text x="340" y="610" text-anchor="middle" fill="#6b7280" font-size="10">YouTube | VK | RuTube | ...</text>
 
-  <!-- Arrow: App -> Database -->
-  <line x1="280" y1="258" x2="192" y2="316" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="760" y="540" width="260" height="88" rx="10" fill="#fdf2f8" stroke="#f9a8d4"/>
+  <text x="890" y="572" text-anchor="middle" fill="#be123c" font-size="15" font-weight="700">aria2</text>
+  <text x="890" y="592" text-anchor="middle" fill="#6b7280" font-size="11">torrents</text>
+  <text x="890" y="610" text-anchor="middle" fill="#6b7280" font-size="10">single-file | multi-file</text>
 
-  <!-- ==================== Download Manager ==================== -->
-  <rect x="230" y="302" width="400" height="80" rx="10" fill="#e8f5e9" stroke="#a5d6a7"/>
-  <text x="430" y="322" text-anchor="middle" font-weight="700" fill="#2e7d32" font-size="14">Download Manager</text>
-  <text x="430" y="338" text-anchor="middle" fill="#388e3c" font-size="10" font-style="italic">manager.Service</text>
+  <!-- Storage -->
+  <rect x="80" y="664" width="260" height="80" rx="10" fill="#eef2ff" stroke="#a5b4fc"/>
+  <text x="210" y="696" text-anchor="middle" fill="#3730a3" font-size="14" font-weight="700">File Manager</text>
+  <text x="210" y="716" text-anchor="middle" fill="#6b7280" font-size="10">disk space | cleanup | temp files</text>
 
-  <!-- Sub-blocks inside DM -->
-  <rect x="250" y="348" width="100" height="26" rx="5" fill="#fff" stroke="#a5d6a7"/>
-  <text x="300" y="366" text-anchor="middle" fill="#555" font-size="10">Queue</text>
+  <rect x="500" y="664" width="360" height="80" rx="10" fill="#fefce8" stroke="#fde047"/>
+  <text x="680" y="696" text-anchor="middle" fill="#a16207" font-size="14" font-weight="700">File Storage</text>
+  <text x="680" y="716" text-anchor="middle" fill="#6b7280" font-size="12">MOVIE_PATH</text>
 
-  <rect x="362" y="348" width="110" height="26" rx="5" fill="#fff" stroke="#a5d6a7"/>
-  <text x="417" y="366" text-anchor="middle" fill="#555" font-size="10">Semaphore</text>
+  <rect x="930" y="664" width="320" height="80" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="1090" y="688" text-anchor="middle" fill="#94a3b8" font-size="10">optional</text>
+  <text x="1090" y="708" text-anchor="middle" fill="#334155" font-size="14" font-weight="700">TV Compat</text>
+  <text x="1090" y="726" text-anchor="middle" fill="#6b7280" font-size="10">ffmpeg | ffprobe | remux</text>
 
-  <rect x="484" y="348" width="100" height="26" rx="5" fill="#fff" stroke="#a5d6a7"/>
-  <text x="534" y="366" text-anchor="middle" fill="#555" font-size="10">Monitor</text>
+  <!-- Output -->
+  <rect x="530" y="786" width="300" height="62" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="680" y="810" text-anchor="middle" fill="#94a3b8" font-size="10">optional</text>
+  <text x="680" y="830" text-anchor="middle" fill="#334155" font-size="14" font-weight="700">DLNA | minidlna</text>
 
-  <!-- Arrow: App -> DM -->
-  <line x1="430" y1="270" x2="430" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="580" y="886" width="200" height="56" rx="28" fill="#64748b" stroke="#475569"/>
+  <text x="680" y="920" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="700">Smart TV</text>
 
-  <!-- Arrows: DM -> downloaders -->
-  <line x1="320" y1="382" x2="230" y2="440" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
-  <line x1="530" y1="382" x2="620" y2="440" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
+  <!-- Meta -->
+  <rect x="1030" y="540" width="250" height="88" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="1155" y="566" text-anchor="middle" fill="#94a3b8" font-size="10">test infrastructure</text>
+  <text x="1155" y="590" text-anchor="middle" fill="#334155" font-size="13" font-weight="700">testutils</text>
+  <text x="1155" y="608" text-anchor="middle" fill="#6b7280" font-size="10">MockBot, DatabaseStub</text>
+  <text x="1155" y="622" text-anchor="middle" fill="#6b7280" font-size="10">TestConfig, TestDatabase</text>
 
-  <!-- downloader.Downloader label -->
-  <text x="240" y="416" fill="#888" font-size="9" font-style="italic">downloader.Downloader</text>
-  <text x="530" y="416" fill="#888" font-size="9" font-style="italic">downloader.Downloader</text>
+  <rect x="80" y="886" width="420" height="56" rx="10" fill="none" stroke="#dbe3ee"/>
+  <text x="98" y="910" fill="#334155" font-size="12" font-weight="700">Legend</text>
+  <line x1="98" y1="924" x2="136" y2="924" stroke="#334155" stroke-width="2"/>
+  <text x="144" y="928" fill="#64748b" font-size="11">required</text>
+  <line x1="232" y1="924" x2="270" y2="924" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6,4"/>
+  <text x="278" y="928" fill="#64748b" font-size="11">optional</text>
+  <text x="98" y="942" fill="#64748b" font-size="11" font-style="italic">downloader.Downloader = testable interface boundary</text>
 
-  <!-- ==================== yt-dlp ==================== -->
-  <rect x="100" y="442" width="200" height="64" rx="8" fill="#f3e5f5" stroke="#ce93d8"/>
-  <text x="200" y="466" text-anchor="middle" font-weight="600" fill="#7b1fa2">yt-dlp</text>
-  <text x="200" y="482" text-anchor="middle" fill="#999" font-size="10">streaming video</text>
-  <text x="200" y="496" text-anchor="middle" fill="#999" font-size="9">YouTube | VK | RuTube | ...</text>
+  <!-- ========== ARROWS (drawn last = always on top) ========== -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
 
-  <!-- ==================== aria2 ==================== -->
-  <rect x="540" y="442" width="200" height="64" rx="8" fill="#fce4ec" stroke="#ef9a9a"/>
-  <text x="640" y="466" text-anchor="middle" font-weight="600" fill="#c62828">aria2</text>
-  <text x="640" y="482" text-anchor="middle" fill="#999" font-size="10">torrents</text>
-  <text x="640" y="496" text-anchor="middle" fill="#999" font-size="9">single-file | multi-file</text>
+    <!-- User -> Bot : straight vertical -->
+    <line x1="660" y1="76" x2="660" y2="110" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="648" y="96" text-anchor="end" fill="#64748b" font-size="10" fill-opacity="1">links / .torrent / commands</text>
 
-  <!-- Arrows: downloaders -> File Storage -->
-  <line x1="230" y1="506" x2="340" y2="570" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
-  <line x1="610" y1="506" x2="500" y2="570" stroke="#555" stroke-width="1.5" marker-end="url(#a)"/>
+    <!-- Bot -> User (notifications) : straight vertical up -->
+    <line x1="700" y1="110" x2="700" y2="76" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrUp)"/>
+    <text x="712" y="96" fill="#2563eb" font-size="10">notifications</text>
 
-  <!-- ==================== TV Compat (optional) ==================== -->
-  <rect x="700" y="552" width="156" height="58" rx="8" fill="#fff" stroke="#bbb" stroke-dasharray="5,3"/>
-  <text x="778" y="570" text-anchor="middle" fill="#aaa" font-size="10">optional</text>
-  <text x="778" y="586" text-anchor="middle" fill="#555" font-weight="600">TV Compat</text>
-  <text x="778" y="600" text-anchor="middle" fill="#999" font-size="9">ffmpeg | ffprobe | remux</text>
-  <line x1="618" y1="582" x2="698" y2="582" stroke="#999" stroke-width="1.1" stroke-dasharray="5,3" marker-end="url(#ad)"/>
+    <!-- Bot -> App : straight vertical -->
+    <line x1="680" y1="250" x2="680" y2="286" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 
-  <!-- ==================== File Manager ==================== -->
-  <rect x="22" y="566" width="170" height="52" rx="8" fill="#e8eaf6" stroke="#9fa8da"/>
-  <text x="107" y="588" text-anchor="middle" font-weight="600" fill="#283593">File Manager</text>
-  <text x="107" y="604" text-anchor="middle" fill="#999" font-size="9">disk space | cleanup | temp files</text>
-  <line x1="250" y1="590" x2="194" y2="590" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+    <!-- App -> Database : L-shape (left then down) -->
+    <path d="M500,313 H205 V384" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 
-  <!-- ==================== File Storage ==================== -->
-  <rect x="252" y="566" width="260" height="52" rx="8" fill="#fffde7" stroke="#fff176"/>
-  <text x="382" y="588" text-anchor="middle" font-weight="600" fill="#f57f17">File Storage</text>
-  <text x="382" y="604" text-anchor="middle" fill="#999" font-size="11">MOVIE_PATH</text>
+    <!-- App -> Download Manager : straight vertical -->
+    <line x1="680" y1="344" x2="680" y2="384" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 
-  <!-- Arrow: Storage -> DLNA -->
-  <line x1="382" y1="618" x2="382" y2="668" stroke="#999" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#ad)"/>
+    <!-- Bot -> Prowlarr (optional) : straight vertical -->
+    <line x1="1155" y1="250" x2="1155" y2="384" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#arrOpt)"/>
+    <text x="1165" y="320" fill="#94a3b8" font-size="10">search</text>
 
-  <!-- ==================== DLNA ==================== -->
-  <rect x="288" y="670" width="190" height="48" rx="8" fill="#fff" stroke="#bbb" stroke-dasharray="5,3"/>
-  <text x="383" y="689" text-anchor="middle" fill="#aaa" font-size="10">optional</text>
-  <text x="383" y="705" text-anchor="middle" fill="#555" font-weight="600">DLNA | minidlna</text>
+    <!-- DM -> yt-dlp : straight vertical -->
+    <line x1="435" y1="500" x2="435" y2="544" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 
-  <!-- Arrow: DLNA -> TV -->
-  <line x1="383" y1="718" x2="383" y2="764" stroke="#999" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#ad)"/>
+    <!-- DM -> aria2 : straight vertical -->
+    <line x1="860" y1="500" x2="860" y2="544" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 
-  <!-- ==================== TV / Smart TV ==================== -->
-  <rect x="310" y="766" width="146" height="40" rx="20" fill="#78909c" stroke="#546e7a"/>
-  <text x="383" y="791" text-anchor="middle" fill="#fff" font-weight="600">Smart TV</text>
+    <!-- interface label between DM and downloaders -->
+    <text x="680" y="526" text-anchor="middle" fill="#64748b" font-size="10" font-style="italic">downloader.Downloader</text>
 
-  <!-- ==================== testutils (dashed) ==================== -->
-  <rect x="700" y="380" width="156" height="80" rx="8" fill="#fafafa" stroke="#bbb" stroke-dasharray="5,3"/>
-  <text x="778" y="400" text-anchor="middle" fill="#aaa" font-size="10">test infrastructure</text>
-  <text x="778" y="418" text-anchor="middle" fill="#555" font-weight="600" font-size="12">testutils</text>
-  <text x="778" y="436" text-anchor="middle" fill="#888" font-size="9">MockBot | DatabaseStub</text>
-  <text x="778" y="450" text-anchor="middle" fill="#888" font-size="9">TestConfig | TestDatabase</text>
+    <!-- DM -> File Manager : routed along left margin to avoid yt-dlp -->
+    <path d="M400,500 V520 H60 V704 H84" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 
-  <!-- ==================== Legend ==================== -->
-  <rect x="22" y="802" width="260" height="60" rx="6" fill="none" stroke="#ddd"/>
-  <text x="34" y="822" fill="#555" font-size="11" font-weight="600">Legend</text>
-  <line x1="34" y1="838" x2="64" y2="838" stroke="#555" stroke-width="1.5"/>
-  <text x="70" y="842" fill="#888" font-size="10">required dependency</text>
-  <line x1="150" y1="838" x2="180" y2="838" stroke="#999" stroke-width="1.2" stroke-dasharray="5,3"/>
-  <text x="186" y="842" fill="#888" font-size="10">optional</text>
-  <text x="34" y="856" fill="#00897b" font-size="10" font-style="italic">interface name</text>
-  <text x="145" y="856" fill="#888" font-size="10">= testable boundary</text>
+    <!-- DM -> TV Compat (optional) : routed along right margin to avoid aria2 -->
+    <path d="M960,500 V520 H1300 V704 H1246" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#arrOpt)"/>
+
+    <!-- yt-dlp -> File Storage : L-shape (down then right) -->
+    <path d="M360,628 V704 H504" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+    <!-- aria2 -> File Storage : straight vertical -->
+    <line x1="810" y1="628" x2="810" y2="668" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+    <!-- File Storage -> DLNA (optional) : straight vertical -->
+    <line x1="680" y1="744" x2="680" y2="790" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#arrOpt)"/>
+
+    <!-- DLNA -> Smart TV (optional) : straight vertical -->
+    <line x1="680" y1="848" x2="680" y2="890" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#arrOpt)"/>
+
+  </g>
 </svg>
