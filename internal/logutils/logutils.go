@@ -136,7 +136,7 @@ func (l *Logger) formatFields() string {
 		if !first {
 			sb.WriteString(" ")
 		}
-		sb.WriteString(fmt.Sprintf("%s=%v", k, v))
+		fmt.Fprintf(&sb, "%s=%v", k, v)
 		first = false
 	}
 	sb.WriteString("]")
