@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -27,18 +28,43 @@ type Service interface {
 }
 
 type Bot struct {
-	Api    *tgbotapi.BotAPI
-	Config *tmsconfig.Config
+	Api        *tgbotapi.BotAPI
+	Config     *tmsconfig.Config
+	httpClient *http.Client
 }
 
 func InitBot(config *tmsconfig.Config) (*Bot, error) {
-	api, err := tgbotapi.NewBotAPI(config.BotToken)
+	httpClient, err := buildHTTPClient(config.TelegramProxy)
+	if err != nil {
+		return nil, fmt.Errorf("invalid TELEGRAM_PROXY: %w", err)
+	}
+
+	api, err := tgbotapi.NewBotAPIWithClient(config.BotToken, tgbotapi.APIEndpoint, httpClient)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Error creating bot")
 		return nil, fmt.Errorf("error creating bot: %w", err)
 	}
 	logutils.Log.Infof("Authorized on account %s", api.Self.UserName)
-	return &Bot{Api: api, Config: config}, nil
+	return &Bot{Api: api, Config: config, httpClient: httpClient}, nil
+}
+
+func buildHTTPClient(proxyAddr string) (*http.Client, error) {
+	if proxyAddr == "" {
+		return http.DefaultClient, nil
+	}
+
+	proxyURL, err := url.Parse(proxyAddr)
+	if err != nil {
+		return nil, fmt.Errorf("parse proxy URL %q: %w", proxyAddr, err)
+	}
+
+	logutils.Log.Infof("Using Telegram proxy: %s", proxyURL.Redacted())
+
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		},
+	}, nil
 }
 
 func (b *Bot) SendMessage(chatID int64, text string, keyboard any) {
@@ -73,7 +99,7 @@ func (b *Bot) DownloadFile(fileID, fileName string) error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := b.httpClient.Do(req)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to download file")
 		return err

@@ -98,11 +98,16 @@ install: build
 	install -Dm644 telegram-media-server.service $(SERVICE_DIR)/telegram-media-server.service
 	install -d $(LOCALES_DEST)
 	install -Dm644 $(LOCALES_SRC)/* $(LOCALES_DEST)/
+	@if [ -f $(CONFIG_DIR)/.env ]; then \
+		echo "Merging new parameters into existing .env..."; \
+		bash scripts/merge-env.sh $(CONFIG_DIR)/.env $(CONFIG_DIR)/.env.example; \
+	else \
+		echo "Please create $(CONFIG_DIR)/.env based on $(CONFIG_DIR)/.env.example"; \
+	fi
 	systemctl daemon-reload
 	systemctl enable --now telegram-media-server
 	systemctl restart telegram-media-server
 	@echo "Installation complete"
-	@echo "Please configure the service by creating a .env file in $(CONFIG_DIR) based on the provided $(CONFIG_DIR)/.env.example and then restarting the service."
 
 .PHONY: uninstall
 uninstall:
@@ -268,6 +273,16 @@ pre-commit-update:
 		exit 1; \
 	fi
 
+.PHONY: env-update
+env-update:
+	@echo "Merging new parameters from .env.example into .env..."
+	@bash scripts/merge-env.sh $(CONFIG_DIR)/.env $(CONFIG_DIR)/.env.example
+
+.PHONY: env-update-local
+env-update-local:
+	@echo "Merging new parameters from .env.example into .env (local)..."
+	@bash scripts/merge-env.sh .env .env.example
+
 .PHONY: help
 help:
 	@echo "Available targets:"
@@ -304,6 +319,10 @@ help:
 	@echo "Docker:"
 	@echo "  run            - Run with Docker Compose"
 	@echo "  stop           - Stop Docker Compose services"
+	@echo ""
+	@echo "Configuration:"
+	@echo "  env-update     - Merge new .env.example params into system .env"
+	@echo "  env-update-local - Merge new .env.example params into local .env"
 	@echo ""
 	@echo "Utility:"
 	@echo "  check          - Run all checks (lint + vet + test-unit)"

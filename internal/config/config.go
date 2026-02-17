@@ -31,6 +31,7 @@ func NewConfig() (*Config, error) {
 		AdminPassword:       getEnv("ADMIN_PASSWORD", ""),
 		RegularPassword:     getEnv("REGULAR_PASSWORD", ""),
 		Lang:                getEnv("LANG", "en"),
+		TelegramProxy:       getEnv("TELEGRAM_PROXY", ""),
 		Proxy:               getEnv("PROXY", ""),
 		ProxyDomains:        getEnv("PROXY_DOMAINS", ""),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
@@ -128,6 +129,7 @@ type Config struct {
 	AdminPassword       string
 	RegularPassword     string
 	Lang                string
+	TelegramProxy       string
 	Proxy               string
 	ProxyDomains        string
 	LogLevel            string
