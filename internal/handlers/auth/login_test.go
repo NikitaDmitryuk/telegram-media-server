@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -16,6 +16,7 @@ import (
 // MockDatabaseLogin embeds DatabaseStub and overrides Login to record calls.
 type MockDatabaseLogin struct {
 	testutils.DatabaseStub
+	mu             sync.Mutex
 	loginResult    bool
 	loginError     error
 	loginCallCount int
@@ -34,6 +35,7 @@ func NewMockDatabaseLogin() *MockDatabaseLogin {
 }
 
 func (m *MockDatabaseLogin) Login(_ context.Context, password string, chatID int64, userName string, cfg *config.Config) (bool, error) {
+	m.mu.Lock()
 	m.loginCallCount++
 	m.lastLoginCall = &LoginCall{
 		Password: password,
@@ -41,16 +43,9 @@ func (m *MockDatabaseLogin) Login(_ context.Context, password string, chatID int
 		UserName: userName,
 		Config:   cfg,
 	}
-	return m.loginResult, m.loginError
-}
-
-// newTestApp builds an *app.App with the given mock bot, database, and config.
-func newTestApp(bot *testutils.MockBot, db database.Database, cfg *config.Config) *app.App {
-	return &app.App{
-		Bot:    bot,
-		DB:     db,
-		Config: cfg,
-	}
+	result, err := m.loginResult, m.loginError
+	m.mu.Unlock()
+	return result, err
 }
 
 // runLoginTests is a shared helper that calls the real LoginHandler.
@@ -87,7 +82,7 @@ func runLoginTests(t *testing.T, tests []struct {
 				},
 			}
 
-			a := newTestApp(bot, db, cfg)
+			a := &app.App{Bot: bot, DB: db, Config: cfg}
 			LoginHandler(a, update)
 
 			if db.loginCallCount != tt.expectedLoginCalls {
@@ -239,7 +234,7 @@ func TestLoginHandler_Failures(t *testing.T) {
 				},
 			}
 
-			a := newTestApp(bot, db, cfg)
+			a := &app.App{Bot: bot, DB: db, Config: cfg}
 			LoginHandler(a, update)
 
 			if db.loginCallCount != tt.expectedLoginCalls {
@@ -312,7 +307,7 @@ func TestLoginHandler_EdgeCases(t *testing.T) {
 			bot := &testutils.MockBot{}
 			db := NewMockDatabaseLogin()
 			cfg := &config.Config{}
-			a := newTestApp(bot, db, cfg)
+			a := &app.App{Bot: bot, DB: db, Config: cfg}
 
 			panicked := false
 			func() {
@@ -339,12 +334,10 @@ func TestLoginHandler_ConcurrentAccess(t *testing.T) {
 		t.Skip("Skipping concurrent access test in short mode")
 	}
 
-	bot := &testutils.MockBot{}
 	db := NewMockDatabaseLogin()
 	db.loginResult = true
 	cfg := &config.Config{AdminPassword: "admin123"}
 
-	a := newTestApp(bot, db, cfg)
 	update := &tgbotapi.Update{
 		Message: &tgbotapi.Message{
 			Chat: &tgbotapi.Chat{ID: 123},
@@ -362,6 +355,8 @@ func TestLoginHandler_ConcurrentAccess(t *testing.T) {
 				}
 				done <- true
 			}()
+			bot := &testutils.MockBot{}
+			a := &app.App{Bot: bot, DB: db, Config: cfg}
 			LoginHandler(a, update)
 		}()
 	}
@@ -370,7 +365,10 @@ func TestLoginHandler_ConcurrentAccess(t *testing.T) {
 		<-done
 	}
 
-	if db.loginCallCount != 10 {
-		t.Errorf("Expected 10 login calls, got %d", db.loginCallCount)
+	db.mu.Lock()
+	count := db.loginCallCount
+	db.mu.Unlock()
+	if count != 10 {
+		t.Errorf("Expected 10 login calls, got %d", count)
 	}
 }

@@ -37,6 +37,12 @@ type Aria2Downloader struct {
 	cmd             *exec.Cmd
 	stoppedManually bool
 	config          *config.Config
+	episodeAck      <-chan struct{} // injected by manager; blocks between sequential episodes
+}
+
+// SetEpisodeAck implements downloader.EpisodeAcker.
+func (d *Aria2Downloader) SetEpisodeAck(ack <-chan struct{}) {
+	d.episodeAck = ack
 }
 
 func NewAria2Downloader(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
@@ -335,6 +341,18 @@ func (d *Aria2Downloader) runMultiFileDownloadSequential(
 
 		if episodesChan != nil && videoDone > 0 {
 			episodesChan <- videoDone
+		}
+
+		// Between episodes (not after the last one), wait for the manager to
+		// release and re-acquire the semaphore slot so queued downloads get a
+		// fair chance to start.
+		if i < len(indices) && d.episodeAck != nil {
+			select {
+			case <-d.episodeAck:
+			case <-ctx.Done():
+				errChan <- ctx.Err()
+				return
+			}
 		}
 	}
 	errChan <- nil

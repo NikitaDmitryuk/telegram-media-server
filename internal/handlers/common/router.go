@@ -2,6 +2,7 @@ package common
 
 import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/admin"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/auth"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/callbacks"
 	tmsdownloads "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
@@ -9,6 +10,7 @@ import (
 	tmssession "github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/session"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/models"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -63,6 +65,12 @@ func handleCommand(
 		movies.DeleteMoviesHandler(a, update)
 	case "temp":
 		auth.GenerateTempPasswordHandler(a, update)
+	case "logs":
+		if !auth.CheckAccessWithRole(update, []models.UserRole{models.AdminRole}, a.DB) {
+			a.Bot.SendMessage(update.Message.Chat.ID, lang.Translate("error.authentication.access_denied", nil), nil)
+			return
+		}
+		admin.LogsHandler(a, update)
 	default:
 		a.Bot.SendMessage(update.Message.Chat.ID, lang.Translate("error.commands.unknown_command", nil), nil)
 	}

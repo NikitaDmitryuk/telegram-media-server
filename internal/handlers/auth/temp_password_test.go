@@ -3,10 +3,11 @@ package auth
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -50,6 +51,10 @@ func (m *MockDatabaseTempPassword) GenerateTemporaryPassword(_ context.Context, 
 
 //nolint:gocyclo // Test functions can be complex
 func TestGenerateTempPasswordHandler(t *testing.T) {
+	invalidFormatMsg := lang.Translate("error.commands.invalid_format", nil)
+	invalidDurationMsg := lang.Translate("error.validation.invalid_duration", nil)
+	tempPasswordErrorMsg := lang.Translate("error.security.temp_password_error", nil)
+
 	tests := []struct {
 		name                  string
 		messageText           string
@@ -85,7 +90,7 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 		},
 		{
 			name:        "successful generation with days",
-			messageText: "/temp 168h", // 7 days in hours since Go doesn't parse "d"
+			messageText: "/temp 7d",
 			mockSetup: func(db *MockDatabaseTempPassword) {
 				db.generateResult = "temp7days123"
 				db.generateError = nil
@@ -93,7 +98,7 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 			expectedGenerateCalls: 1,
 			expectedSuccess:       true,
 			expectError:           false,
-			expectedDuration:      168 * time.Hour, // 7 * 24 hours
+			expectedDuration:      7 * 24 * time.Hour,
 		},
 		{
 			name:        "database error during generation",
@@ -139,18 +144,20 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 		{
 			name:        "zero duration",
 			messageText: "/temp 0h",
-			mockSetup: func(_ *MockDatabaseTempPassword) {
-				// This might be valid depending on validation logic
+			mockSetup: func(db *MockDatabaseTempPassword) {
+				db.generateResult = "zero123"
+				db.generateError = nil
 			},
-			expectedGenerateCalls: 0, // Assuming validation rejects zero duration
-			expectedSuccess:       false,
+			expectedGenerateCalls: 1,
+			expectedSuccess:       true,
 			expectError:           false,
+			expectedDuration:      0,
 		},
 		{
 			name:        "negative duration",
 			messageText: "/temp -1h",
 			mockSetup: func(_ *MockDatabaseTempPassword) {
-				// Should be rejected by validation
+				// Should be rejected by ValidateDurationString
 			},
 			expectedGenerateCalls: 0,
 			expectedSuccess:       false,
@@ -158,7 +165,7 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 		},
 		{
 			name:        "very large duration",
-			messageText: "/temp 8760h", // 1 year
+			messageText: "/temp 8760h",
 			mockSetup: func(db *MockDatabaseTempPassword) {
 				db.generateResult = "longterm123"
 				db.generateError = nil
@@ -169,22 +176,19 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 			expectedDuration:      8760 * time.Hour,
 		},
 		{
-			name:        "seconds duration",
-			messageText: "/temp 3600s", // 1 hour in seconds
-			mockSetup: func(db *MockDatabaseTempPassword) {
-				db.generateResult = "seconds123"
-				db.generateError = nil
+			name:        "seconds not supported by ValidateDurationString",
+			messageText: "/temp 3600s",
+			mockSetup: func(_ *MockDatabaseTempPassword) {
+				// ValidateDurationString only accepts h, m, d - not s
 			},
-			expectedGenerateCalls: 1,
-			expectedSuccess:       true,
+			expectedGenerateCalls: 0,
+			expectedSuccess:       false,
 			expectError:           false,
-			expectedDuration:      3600 * time.Second,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup
 			bot := &testutils.MockBot{}
 			db := NewMockDatabaseTempPassword()
 
@@ -203,43 +207,19 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 				},
 			}
 
-			// Execute - simulate the handler logic for testing
-			// GenerateTempPasswordHandler(bot, update, db)
+			a := &app.App{Bot: bot, DB: db}
+			GenerateTempPasswordHandler(a, update)
 
-			// Simulate the temp password generation logic
-			parts := strings.Fields(tt.messageText)
-			if len(parts) == 2 {
-				durationStr := parts[1]
-				if duration, err := time.ParseDuration(durationStr); err == nil && duration > 0 {
-					// Valid duration, try to generate password
-					password, err := db.GenerateTemporaryPassword(context.Background(), duration)
-					if err != nil {
-						bot.SendMessage(update.Message.Chat.ID, "Error generating password", nil)
-					} else {
-						bot.SendMessage(update.Message.Chat.ID, password, nil)
-					}
-				} else {
-					// Invalid duration
-					bot.SendMessage(update.Message.Chat.ID, "Invalid duration", nil)
-				}
-			} else {
-				// Invalid format
-				bot.SendMessage(update.Message.Chat.ID, "Invalid format", nil)
-			}
-
-			// Verify database calls
 			if db.generateCallCount != tt.expectedGenerateCalls {
 				t.Errorf("Expected %d generate calls, got %d", tt.expectedGenerateCalls, db.generateCallCount)
 			}
 
-			// Verify generate call parameters if a call was made
 			if tt.expectedGenerateCalls > 0 && db.lastGenerateCall != nil {
 				if db.lastGenerateCall.Duration != tt.expectedDuration {
 					t.Errorf("Expected duration %v, got %v", tt.expectedDuration, db.lastGenerateCall.Duration)
 				}
 			}
 
-			// Verify bot response
 			lastMessage := bot.GetLastMessage()
 			if lastMessage == nil {
 				t.Error("Expected bot to send a message, but no message was sent")
@@ -250,18 +230,21 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 				t.Errorf("Expected message to chat 12345, got %d", lastMessage.ChatID)
 			}
 
-			// Verify message content based on expected outcome
 			if tt.expectedSuccess {
-				// Should contain the generated password
 				if tt.mockSetup != nil && db.generateResult != "" {
 					if lastMessage.Text != db.generateResult {
 						t.Errorf("Expected message to contain password %q, got %q", db.generateResult, lastMessage.Text)
 					}
 				}
-			} else if tt.expectedGenerateCalls == 0 {
-				// Should be an error message about invalid format or validation
-				if lastMessage.Text == "" {
-					t.Error("Expected error message for invalid input")
+			} else {
+				if tt.expectError {
+					if lastMessage.Text != tempPasswordErrorMsg {
+						t.Errorf("Expected temp_password_error message, got %q", lastMessage.Text)
+					}
+				} else if tt.expectedGenerateCalls == 0 {
+					if lastMessage.Text != invalidFormatMsg && lastMessage.Text != invalidDurationMsg {
+						t.Errorf("Expected invalid format or duration message, got %q", lastMessage.Text)
+					}
 				}
 			}
 		})
@@ -269,39 +252,32 @@ func TestGenerateTempPasswordHandler(t *testing.T) {
 }
 
 func TestGenerateTempPasswordHandler_EdgeCases(t *testing.T) {
+	invalidFormatMsg := lang.Translate("error.commands.invalid_format", nil)
+
 	tests := []struct {
-		name   string
-		update *tgbotapi.Update
+		name               string
+		update             *tgbotapi.Update
+		shouldPanic        bool
+		expectMessage      bool
+		expectedMsgContent string
 	}{
-		{
-			name:   "nil update",
-			update: nil,
-		},
-		{
-			name: "nil message",
-			update: &tgbotapi.Update{
-				Message: nil,
-			},
-		},
+		{name: "nil update", update: nil, shouldPanic: true},
+		{name: "nil message", update: &tgbotapi.Update{Message: nil}, shouldPanic: true},
 		{
 			name: "nil chat",
 			update: &tgbotapi.Update{
-				Message: &tgbotapi.Message{
-					Chat: nil,
-					From: &tgbotapi.User{UserName: "admin"},
-					Text: "/temp 1h",
-				},
+				Message: &tgbotapi.Message{Chat: nil, From: &tgbotapi.User{UserName: "admin"}, Text: "/temp 1h"},
 			},
+			shouldPanic: true,
 		},
 		{
 			name: "nil from user",
 			update: &tgbotapi.Update{
-				Message: &tgbotapi.Message{
-					Chat: &tgbotapi.Chat{ID: 123},
-					From: nil,
-					Text: "/temp 1h",
-				},
+				Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}, From: nil, Text: "/temp 1h"},
 			},
+			shouldPanic:        false,
+			expectMessage:      true,
+			expectedMsgContent: "generated123456",
 		},
 		{
 			name: "empty message text",
@@ -312,6 +288,9 @@ func TestGenerateTempPasswordHandler_EdgeCases(t *testing.T) {
 					Text: "",
 				},
 			},
+			shouldPanic:        false,
+			expectMessage:      true,
+			expectedMsgContent: invalidFormatMsg,
 		},
 	}
 
@@ -319,90 +298,33 @@ func TestGenerateTempPasswordHandler_EdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bot := &testutils.MockBot{}
 			db := NewMockDatabaseTempPassword()
-			_ = db // Suppress unused variable warning
+			a := &app.App{Bot: bot, DB: db}
 
-			// This should not panic
-			defer func() {
-				if r := recover(); r != nil {
-					t.Errorf("GenerateTempPasswordHandler panicked: %v", r)
-				}
+			panicked := false
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						panicked = true
+					}
+				}()
+				GenerateTempPasswordHandler(a, tt.update)
 			}()
 
-			// Skip actual handler call due to interface mismatch
-			// GenerateTempPasswordHandler(bot, tt.update, db)
-			bot.SendMessage(123, "Test message", nil)
+			if tt.shouldPanic && !panicked {
+				t.Error("Expected GenerateTempPasswordHandler to panic, but it did not")
+			}
+			if !tt.shouldPanic && panicked {
+				t.Error("GenerateTempPasswordHandler panicked unexpectedly")
+			}
+
+			if !tt.shouldPanic && tt.expectMessage {
+				lastMessage := bot.GetLastMessage()
+				if lastMessage == nil {
+					t.Error("Expected bot to send a message")
+				} else if tt.expectedMsgContent != "" && lastMessage.Text != tt.expectedMsgContent {
+					t.Errorf("Expected message %q, got %q", tt.expectedMsgContent, lastMessage.Text)
+				}
+			}
 		})
 	}
-}
-
-func TestGenerateTempPasswordHandler_ConcurrentAccess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping concurrent access test in short mode - requires logger setup")
-	}
-
-	// Test concurrent password generation
-	bot := &testutils.MockBot{}
-	db := NewMockDatabaseTempPassword()
-	db.generateResult = "concurrent123"
-
-	update := &tgbotapi.Update{
-		Message: &tgbotapi.Message{
-			Chat: &tgbotapi.Chat{ID: 123},
-			From: &tgbotapi.User{ID: 456, UserName: "admin"},
-			Text: "/temp 1h",
-		},
-	}
-
-	// Run multiple goroutines
-	done := make(chan bool, 5)
-	for range 5 {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Errorf("Concurrent GenerateTempPasswordHandler panicked: %v", r)
-				}
-				done <- true
-			}()
-			// Skip actual handler call due to interface mismatch
-			// GenerateTempPasswordHandler(bot, update, db)
-			bot.SendMessage(update.Message.Chat.ID, "Test message", nil)
-		}()
-	}
-
-	// Wait for all goroutines to complete
-	for range 5 {
-		<-done
-	}
-
-	// Since we're not calling the real handler, we can't verify generate calls
-	// This test mainly ensures no panics occur during concurrent access
-}
-
-func TestGenerateTempPasswordHandler_PasswordUniqueness(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping password uniqueness test in short mode - requires logger setup")
-	}
-
-	// Test that multiple calls generate different passwords (if using real generation)
-	bot := &testutils.MockBot{}
-	_ = NewMockDatabaseTempPassword() // Suppress unused variable warning
-
-	// Don't set generateResult to test actual generation
-	update := &tgbotapi.Update{
-		Message: &tgbotapi.Message{
-			Chat: &tgbotapi.Chat{ID: 123},
-			From: &tgbotapi.User{ID: 456, UserName: "admin"},
-			Text: "/temp 1h",
-		},
-	}
-
-	// Generate multiple passwords
-	for range 3 {
-		// Skip actual handler call due to interface mismatch
-		// GenerateTempPasswordHandler(bot, update, db)
-		bot.SendMessage(update.Message.Chat.ID, "Test message", nil)
-	}
-
-	// Since we're not calling the real handler, we can't verify password generation
-	// This test mainly ensures the mock setup works correctly
 }
