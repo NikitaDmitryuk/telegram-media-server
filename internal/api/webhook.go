@@ -27,7 +27,8 @@ type WebhookPayload struct {
 }
 
 // SendCompletionWebhook POSTs the payload to webhookURL asynchronously (best effort, with retries).
-func SendCompletionWebhook(webhookURL string, movieID uint, title, status, errMsg string) {
+// If authToken is non-empty, sends Authorization: Bearer <authToken> (e.g. for OpenClaw hooks).
+func SendCompletionWebhook(webhookURL, authToken string, movieID uint, title, status, errMsg string) {
 	if webhookURL == "" {
 		return
 	}
@@ -44,10 +45,10 @@ func SendCompletionWebhook(webhookURL string, movieID uint, title, status, errMs
 		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Webhook: failed to marshal payload")
 		return
 	}
-	go doSendWithRetry(webhookURL, body, movieID, eventID)
+	go doSendWithRetry(webhookURL, authToken, body, movieID, eventID)
 }
 
-func doSendWithRetry(webhookURL string, body []byte, movieID uint, eventID string) {
+func doSendWithRetry(webhookURL, authToken string, body []byte, movieID uint, eventID string) {
 	client := &http.Client{Timeout: webhookTimeout}
 	for attempt := 0; attempt <= webhookMaxRetries; attempt++ {
 		if attempt > 0 {
@@ -61,6 +62,9 @@ func doSendWithRetry(webhookURL string, body []byte, movieID uint, eventID strin
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
+		if authToken != "" {
+			req.Header.Set("Authorization", "Bearer "+authToken)
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			logutils.Log.WithError(err).

@@ -104,7 +104,7 @@ func handleDownloadCompletion(
 	if downloaderInstance.StoppedManually() {
 		logutils.Log.Info("Download was manually stopped")
 		if a.Config.TMSWebhookURL != "" {
-			api.SendCompletionWebhook(a.Config.TMSWebhookURL, movieID, videoTitle, "stopped", "")
+			api.SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, videoTitle, "stopped", "")
 		}
 		return
 	}
@@ -119,7 +119,7 @@ func handleDownloadCompletion(
 			}), nil)
 		}
 		if a.Config.TMSWebhookURL != "" {
-			api.SendCompletionWebhook(a.Config.TMSWebhookURL, movieID, videoTitle, "failed", err.Error())
+			api.SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, videoTitle, "failed", err.Error())
 		}
 		return
 	}
@@ -133,6 +133,6 @@ func handleDownloadCompletion(
 		logutils.Log.WithError(err).Error("Failed to delete temporary files after download")
 	}
 	if a.Config.TMSWebhookURL != "" {
-		api.SendCompletionWebhook(a.Config.TMSWebhookURL, movieID, videoTitle, "completed", "")
+		api.SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, videoTitle, "completed", "")
 	}
 }
