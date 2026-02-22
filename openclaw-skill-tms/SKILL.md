@@ -1,19 +1,21 @@
 ---
 name: tms
-version: "1.0.2"
+version: "1.0.4"
 description: Manage downloads via Telegram Media Server (TMS) REST API — add by URL (video/magnet/torrent), list, delete, search torrents.
 metadata:
-  {"openclaw":{"requires":{"env":["TMS_API_URL","TMS_API_KEY"]},"primaryEnv":"TMS_API_KEY"}}
+  {"openclaw":{"requires":{"env":[]},"primaryEnv":"TMS_API_URL"}}
 ---
 
 # TMS (Telegram Media Server) API skill
 
 Use this skill when the user wants to add downloads, check download status, stop a download, or search for torrents via the TMS backend. All requests go to the TMS REST API.
 
+**How to use:** This skill does not add a "tms" command. The agent must make HTTP requests (GET/POST/DELETE) to the endpoints below. **Base URL:** use env `TMS_API_URL` if set; otherwise when TMS and OpenClaw run on the **same host**, use default **`http://127.0.0.1:8080`** (TMS default API listen). Do not add a trailing slash. To get the full API contract, fetch **`{base_url}/api/v1/openapi-llm.yaml`** (e.g. `http://127.0.0.1:8080/api/v1/openapi-llm.yaml`).
+
 ## Configuration
 
-- **Base URL:** from environment variable `TMS_API_URL` (e.g. `http://tms-host:8080`).
-- **Authentication:** send every API request with either `Authorization: Bearer <TMS_API_KEY>` or header `X-API-Key: <TMS_API_KEY>` (value from env `TMS_API_KEY`).
+- **Base URL:** optional. From env `TMS_API_URL` (e.g. `http://tms-host:8080`). When not set and agent runs on the same host as TMS, use **`http://127.0.0.1:8080`** (TMS default).
+- **Authentication:** optional. When TMS and OpenClaw run on the **same host**, TMS accepts requests from localhost without a key — `TMS_API_KEY` can be omitted. When OpenClaw runs on another host (or you want auth), set `TMS_API_KEY` and send every API request with either `Authorization: Bearer <TMS_API_KEY>` or header `X-API-Key: <TMS_API_KEY>`.
 
 ## Operations
 
@@ -29,7 +31,7 @@ Use this skill when the user wants to add downloads, check download status, stop
 
 ## Full API spec for tools
 
-Machine-readable OpenAPI spec for LLM/tool use: **GET {TMS_API_URL}/api/v1/openapi-llm.yaml** — fetch this URL to get the full contract (parameters, schemas, examples) when building or invoking API calls.
+**Exact URL:** `{base_url}/api/v1/openapi-llm.yaml` where base_url is `TMS_API_URL` if set, else `http://127.0.0.1:8080` for same-host. Example: `http://127.0.0.1:8080/api/v1/openapi-llm.yaml`. Use this to get the full contract (parameters, schemas, examples) when building or invoking API calls.
 
 ## Webhook (optional)
 

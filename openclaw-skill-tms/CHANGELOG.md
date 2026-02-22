@@ -2,6 +2,15 @@
 
 All notable changes to this skill are documented here.
 
+## [1.0.4] - Optional TMS_API_URL (default for same-host)
+
+- **TMS_API_URL is optional:** When agent and TMS run on the same host, default base URL is `http://127.0.0.1:8080` (TMS default API listen). No env vars are required for same-host; skill metadata `requires.env` is now `[]`.
+
+## [1.0.3] - Optional API key, clearer spec URL
+
+- **TMS_API_KEY is optional:** When TMS and OpenClaw run on the same host, requests from localhost are accepted without a key; only `TMS_API_URL` was required (now also optional).
+- **OpenAPI spec for agents:** SKILL.md now states exactly where to get the API contract: `{base_url}/api/v1/openapi-llm.yaml` (with default for same-host).
+
 ## [1.0.2] - Version bump
 
 - Version bump (1.0.1 was already released).
