@@ -30,6 +30,8 @@ type Service interface {
 	StopDownloadSilent(movieID uint) error
 	StopAllDownloads()
 	GetNotificationChan() <-chan QueueNotification
+	GetActiveDownloads() []uint
+	GetQueueItems() []map[string]any
 }
 
 // conversionJob is sent to the conversion worker; Done is closed when conversion (or skip) is finished.

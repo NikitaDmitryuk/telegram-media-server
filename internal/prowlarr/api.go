@@ -1,9 +1,11 @@
 package prowlarr
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/go-resty/resty/v2"
@@ -43,6 +45,35 @@ func NewProwlarr(baseURL, apiKey string) *Prowlarr {
 }
 
 func (p *Prowlarr) SearchTorrents(query string, offset, limit int, indexerIDs, categories []int) (TorrentSearchPage, error) {
+	logutils.Log.Infof(
+		"Searching torrents: query='%s', offset=%d, limit=%d, indexers=%v, categories=%v",
+		query, offset, limit, indexerIDs, categories,
+	)
+	page, err := p.searchTorrents(context.Background(), query, offset, limit, indexerIDs, categories)
+	if err != nil {
+		logutils.Log.WithError(err).Error("Failed to perform search request to Prowlarr")
+		return TorrentSearchPage{}, err
+	}
+	logutils.Log.Infof("Prowlarr search returned %d results", len(page.Results))
+	return page, nil
+}
+
+// SearchTorrentsWithContext is like SearchTorrents but uses ctx for timeout/cancellation (e.g. 10–15s for API).
+func (p *Prowlarr) SearchTorrentsWithContext(
+	ctx context.Context,
+	query string,
+	offset, limit int,
+	indexerIDs, categories []int,
+) (TorrentSearchPage, error) {
+	return p.searchTorrents(ctx, query, offset, limit, indexerIDs, categories)
+}
+
+func (p *Prowlarr) searchTorrents(
+	ctx context.Context,
+	query string,
+	offset, limit int,
+	indexerIDs, categories []int,
+) (TorrentSearchPage, error) {
 	params := url.Values{}
 	params.Set("query", query)
 	if offset > 0 {
@@ -52,43 +83,33 @@ func (p *Prowlarr) SearchTorrents(query string, offset, limit int, indexerIDs, c
 		params.Set("limit", strconv.Itoa(limit))
 	}
 	if len(indexerIDs) > 0 {
-		ids := ""
+		parts := make([]string, len(indexerIDs))
 		for i, id := range indexerIDs {
-			if i > 0 {
-				ids += ","
-			}
-			ids += strconv.Itoa(id)
+			parts[i] = strconv.Itoa(id)
 		}
-		params.Set("indexerIds", ids)
+		params.Set("indexerIds", strings.Join(parts, ","))
 	}
 	for _, cat := range categories {
 		params.Add("categories", strconv.Itoa(cat))
 	}
 	params.Set("type", "search")
 
-	logutils.Log.Infof(
-		"Searching torrents: query='%s', offset=%d, limit=%d, indexers=%v, categories=%v",
-		query, offset, limit, indexerIDs, categories,
-	)
-	resp, err := p.Client.R().
+	req := p.Client.R().
+		SetContext(ctx).
 		SetQueryString(params.Encode()).
 		SetHeader("X-Api-Key", p.ApiKey).
-		SetResult(&[]map[string]any{}).
-		Get("/api/v1/search")
-
+		SetResult(&[]map[string]any{})
+	resp, err := req.Get("/api/v1/search")
 	if err != nil {
-		logutils.Log.WithError(err).Error("Failed to perform search request to Prowlarr")
 		return TorrentSearchPage{}, fmt.Errorf("failed to perform search request: %w", err)
 	}
 	if resp.IsError() {
-		logutils.Log.WithField("status", resp.Status()).Warn("Prowlarr search returned error status")
 		return TorrentSearchPage{}, fmt.Errorf("prowlarr search error: %s", resp.Status())
 	}
 	var rawResults []map[string]any
 	if result, ok := resp.Result().(*[]map[string]any); ok && result != nil {
 		rawResults = *result
 	} else {
-		logutils.Log.Error("Failed to parse search response from Prowlarr")
 		return TorrentSearchPage{}, fmt.Errorf("failed to parse search response")
 	}
 	results := make([]TorrentSearchResult, 0, len(rawResults))
@@ -119,7 +140,6 @@ func (p *Prowlarr) SearchTorrents(query string, offset, limit int, indexerIDs, c
 			Peers:       peers,
 		})
 	}
-	logutils.Log.Infof("Prowlarr search returned %d results", len(results))
 	return TorrentSearchPage{
 		Results: results,
 		Total:   len(results),

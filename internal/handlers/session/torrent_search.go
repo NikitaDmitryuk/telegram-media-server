@@ -339,13 +339,6 @@ func HandleTorrentSearchCallback(
 			}
 		}
 		downloaderInstance := tmsfactory.NewTorrentDownloader(fileName, a.Config.MoviePath, a.Config)
-		if downloaderInstance == nil {
-			a.Bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), ui.GetEmptyKeyboard())
-			if update.CallbackQuery != nil {
-				a.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
-			}
-			return true
-		}
 		DeleteSearchSession(chatID)
 		downloads.HandleDownload(a, chatID, downloaderInstance)
 		ui.SendMainMenuNoText(a.Bot, chatID)

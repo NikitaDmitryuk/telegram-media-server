@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/api"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsdownloader "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	filemanager "github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
@@ -102,21 +103,36 @@ func handleDownloadCompletion(
 	}
 	if downloaderInstance.StoppedManually() {
 		logutils.Log.Info("Download was manually stopped")
-	} else if err != nil {
+		if a.Config.TMSWebhookURL != "" {
+			api.SendCompletionWebhook(a.Config.TMSWebhookURL, movieID, videoTitle, "stopped", "")
+		}
+		return
+	}
+	if err != nil {
 		logutils.Log.WithError(err).Error("Download failed")
 		if deleteErr := filemanager.DeleteMovie(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); deleteErr != nil {
 			logutils.Log.WithError(deleteErr).Error("Failed to delete movie after download failed")
 		}
-		a.Bot.SendMessage(chatID, tmslang.Translate("error.downloads.video_download_error", map[string]any{
-			"Error": err.Error(),
-		}), nil)
-	} else {
-		logutils.Log.Info("Download completed successfully")
+		if chatID != 0 {
+			a.Bot.SendMessage(chatID, tmslang.Translate("error.downloads.video_download_error", map[string]any{
+				"Error": err.Error(),
+			}), nil)
+		}
+		if a.Config.TMSWebhookURL != "" {
+			api.SendCompletionWebhook(a.Config.TMSWebhookURL, movieID, videoTitle, "failed", err.Error())
+		}
+		return
+	}
+	logutils.Log.Info("Download completed successfully")
+	if chatID != 0 {
 		a.Bot.SendMessage(chatID, tmslang.Translate("general.video_successfully_downloaded", map[string]any{
 			"Title": videoTitle,
 		}), nil)
-		if err := filemanager.DeleteTemporaryFilesByMovieID(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); err != nil {
-			logutils.Log.WithError(err).Error("Failed to delete temporary files after download")
-		}
+	}
+	if err := filemanager.DeleteTemporaryFilesByMovieID(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); err != nil {
+		logutils.Log.WithError(err).Error("Failed to delete temporary files after download")
+	}
+	if a.Config.TMSWebhookURL != "" {
+		api.SendCompletionWebhook(a.Config.TMSWebhookURL, movieID, videoTitle, "completed", "")
 	}
 }

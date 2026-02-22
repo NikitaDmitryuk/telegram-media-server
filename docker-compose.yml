@@ -6,9 +6,17 @@ services:
     env_file: ".env"
     environment:
       - RUNNING_IN_DOCKER=true
+      # Listen on all interfaces so the host can reach the API (port mapping).
+      # Default 127.0.0.1:8080 is only reachable inside the container.
+      - TMS_API_LISTEN=0.0.0.0:8080
     volumes:
       - ${MOVIE_PATH}:/app/media
-    network_mode: host
+    ports:
+      - "8080:8080"
+    # Optional: on Linux, use network_mode: host for direct host network (e.g. better
+    # torrent peer acceptance). Then remove "ports" and set TMS_API_LISTEN=127.0.0.1:8080
+    # in .env if you only need API from the same machine.
+    # network_mode: host
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest

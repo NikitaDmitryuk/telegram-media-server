@@ -3,7 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 )
 
 const (
@@ -18,6 +20,9 @@ func (c *Config) validate() error {
 		return err
 	}
 	if err := c.validateProwlarr(); err != nil {
+		return err
+	}
+	if err := c.validateTMSAPI(); err != nil {
 		return err
 	}
 	if err := c.validateDownloadSettings(); err != nil {
@@ -72,6 +77,25 @@ func (c *Config) validateProwlarr() error {
 		}
 	}
 
+	return nil
+}
+
+func (c *Config) validateTMSAPI() error {
+	if !c.TMSAPIEnabled {
+		return nil
+	}
+	// TMS_API_KEY is optional: when empty, API accepts only requests from localhost
+	host, port, err := net.SplitHostPort(c.TMSAPIListen)
+	if err != nil {
+		return fmt.Errorf("TMS_API_LISTEN must be host:port or :port: %w", err)
+	}
+	if port == "" {
+		return errors.New("TMS_API_LISTEN must include a port")
+	}
+	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p > 65535 {
+		return errors.New("TMS_API_LISTEN port must be between 1 and 65535")
+	}
+	_ = host // host may be empty for ":8080"
 	return nil
 }
 

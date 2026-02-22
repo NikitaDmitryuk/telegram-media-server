@@ -156,8 +156,14 @@ linters:
           - mnd
           - lll
 
-      # G704: SSRF false positive -- URL comes from trusted Telegram Bot API.
+      # G704: SSRF -- URL from trusted/config sources or accepted risk.
       - path: internal/bot/bot\.go
+        linters: [gosec]
+        text: "G704:"
+      - path: internal/api/webhook\.go
+        linters: [gosec]
+        text: "G704:"
+      - path: internal/downloader/factory/factory\.go
         linters: [gosec]
         text: "G704:"
 
