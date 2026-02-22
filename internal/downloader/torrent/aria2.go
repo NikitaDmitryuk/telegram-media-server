@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,14 +37,21 @@ type Aria2Downloader struct {
 	cmd             *exec.Cmd
 	stoppedManually bool
 	config          *config.Config
+	magnetURI       string // when non-empty, download is from magnet link (torrentFileName is .magnet file path)
 }
 
 func NewAria2Downloader(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
-	return &Aria2Downloader{
+	d := &Aria2Downloader{
 		torrentFileName: torrentFileName,
 		downloadDir:     moviePath,
 		config:          cfg,
 	}
+	if strings.HasSuffix(strings.ToLower(torrentFileName), ".magnet") {
+		if uri, err := os.ReadFile(filepath.Join(moviePath, torrentFileName)); err == nil {
+			d.magnetURI = strings.TrimSpace(string(uri))
+		}
+	}
+	return d
 }
 
 func (d *Aria2Downloader) StartDownload(
@@ -51,6 +59,10 @@ func (d *Aria2Downloader) StartDownload(
 ) (progressChan chan float64, errChan chan error, episodesChan <-chan int, err error) {
 	aria2Cfg := d.config.GetAria2Settings()
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
+	aria2Source := torrentPath
+	if d.magnetURI != "" {
+		aria2Source = d.magnetURI
+	}
 
 	meta, metaErr := d.parseTorrentMeta()
 	if metaErr != nil {
@@ -63,25 +75,26 @@ func (d *Aria2Downloader) StartDownload(
 	if len(meta.Info.Files) > 0 {
 		epCh := make(chan int, len(meta.Info.Files))
 		episodesChan = epCh
-		go d.runMultiFileDownload(ctx, torrentPath, meta, &aria2Cfg, progressChan, errChan, epCh)
+		go d.runMultiFileDownload(ctx, aria2Source, meta, &aria2Cfg, progressChan, errChan, epCh)
 	} else {
-		go d.runSingleDownload(ctx, torrentPath, &aria2Cfg, progressChan, errChan)
+		go d.runSingleDownload(ctx, aria2Source, &aria2Cfg, progressChan, errChan)
 		return progressChan, errChan, nil, nil
 	}
 	return progressChan, errChan, episodesChan, nil
 }
 
 // runSingleDownload runs one aria2 process for single-file torrent or multi-file without ordering.
+// torrentPathOrMagnet is either a path to .torrent file or a magnet URI.
 func (d *Aria2Downloader) runSingleDownload(
 	ctx context.Context,
-	torrentPath string,
+	torrentPathOrMagnet string,
 	aria2Cfg *config.Aria2Config,
 	progressChan chan float64,
 	errChan chan error,
 ) {
 	defer close(errChan)
 
-	cmdArgs := d.buildAria2Args(torrentPath, aria2Cfg)
+	cmdArgs := d.buildAria2Args(torrentPathOrMagnet, aria2Cfg)
 	d.cmd = exec.CommandContext(ctx, "aria2c", cmdArgs...)
 
 	stdout, pipeErr := d.cmd.StdoutPipe()
@@ -121,10 +134,10 @@ func (d *Aria2Downloader) runSingleDownload(
 	}
 }
 
-// runMultiFileDownload runs aria2 for multi-file torrent.
+// runMultiFileDownload runs aria2 for multi-file torrent (torrentPathOrMagnet is file path; magnet uses runSingleDownload).
 func (d *Aria2Downloader) runMultiFileDownload(
 	ctx context.Context,
-	torrentPath string,
+	torrentPathOrMagnet string,
 	meta *Meta,
 	aria2Cfg *config.Aria2Config,
 	progressChan chan float64,
@@ -158,7 +171,7 @@ func (d *Aria2Downloader) runMultiFileDownload(
 		"video_episodes": totalVideo,
 	}).Info("Starting aria2c multi-file download (single instance, all files)")
 
-	cmdArgs := d.buildAria2Args(torrentPath, aria2Cfg)
+	cmdArgs := d.buildAria2Args(torrentPathOrMagnet, aria2Cfg)
 	cmd := exec.CommandContext(ctx, "aria2c", cmdArgs...)
 	d.cmd = cmd
 
@@ -449,6 +462,9 @@ func (d *Aria2Downloader) GetEarlyTvCompatibility(_ context.Context) (string, er
 }
 
 func (d *Aria2Downloader) parseTorrentMeta() (*Meta, error) {
+	if d.magnetURI != "" {
+		return d.magnetDummyMeta()
+	}
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
 
 	if err := d.validateTorrentFile(torrentPath); err != nil {
@@ -456,6 +472,51 @@ func (d *Aria2Downloader) parseTorrentMeta() (*Meta, error) {
 	}
 
 	return ParseMeta(torrentPath)
+}
+
+// magnetDummyMeta returns a minimal Meta for magnet downloads (no bencode file).
+func (d *Aria2Downloader) magnetDummyMeta() (*Meta, error) {
+	name := "Magnet download"
+	if dn := d.parseMagnetDN(d.magnetURI); dn != "" {
+		name = dn
+	}
+	return &Meta{
+		Info: struct {
+			Name   string `bencode:"name"`
+			Length int64  `bencode:"length"`
+			Files  []struct {
+				Length int64    `bencode:"length"`
+				Path   []string `bencode:"path"`
+			} `bencode:"files"`
+		}{
+			Name:   name,
+			Length: 0,
+			Files:  nil,
+		},
+	}, nil
+}
+
+// parseMagnetDN extracts dn= (display name) from a magnet URI if present.
+// The value may be URL-encoded (e.g. dn=Test%26Movie); it is decoded.
+func (*Aria2Downloader) parseMagnetDN(uri string) string {
+	const prefix = "dn="
+	start := strings.Index(uri, prefix)
+	if start == -1 {
+		return ""
+	}
+	start += len(prefix)
+	end := strings.IndexAny(uri[start:], "&")
+	var raw string
+	if end == -1 {
+		raw = uri[start:]
+	} else {
+		raw = uri[start : start+end]
+	}
+	decoded, err := url.QueryUnescape(raw)
+	if err != nil {
+		return raw
+	}
+	return decoded
 }
 
 func (*Aria2Downloader) validateTorrentFile(filePath string) error {
@@ -496,7 +557,8 @@ func (*Aria2Downloader) validateTorrentFile(filePath string) error {
 	return ValidateContent(header, n)
 }
 
-func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Config) []string {
+// buildAria2Args builds aria2c arguments. torrentPathOrMagnet is either a path to .torrent file or a magnet URI.
+func (d *Aria2Downloader) buildAria2Args(torrentPathOrMagnet string, cfg *config.Aria2Config) []string {
 	args := []string{
 		"--dir", d.downloadDir,
 		"--summary-interval=3",
@@ -614,8 +676,8 @@ func (d *Aria2Downloader) buildAria2Args(torrentPath string, cfg *config.Aria2Co
 		args = append(args, "--follow-torrent=true")
 	}
 
-	// Add the torrent file path at the end
-	args = append(args, torrentPath)
+	// Add the torrent file path or magnet URI at the end
+	args = append(args, torrentPathOrMagnet)
 
 	logutils.Log.WithField("aria2_args", args).Debug("Built aria2c command arguments")
 	return args

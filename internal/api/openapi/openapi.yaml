@@ -1,0 +1,262 @@
+openapi: 3.1.0
+info:
+  title: TMS REST API
+  description: |
+    REST API Telegram Media Server (TMS) для управления загрузками: добавление по URL (видео, magnet, .torrent),
+    список загрузок со статусом, удаление, поиск торрентов через Prowlarr.
+    Предназначен для интеграции с OpenClaw и другими клиентами.
+  version: 1.0.0
+  contact:
+    name: TMS API
+
+servers:
+  - url: /api/v1
+    description: API v1 base path (relative to host)
+
+tags:
+  - name: health
+    description: Проверка доступности сервиса
+  - name: downloads
+    description: Управление загрузками (очередь, добавление, удаление)
+  - name: search
+    description: Поиск торрентов (требуется настроенный Prowlarr)
+
+security:
+  - BearerAuth: []
+  - ApiKeyHeader: []
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Проверка доступности
+      description: Возвращает статус сервиса. Используется для health-check и проверки доступности API.
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Сервис доступен
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+              example: { status: ok }
+
+  /downloads:
+    get:
+      tags: [downloads]
+      summary: Список загрузок
+      description: |
+        Возвращает снимок текущих загрузок (best effort): очередь, активные загрузки и их статус из БД.
+        Для каждой позиции указаны id, название, статус (queued, downloading, converting, completed, failed, stopped),
+        прогресс загрузки и конвертации, при ошибке — текст.
+      operationId: listDownloads
+      responses:
+        '200':
+          description: Список загрузок
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DownloadItem' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [downloads]
+      summary: Добавить загрузку
+      description: |
+        Добавляет загрузку по одному URL. Поддерживаются ссылки на видео (yt-dlp), magnet-ссылки и URL на .torrent файл.
+        Ответ содержит id созданной загрузки и название. Загрузки, добавленные через API, не отправляют уведомления в Telegram;
+        при настройке TMS_WEBHOOK_URL при завершении/ошибке вызывается webhook.
+      operationId: addDownload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddDownloadRequest' }
+            examples:
+              video:
+                summary: Ссылка на видео
+                value: { url: "https://www.youtube.com/watch?v=example" }
+              magnet:
+                summary: Magnet-ссылка
+                value: { url: "magnet:?xt=urn:btih:..." }
+              torrent:
+                summary: URL .torrent файла
+                value: { url: "https://example.com/file.torrent" }
+      responses:
+        '201':
+          description: Загрузка создана
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AddDownloadResponse' }
+        '400':
+          description: Неверный запрос (нет url, неверный URL или тип)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: Тело запроса превышает лимит (1 MiB)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /downloads/{id}:
+    delete:
+      tags: [downloads]
+      summary: Остановить и удалить загрузку
+      description: Останавливает загрузку с указанным id и удаляет её из очереди/активных. Ответ без тела.
+      operationId: deleteDownload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор загрузки (movie_id)
+          schema: { type: integer, format: uint32, minimum: 1 }
+      responses:
+        '204':
+          description: Загрузка остановлена
+        '400':
+          description: Неверный id (не число)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /search:
+    get:
+      tags: [search]
+      summary: Поиск торрентов
+      description: |
+        Поиск торрентов через Prowlarr (требуются PROWLARR_URL и PROWLARR_API_KEY).
+        Параметр q обязателен; limit ограничивает количество результатов (1–100), quality — пост-фильтрация по названию раздачи.
+      operationId: searchTorrents
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Поисковый запрос
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Максимум результатов (по умолчанию 20, макс. 100)
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: quality
+          in: query
+          required: false
+          description: Фильтр по качеству в названии (например 1080, 720)
+          schema: { type: string }
+      responses:
+        '200':
+          description: Список результатов поиска
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SearchResultItem' }
+        '400':
+          description: Отсутствует параметр q
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Поиск недоступен (Prowlarr не настроен или ошибка)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: API key в заголовке Authorization (Bearer &lt;key&gt;)
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key в заголовке X-API-Key
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, example: ok }
+
+    DownloadItem:
+      type: object
+      properties:
+        id: { type: integer, format: uint32, description: Идентификатор загрузки }
+        title: { type: string, description: Название }
+        status:
+          type: string
+          enum: [queued, downloading, converting, completed, failed, stopped]
+          description: Текущий статус
+        progress: { type: integer, minimum: 0, maximum: 100, description: Прогресс загрузки (0–100) }
+        conversion_progress: { type: integer, minimum: 0, maximum: 100, description: Прогресс конвертации }
+        error: { type: string, description: Текст ошибки при status=failed }
+        position_in_queue: { type: integer, description: Позиция в очереди для queued }
+
+    AddDownloadRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri, description: URL видео, magnet или .torrent }
+
+    AddDownloadResponse:
+      type: object
+      properties:
+        id: { type: integer, format: uint32 }
+        title: { type: string }
+
+    SearchResultItem:
+      type: object
+      properties:
+        title: { type: string }
+        size: { type: integer, format: int64, description: Размер в байтах }
+        magnet: { type: string, description: Magnet-ссылка }
+        torrent_url: { type: string, description: URL .torrent файла }
+        indexer_name: { type: string }
+        peers: { type: integer }
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+    WebhookPayload:
+      description: |
+        Тело POST-запроса, который TMS отправляет на TMS_WEBHOOK_URL при завершении, ошибке или остановке загрузки.
+        Контракт для приёма на стороне OpenClaw (best effort, до 2 повторов).
+      type: object
+      properties:
+        id: { type: integer, format: uint32, description: Идентификатор загрузки }
+        title: { type: string }
+        status: { type: string, enum: [completed, failed, stopped] }
+        error: { type: string, description: Текст ошибки при status=failed }
+        event_id: { type: string, format: uuid, description: Уникальный идентификатор события }
+
+  responses:
+    Unauthorized:
+      description: Неверный или отсутствующий API key
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example: { error: "unauthorized" }
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

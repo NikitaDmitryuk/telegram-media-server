@@ -1,9 +1,9 @@
 package config
 
 import (
-	"log"
 	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
@@ -21,6 +21,7 @@ const (
 	DefaultProgressUpdateInterval       = 3 * time.Second
 	DefaultVideoMaxHeight               = 0             // Default: no max height limit (0 = disabled)
 	DefaultYtdlpUpdateInterval          = 3 * time.Hour // Periodic yt-dlp update interval; 0 = disabled
+	DefaultTMSAPIListen                 = "127.0.0.1:8080"
 )
 
 func NewConfig() (*Config, error) {
@@ -37,6 +38,10 @@ func NewConfig() (*Config, error) {
 		LangPath:            getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
 		ProwlarrURL:         getEnv("PROWLARR_URL", ""),
 		ProwlarrAPIKey:      getEnv("PROWLARR_API_KEY", ""),
+		TMSAPIEnabled:       getEnvBool("TMS_API_ENABLED", true),
+		TMSAPIListen:        getEnv("TMS_API_LISTEN", DefaultTMSAPIListen),
+		TMSAPIKey:           getEnv("TMS_API_KEY", ""),
+		TMSWebhookURL:       getEnv("TMS_WEBHOOK_URL", ""),
 		YtdlpPath:           getEnv("YTDLP_PATH", "/usr/bin/yt-dlp"),
 		YtdlpUpdateOnStart:  getEnvBool("YTDLP_UPDATE_ON_START", true),
 		YtdlpUpdateInterval: getEnvDuration("YTDLP_UPDATE_INTERVAL", DefaultYtdlpUpdateInterval),
@@ -108,17 +113,23 @@ func NewConfig() (*Config, error) {
 	if getEnv("RUNNING_IN_DOCKER", "false") == "true" {
 		config.MoviePath = "/app/media"
 		config.LangPath = "/app/locales"
-		log.Printf("Running inside Docker, setting MOVIE_PATH to %s and LANG_PATH to %s", config.MoviePath, config.LangPath)
+		if logutils.Log != nil {
+			logutils.Log.WithFields(map[string]any{
+				"movie_path": config.MoviePath,
+				"lang_path":  config.LangPath,
+			}).Info("Running inside Docker, using container paths")
+		}
 	}
 
 	if err := config.validate(); err != nil {
-		log.Printf("Configuration validation failed: %v", err)
-		return nil, utils.WrapError(err, "configuration validation failed", map[string]any{
-			"config": config,
-		})
+		if logutils.Log != nil {
+			logutils.Log.WithError(err).Error("Configuration validation failed")
+		}
+		return nil, utils.WrapError(err, "configuration validation failed", nil)
 	}
-
-	log.Println("Configuration loaded successfully")
+	if logutils.Log != nil {
+		logutils.Log.Info("Configuration loaded successfully")
+	}
 	return config, nil
 }
 
@@ -135,6 +146,10 @@ type Config struct {
 	LangPath            string
 	ProwlarrURL         string
 	ProwlarrAPIKey      string
+	TMSAPIEnabled       bool
+	TMSAPIListen        string // e.g. "127.0.0.1:8080" or "0.0.0.0:8080"
+	TMSAPIKey           string
+	TMSWebhookURL       string // optional; POST on download completion/failure
 	YtdlpPath           string // Path to yt-dlp binary; use standalone from GitHub for auto-update via -U (pacman/pip builds refuse -U)
 	YtdlpUpdateOnStart  bool
 	YtdlpUpdateInterval time.Duration

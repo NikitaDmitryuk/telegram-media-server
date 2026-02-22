@@ -20,6 +20,30 @@
 
 ---
 
+## OpenClaw skill
+
+An [OpenClaw](https://openclaw.ai/) skill for managing TMS downloads via the REST API (add by URL/magnet/torrent, list, delete, search) lives in **[openclaw-skill-tms/](openclaw-skill-tms/)**. Install from [ClawHub](https://clawhub.ai/): `clawhub install tms`, or copy the `openclaw-skill-tms` folder into your agent's `skills` directory. See [openclaw-skill-tms/README.md](openclaw-skill-tms/README.md) for setup (`TMS_API_URL`, `TMS_API_KEY`) and usage.
+
+---
+
+## REST API и Swagger / REST API and Swagger
+
+REST API включён по умолчанию. Без `TMS_API_KEY` принимаются только запросы с localhost; с ключом — доступ по сети с авторизацией. Документация доступна по адресам ниже (базовый URL — `TMS_API_LISTEN`, по умолчанию `127.0.0.1:8080`). Ссылки работают при запущенном сервере.  
+REST API is enabled by default. Without `TMS_API_KEY`, only localhost requests are accepted; with a key set, remote access with authentication is allowed. Documentation is available at the URLs below (base URL is `TMS_API_LISTEN`, default `127.0.0.1:8080`). Links work when the server is running.
+
+- **Swagger UI** (интерактивная документация): [http://127.0.0.1:8080/api/v1/docs](http://127.0.0.1:8080/api/v1/docs) (путь path: `/api/v1/docs`)  
+  **Swagger UI** (interactive docs): [http://127.0.0.1:8080/api/v1/docs](http://127.0.0.1:8080/api/v1/docs) (path: `/api/v1/docs`)
+- **OpenAPI YAML**: [http://127.0.0.1:8080/api/v1/openapi.yaml](http://127.0.0.1:8080/api/v1/openapi.yaml) — спецификация для людей / human-oriented spec
+- **OpenAPI LLM YAML**: [http://127.0.0.1:8080/api/v1/openapi-llm.yaml](http://127.0.0.1:8080/api/v1/openapi-llm.yaml) — для LLM/инструментов / LLM/tool-oriented spec
+
+Маршруты документации при пустом `TMS_API_KEY` доступны только с localhost.  
+Documentation routes without API key are available only from localhost.
+
+**Swagger не открывается?** 1) В логах при старте должно быть сообщение `TMS API server starting` и адрес (например `127.0.0.1:8080`). Если видите `TMS REST API is disabled`, в `.env` указано `TMS_API_ENABLED=false` — замените на `TMS_API_ENABLED=true` или удалите эту строку. 2) Проверьте доступность API с той же машины, где запущен TMS: `curl -s http://127.0.0.1:8080/api/v1/health` — должен вернуть `{"status":"ok"}`; при `Connection refused` API не слушает (проверьте .env и логи). 3) Если страница Swagger открывается, но остаётся пустой — откройте консоль браузера (F12 → Console/Network): запрос к `openapi.yaml` не должен возвращать 401. Переменные: при **make run** (Docker) берутся из `.env` в корне проекта; при **systemd** — из `/etc/telegram-media-server/.env`.  
+**Swagger not loading?** 1) On startup you should see `TMS API server starting`. If you see `TMS REST API is disabled`, set `TMS_API_ENABLED=true` in `.env` or remove that line. 2) From the host where TMS runs, run `curl -s http://127.0.0.1:8080/api/v1/health` — expect `{"status":"ok"}`; if you get connection refused, the API is not listening. 3) If the Swagger page opens but stays blank, check the browser console (F12); the request to `openapi.yaml` should not return 401.
+
+---
+
 ## Зависимости / Dependencies
 
 Для установки с помощью `sudo make install` необходимы следующие зависимости:  
@@ -123,8 +147,8 @@ All available configuration parameters are thoroughly documented in the [`.env.e
 Создайте файл `.env` на основе `.env.example` и настройте необходимые параметры.  
 Create a `.env` file based on `.env.example` and configure the required parameters.
 
-Docker: если торренты «стоят» без пиров, попробуйте `network_mode: host` в `docker-compose.yml` (aria2 сможет принимать входящие). Порты 6881–6999 (TCP/UDP) должны быть открыты.  
-Docker: if torrents get no peers, try `network_mode: host` in `docker-compose.yml` so aria2 can accept incoming connections. Ensure ports 6881–6999 (TCP/UDP) are open.
+**Docker и сеть:** по умолчанию в `docker-compose.yml` порт API проброшен на хост (`8080:8080`), приложение слушает `0.0.0.0:8080` — Swagger и API доступны по http://localhost:8080 на Mac, Windows и Linux. На macOS/Windows режим `network_mode: host` в Docker Desktop не даёт доступа к портам контейнера с хоста, поэтому используется проброс портов. На Linux при необходимости лучшего приёма пиров для торрентов можно включить `network_mode: host` в `docker-compose.yml` (тогда порт 8080 будет доступен на хосте без явного маппинга).  
+**Docker and network:** by default, the API port is published to the host (`8080:8080`) and the app listens on `0.0.0.0:8080`, so Swagger is at http://localhost:8080 on Mac, Windows, and Linux. On macOS/Windows, `network_mode: host` in Docker Desktop does not expose container ports to the host, so port mapping is used. On Linux, you can enable `network_mode: host` in `docker-compose.yml` for better torrent peer acceptance (port 8080 will then be available on the host without explicit mapping).
 
 Совместимость с ТВ: если видео не воспроизводится — `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости пройдут remux. Опции: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — отклонять несовместимое видео.  
 TV compatibility: if video won't play on your TV, set `VIDEO_COMPATIBILITY_MODE=true`. Files may be remuxed. Options: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — reject incompatible video.

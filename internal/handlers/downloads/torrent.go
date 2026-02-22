@@ -33,12 +33,5 @@ func HandleTorrentFile(
 	}
 
 	downloaderInstance := tmsfactory.NewTorrentDownloader(doc.FileName, a.Config.MoviePath, a.Config)
-
-	if downloaderInstance == nil {
-		logutils.Log.Warn("Failed to initialize torrent downloader")
-		a.Bot.SendMessage(chatID, lang.Translate("error.file_management.unsupported_type", nil), tgbotapi.NewRemoveKeyboard(false))
-		return
-	}
-
 	HandleDownload(a, chatID, downloaderInstance)
 }

@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/api"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
@@ -68,6 +72,18 @@ func main() {
 
 	downloads.InitNotificationHandler(a)
 
+	var apiServer *api.Server
+	if config.TMSAPIEnabled {
+		apiServer = api.NewServer(a, config.TMSAPIListen, config.TMSAPIKey)
+		go func() {
+			if err := apiServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logutils.Log.WithError(err).Error("TMS API server exited with error")
+			}
+		}()
+	} else {
+		logutils.Log.Info("TMS REST API is disabled (TMS_API_ENABLED=false). Set TMS_API_ENABLED=true in .env to enable Swagger and the API.")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -84,6 +100,15 @@ func main() {
 	logutils.Log.Info("Received shutdown signal, starting graceful shutdown...")
 
 	cancel()
+
+	if apiServer != nil {
+		const apiShutdownTimeout = 10 * time.Second
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), apiShutdownTimeout)
+		if err := apiServer.Shutdown(shutdownCtx); err != nil {
+			logutils.Log.WithError(err).Warn("TMS API shutdown error")
+		}
+		shutdownCancel()
+	}
 
 	a.DownloadManager.StopAllDownloads()
 	logutils.Log.Info("All downloads stopped")

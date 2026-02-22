@@ -1,0 +1,12 @@
+{
+  "name": "TMS (Telegram Media Server)",
+  "tagline": "Manage media downloads via REST API: video URLs, magnets, torrents, and search.",
+  "description": "Telegram Media Server (TMS) is a Telegram bot that downloads streaming video and torrents (yt-dlp, aria2) and can serve them via DLNA. Install TMS from https://github.com/NikitaDmitryuk/telegram-media-server (see repo README). This skill teaches OpenClaw to control a running TMS via its REST API: add downloads by URL (video, magnet, .torrent), list downloads, delete a download, and search torrents when Prowlarr is configured. Instruction-only — no install scripts or code execution; only TMS_API_URL and TMS_API_KEY are required. Use it to manage media downloads from OpenClaw chat instead of the Telegram bot.",
+  "category": "utility",
+  "tags": ["downloads", "media", "api", "torrent", "yt-dlp", "tms"],
+  "version": "1.0.0",
+  "license": "MIT",
+  "pricing": "free",
+  "support_url": "https://github.com/NikitaDmitryuk/telegram-media-server/issues",
+  "homepage": "https://github.com/NikitaDmitryuk/telegram-media-server/tree/main/openclaw-skill-tms"
+}

@@ -120,6 +120,144 @@ func TestConfigValidation(t *testing.T) {
 			expectError:   true,
 			errorContains: "configuration validation failed",
 		},
+		{
+			name: "TMS API enabled without key (localhost-only)",
+			setupEnv: func() {
+				tempDir := os.TempDir()
+				os.Setenv("BOT_TOKEN", "test-token")
+				os.Setenv("MOVIE_PATH", tempDir)
+				os.Setenv("ADMIN_PASSWORD", "admin123")
+				os.Setenv("REGULAR_PASSWORD", "regular123")
+				os.Setenv("TMS_API_ENABLED", "true")
+				// TMS_API_KEY not set — API accepts only localhost
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("BOT_TOKEN")
+				os.Unsetenv("MOVIE_PATH")
+				os.Unsetenv("ADMIN_PASSWORD")
+				os.Unsetenv("REGULAR_PASSWORD")
+				os.Unsetenv("TMS_API_ENABLED")
+			},
+			expectError: false,
+		},
+		{
+			name: "TMS API enabled with valid key and listen",
+			setupEnv: func() {
+				tempDir := os.TempDir()
+				os.Setenv("BOT_TOKEN", "test-token")
+				os.Setenv("MOVIE_PATH", tempDir)
+				os.Setenv("ADMIN_PASSWORD", "admin123")
+				os.Setenv("REGULAR_PASSWORD", "regular123")
+				os.Setenv("TMS_API_ENABLED", "true")
+				os.Setenv("TMS_API_KEY", "secret-key")
+				os.Setenv("TMS_API_LISTEN", "127.0.0.1:9090")
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("BOT_TOKEN")
+				os.Unsetenv("MOVIE_PATH")
+				os.Unsetenv("ADMIN_PASSWORD")
+				os.Unsetenv("REGULAR_PASSWORD")
+				os.Unsetenv("TMS_API_ENABLED")
+				os.Unsetenv("TMS_API_KEY")
+				os.Unsetenv("TMS_API_LISTEN")
+			},
+			expectError: false,
+		},
+		{
+			name: "TMS API enabled with listen :8080 (host empty)",
+			setupEnv: func() {
+				tempDir := os.TempDir()
+				os.Setenv("BOT_TOKEN", "test-token")
+				os.Setenv("MOVIE_PATH", tempDir)
+				os.Setenv("ADMIN_PASSWORD", "admin123")
+				os.Setenv("REGULAR_PASSWORD", "regular123")
+				os.Setenv("TMS_API_ENABLED", "true")
+				os.Setenv("TMS_API_KEY", "secret-key")
+				os.Setenv("TMS_API_LISTEN", ":8080")
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("BOT_TOKEN")
+				os.Unsetenv("MOVIE_PATH")
+				os.Unsetenv("ADMIN_PASSWORD")
+				os.Unsetenv("REGULAR_PASSWORD")
+				os.Unsetenv("TMS_API_ENABLED")
+				os.Unsetenv("TMS_API_KEY")
+				os.Unsetenv("TMS_API_LISTEN")
+			},
+			expectError: false,
+		},
+		{
+			name: "TMS API enabled with invalid port 0",
+			setupEnv: func() {
+				tempDir := os.TempDir()
+				os.Setenv("BOT_TOKEN", "test-token")
+				os.Setenv("MOVIE_PATH", tempDir)
+				os.Setenv("ADMIN_PASSWORD", "admin123")
+				os.Setenv("REGULAR_PASSWORD", "regular123")
+				os.Setenv("TMS_API_ENABLED", "true")
+				os.Setenv("TMS_API_KEY", "secret-key")
+				os.Setenv("TMS_API_LISTEN", "127.0.0.1:0")
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("BOT_TOKEN")
+				os.Unsetenv("MOVIE_PATH")
+				os.Unsetenv("ADMIN_PASSWORD")
+				os.Unsetenv("REGULAR_PASSWORD")
+				os.Unsetenv("TMS_API_ENABLED")
+				os.Unsetenv("TMS_API_KEY")
+				os.Unsetenv("TMS_API_LISTEN")
+			},
+			expectError:   true,
+			errorContains: "configuration validation failed",
+		},
+		{
+			name: "TMS API enabled with invalid port 99999",
+			setupEnv: func() {
+				tempDir := os.TempDir()
+				os.Setenv("BOT_TOKEN", "test-token")
+				os.Setenv("MOVIE_PATH", tempDir)
+				os.Setenv("ADMIN_PASSWORD", "admin123")
+				os.Setenv("REGULAR_PASSWORD", "regular123")
+				os.Setenv("TMS_API_ENABLED", "true")
+				os.Setenv("TMS_API_KEY", "secret-key")
+				os.Setenv("TMS_API_LISTEN", "127.0.0.1:99999")
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("BOT_TOKEN")
+				os.Unsetenv("MOVIE_PATH")
+				os.Unsetenv("ADMIN_PASSWORD")
+				os.Unsetenv("REGULAR_PASSWORD")
+				os.Unsetenv("TMS_API_ENABLED")
+				os.Unsetenv("TMS_API_KEY")
+				os.Unsetenv("TMS_API_LISTEN")
+			},
+			expectError:   true,
+			errorContains: "configuration validation failed",
+		},
+		{
+			name: "TMS API enabled with invalid listen (no port)",
+			setupEnv: func() {
+				tempDir := os.TempDir()
+				os.Setenv("BOT_TOKEN", "test-token")
+				os.Setenv("MOVIE_PATH", tempDir)
+				os.Setenv("ADMIN_PASSWORD", "admin123")
+				os.Setenv("REGULAR_PASSWORD", "regular123")
+				os.Setenv("TMS_API_ENABLED", "true")
+				os.Setenv("TMS_API_KEY", "secret-key")
+				os.Setenv("TMS_API_LISTEN", "127.0.0.1")
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("BOT_TOKEN")
+				os.Unsetenv("MOVIE_PATH")
+				os.Unsetenv("ADMIN_PASSWORD")
+				os.Unsetenv("REGULAR_PASSWORD")
+				os.Unsetenv("TMS_API_ENABLED")
+				os.Unsetenv("TMS_API_KEY")
+				os.Unsetenv("TMS_API_LISTEN")
+			},
+			expectError:   true,
+			errorContains: "configuration validation failed",
+		},
 	}
 
 	for _, tt := range tests {
