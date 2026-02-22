@@ -1,6 +1,6 @@
 ---
 name: tms
-version: "1.0.0"
+version: "1.0.2"
 description: Manage downloads via Telegram Media Server (TMS) REST API — add by URL (video/magnet/torrent), list, delete, search torrents.
 metadata:
   {"openclaw":{"requires":{"env":["TMS_API_URL","TMS_API_KEY"]},"primaryEnv":"TMS_API_KEY"}}
@@ -33,4 +33,4 @@ Machine-readable OpenAPI spec for LLM/tool use: **GET {TMS_API_URL}/api/v1/opena
 
 ## Webhook (optional)
 
-If TMS is configured with `TMS_WEBHOOK_URL` pointing to an endpoint OpenClaw can receive, TMS will POST to that URL when a download completes, fails, or is stopped. Body: `id`, `title`, `status` (completed|failed|stopped), `error` (if failed), `event_id` (UUID). Delivery is best-effort (no guaranteed delivery). Use this to notify the user in chat when a download finishes.
+If TMS is configured with `TMS_WEBHOOK_URL` pointing to an endpoint OpenClaw can receive, TMS will POST to that URL when a download completes, fails, or is stopped. Body: `id`, `title`, `status` (completed|failed|stopped), `error` (if failed), `event_id` (UUID). When `TMS_WEBHOOK_TOKEN` is set in TMS config, TMS sends `Authorization: Bearer <TMS_WEBHOOK_TOKEN>` (required for OpenClaw gateway hooks). Delivery is best-effort (no guaranteed delivery). Use this to notify the user in chat when a download finishes.

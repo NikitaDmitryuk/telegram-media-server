@@ -57,7 +57,10 @@ All requests use the TMS API base URL and API key you configure. The skill does 
    }
    ```
 
-3. **Optional — Webhook:** To have OpenClaw notified when a download completes, set `TMS_WEBHOOK_URL` in TMS config to an HTTP endpoint that OpenClaw can receive (e.g. a webhook handler in your OpenClaw setup). TMS will POST completion/failure/stopped events there.
+3. **Optional — Webhook:** To have OpenClaw notified when a download completes (and e.g. post to Telegram), enable gateway hooks in OpenClaw and add a `tms` mapping, then in TMS set:
+   - `TMS_WEBHOOK_URL` — e.g. `http://127.0.0.1:18789/hooks/tms` (gateway port and path from your OpenClaw config).
+   - `TMS_WEBHOOK_TOKEN` — same value as `hooks.token` in OpenClaw (TMS sends it as `Authorization: Bearer <token>`). Generate with `openssl rand -hex 32` if you create a new token.
+   TMS will POST JSON `{ id, title, status, error?, event_id }` on completion/failure/stopped.
 
 ## How to use
 
@@ -104,7 +107,7 @@ After publication, the skill page on ClawHub may list the exact slug if it diffe
 
 ## Security and trust
 
-This skill is **instruction-only**: it contains no install scripts, no code to execute, and no extra binaries. OpenClaw uses it to decide when and how to call your TMS API. The only requirements are two environment variables: `TMS_API_URL` (base URL of your TMS) and `TMS_API_KEY` (for authentication). Both are used solely for HTTP requests to the TMS endpoints described in SKILL.md (health, list, add, delete, search, OpenAPI spec). The skill does not read unrelated files, harvest other env vars, or send data to third-party endpoints. Optional webhook support is configured on the TMS side (`TMS_WEBHOOK_URL`), not by the skill.
+This skill is **instruction-only**: it contains no install scripts, no code to execute, and no extra binaries. OpenClaw uses it to decide when and how to call your TMS API. The only requirements are two environment variables: `TMS_API_URL` (base URL of your TMS) and `TMS_API_KEY` (for authentication). Both are used solely for HTTP requests to the TMS endpoints described in SKILL.md (health, list, add, delete, search, OpenAPI spec). The skill does not read unrelated files, harvest other env vars, or send data to third-party endpoints. Optional webhook support is configured on the TMS side (`TMS_WEBHOOK_URL`, and `TMS_WEBHOOK_TOKEN` for OpenClaw hooks auth), not by the skill.
 
 **Before installing:**
 

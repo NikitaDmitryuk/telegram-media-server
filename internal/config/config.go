@@ -42,6 +42,7 @@ func NewConfig() (*Config, error) {
 		TMSAPIListen:        getEnv("TMS_API_LISTEN", DefaultTMSAPIListen),
 		TMSAPIKey:           getEnv("TMS_API_KEY", ""),
 		TMSWebhookURL:       getEnv("TMS_WEBHOOK_URL", ""),
+		TMSWebhookToken:     getEnv("TMS_WEBHOOK_TOKEN", ""),
 		YtdlpPath:           getEnv("YTDLP_PATH", "/usr/bin/yt-dlp"),
 		YtdlpUpdateOnStart:  getEnvBool("YTDLP_UPDATE_ON_START", true),
 		YtdlpUpdateInterval: getEnvDuration("YTDLP_UPDATE_INTERVAL", DefaultYtdlpUpdateInterval),
@@ -150,6 +151,7 @@ type Config struct {
 	TMSAPIListen        string // e.g. "127.0.0.1:8080" or "0.0.0.0:8080"
 	TMSAPIKey           string
 	TMSWebhookURL       string // optional; POST on download completion/failure
+	TMSWebhookToken     string // optional; sent as Authorization: Bearer <token> when calling TMS_WEBHOOK_URL (e.g. for OpenClaw hooks)
 	YtdlpPath           string // Path to yt-dlp binary; use standalone from GitHub for auto-update via -U (pacman/pip builds refuse -U)
 	YtdlpUpdateOnStart  bool
 	YtdlpUpdateInterval time.Duration
