@@ -35,6 +35,14 @@ func (s *SQLiteDatabase) AddMovie(
 	return movie.ID, nil
 }
 
+func (s *SQLiteDatabase) UpdateMovieName(ctx context.Context, movieID uint, name string) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("name", name)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func (s *SQLiteDatabase) RemoveMovie(ctx context.Context, movieID uint) error {
 	result := s.db.WithContext(ctx).Delete(&Movie{}, movieID)
 	if result.Error != nil {

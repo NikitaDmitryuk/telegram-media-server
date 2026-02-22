@@ -48,6 +48,8 @@ func (*DatabaseStub) AddMovie(_ context.Context, _ string, _ int64, _, _ []strin
 	return 0, nil
 }
 
+func (*DatabaseStub) UpdateMovieName(_ context.Context, _ uint, _ string) error { return nil }
+
 func (*DatabaseStub) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error { return nil }
 
 func (*DatabaseStub) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {

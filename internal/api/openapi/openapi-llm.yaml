@@ -52,7 +52,7 @@ paths:
       tags: [downloads]
       summary: Create a download
       description: |
-        Call to add a download. Body must be JSON with single field "url" (string). URL can be: video URL (yt-dlp), magnet link (magnet:...), or .torrent file URL. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
+        Call to add a download. Body: JSON with "url" (required) and optional "title" (display name, e.g. from search). URL can be: video URL (yt-dlp), magnet link (magnet:...), .torrent file URL, or Prowlarr proxy download URL when Prowlarr is configured. Prefer magnet from search results. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
       operationId: addDownload
       requestBody:
         required: true
@@ -117,7 +117,7 @@ paths:
       tags: [search]
       summary: Search torrents
       description: |
-        Call to search torrents (requires Prowlarr configured). Query param "q" (required): search string. "limit" (optional, 1-100, default 20): max results. "quality" (optional): filter by substring in release title (e.g. 1080). Returns array of objects with title, size, magnet, torrent_url, indexer_name, peers. Use magnet or torrent_url in POST /downloads to add a download.
+        Call to search torrents (requires Prowlarr configured). Query param "q" (required): search string. "limit" (optional, 1-100, default 20): max results. "quality" (optional): filter by substring in release title (e.g. 1080). Returns array of objects with title, size, magnet, torrent_url, indexer_name, peers. When adding a download, prefer the magnet field in POST /downloads; you may also pass title from the result.
       operationId: searchTorrents
       parameters:
         - name: q
@@ -188,6 +188,7 @@ components:
       required: [url]
       properties:
         url: { type: string }
+        title: { type: string, description: Optional display name e.g. from search result }
 
     AddDownloadResponse:
       type: object

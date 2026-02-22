@@ -22,6 +22,7 @@ type MovieReader interface {
 // MovieWriter is the write subset for movies and files. Use together with MovieReader where both are needed.
 type MovieWriter interface {
 	AddMovie(ctx context.Context, name string, fileSize int64, mainFiles, tempFiles []string, totalEpisodes int) (uint, error)
+	UpdateMovieName(ctx context.Context, movieID uint, name string) error
 	UpdateEpisodesProgress(ctx context.Context, movieID uint, completedEpisodes int) error
 	UpdateDownloadedPercentage(ctx context.Context, movieID uint, percentage int) error
 	SetLoaded(ctx context.Context, movieID uint) error

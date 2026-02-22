@@ -163,6 +163,10 @@ func (t *TestSQLiteDatabase) AddMovie(
 	return movie.ID, nil
 }
 
+func (t *TestSQLiteDatabase) UpdateMovieName(ctx context.Context, movieID uint, name string) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).Update("name", name).Error
+}
+
 func (t *TestSQLiteDatabase) addFiles(ctx context.Context, movieID uint, files []string, isTemp bool) error {
 	for _, file := range files {
 		movieFile := database.MovieFile{

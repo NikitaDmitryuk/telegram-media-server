@@ -154,6 +154,15 @@ func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 		writeError(w, http.StatusInternalServerError, "failed to start download")
 		return
 	}
+	if strings.TrimSpace(req.Title) != "" {
+		if updateErr := a.DB.UpdateMovieName(ctx, movieID, strings.TrimSpace(req.Title)); updateErr != nil {
+			logutils.Log.WithError(updateErr).
+				WithField("movie_id", movieID).
+				Warn("AddDownload: UpdateMovieName failed, using downloader title")
+		} else {
+			title = strings.TrimSpace(req.Title)
+		}
+	}
 	go handleAPIDownloadCompletion(a, dl, movieID, title, progressChan, errChan)
 	writeJSON(w, http.StatusCreated, AddDownloadResponse{ID: movieID, Title: title})
 }
