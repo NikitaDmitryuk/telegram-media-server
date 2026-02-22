@@ -1,6 +1,6 @@
 ---
 name: tms
-version: "1.0.4"
+version: "1.0.5"
 description: Manage downloads via Telegram Media Server (TMS) REST API — add by URL (video/magnet/torrent), list, delete, search torrents.
 metadata:
   {"openclaw":{"requires":{"env":[]},"primaryEnv":"TMS_API_URL"}}
@@ -23,11 +23,11 @@ Use this skill when the user wants to add downloads, check download status, stop
 
 2. **List downloads** — `GET {TMS_API_URL}/api/v1/downloads` — returns a JSON array of downloads with `id`, `title`, `status` (queued, downloading, converting, completed, failed, stopped), `progress`, `conversion_progress`, `error` (if failed), `position_in_queue` (if queued). Snapshot is best-effort.
 
-3. **Add download** — `POST {TMS_API_URL}/api/v1/downloads` with JSON body `{"url": "<url>"}`. URL can be: video URL (yt-dlp), magnet link (`magnet:...`), or .torrent file URL. Response: `201` with `{"id": <number>, "title": "<string>"}`. Use `id` for delete or status.
+3. **Add download** — `POST {TMS_API_URL}/api/v1/downloads` with JSON body `{"url": "<url>", "title": "<optional>"}`. URL can be: video URL (yt-dlp), magnet link (`magnet:...`), .torrent file URL, or (when Prowlarr is configured on TMS) Prowlarr proxy download URL. Prefer **magnet** from search results when adding a torrent. Optional `title` overrides the display name (e.g. from search result). For magnets without a display name in the link, the default title is "Magnet download"; size may show 0 until metadata is received; the status circle is yellow until resolved. Response: `201` with `{"id": <number>, "title": "<string>"}`. Use `id` for delete or status.
 
 4. **Delete download** — `DELETE {TMS_API_URL}/api/v1/downloads/{id}` — stops and removes the download. Response: `204` no body. `id` is the numeric id from the add response or list.
 
-5. **Search torrents** — `GET {TMS_API_URL}/api/v1/search?q=<query>&limit=20&quality=1080` — requires Prowlarr configured on TMS. `q` is required; `limit` (1–100, default 20) and `quality` (optional filter) may be used. Returns array of `{title, size, magnet, torrent_url, indexer_name, peers}`. Use `magnet` or `torrent_url` in POST /downloads to add a download.
+5. **Search torrents** — `GET {TMS_API_URL}/api/v1/search?q=<query>&limit=20&quality=1080` — requires Prowlarr configured on TMS. `q` is required; `limit` (1–100, default 20) and `quality` (optional filter) may be used. Returns array of `{title, size, magnet, torrent_url, indexer_name, peers}`. When adding a download from search, use the **magnet** field in POST /downloads (or torrent_url if it is a direct .torrent link). You may pass `title` from the result for a clearer name in the list.
 
 ## Full API spec for tools
 

@@ -18,7 +18,8 @@ type DownloadItem struct {
 
 // AddDownloadRequest is the body for POST /api/v1/downloads.
 type AddDownloadRequest struct {
-	URL string `json:"url"`
+	URL   string `json:"url"`
+	Title string `json:"title,omitempty"` // optional display name (e.g. from search result)
 }
 
 // AddDownloadResponse is returned on success by POST /api/v1/downloads.

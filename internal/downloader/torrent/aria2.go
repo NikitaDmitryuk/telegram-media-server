@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
+	"github.com/go-bittorrent/magneturi"
 )
 
 const (
@@ -453,12 +453,17 @@ func (d *Aria2Downloader) GetFileSize() (int64, error) {
 
 // GetEarlyTvCompatibility returns a preliminary TV compatibility from torrent metadata (file names)
 // so the circle can be shown immediately when the torrent is added.
+// For magnet links, file names are unknown until metadata is received, so we return yellow (unknown).
 func (d *Aria2Downloader) GetEarlyTvCompatibility(_ context.Context) (string, error) {
 	mainFiles, _, err := d.GetFiles()
 	if err != nil {
 		return "", err
 	}
-	return tvcompat.CompatFromTorrentFileNames(mainFiles), nil
+	compat := tvcompat.CompatFromTorrentFileNames(mainFiles)
+	if compat == "" && d.magnetURI != "" {
+		return tvcompat.TvCompatYellow, nil
+	}
+	return compat, nil
 }
 
 func (d *Aria2Downloader) parseTorrentMeta() (*Meta, error) {
@@ -475,10 +480,17 @@ func (d *Aria2Downloader) parseTorrentMeta() (*Meta, error) {
 }
 
 // magnetDummyMeta returns a minimal Meta for magnet downloads (no bencode file).
+// Name and size are taken from magnet URI via magneturi (dn= and xl=) when present.
 func (d *Aria2Downloader) magnetDummyMeta() (*Meta, error) {
 	name := "Magnet download"
-	if dn := d.parseMagnetDN(d.magnetURI); dn != "" {
-		name = dn
+	var length int64
+	if parsed, err := magneturi.Parse(d.magnetURI); err == nil {
+		if parsed.DisplayName != "" {
+			name = parsed.DisplayName
+		}
+		if parsed.ExactLength > 0 {
+			length = parsed.ExactLength
+		}
 	}
 	return &Meta{
 		Info: struct {
@@ -490,33 +502,10 @@ func (d *Aria2Downloader) magnetDummyMeta() (*Meta, error) {
 			} `bencode:"files"`
 		}{
 			Name:   name,
-			Length: 0,
+			Length: length,
 			Files:  nil,
 		},
 	}, nil
-}
-
-// parseMagnetDN extracts dn= (display name) from a magnet URI if present.
-// The value may be URL-encoded (e.g. dn=Test%26Movie); it is decoded.
-func (*Aria2Downloader) parseMagnetDN(uri string) string {
-	const prefix = "dn="
-	start := strings.Index(uri, prefix)
-	if start == -1 {
-		return ""
-	}
-	start += len(prefix)
-	end := strings.IndexAny(uri[start:], "&")
-	var raw string
-	if end == -1 {
-		raw = uri[start:]
-	} else {
-		raw = uri[start : start+end]
-	}
-	decoded, err := url.QueryUnescape(raw)
-	if err != nil {
-		return raw
-	}
-	return decoded
 }
 
 func (*Aria2Downloader) validateTorrentFile(filePath string) error {

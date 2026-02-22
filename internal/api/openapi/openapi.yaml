@@ -64,7 +64,7 @@ paths:
       tags: [downloads]
       summary: Добавить загрузку
       description: |
-        Добавляет загрузку по одному URL. Поддерживаются ссылки на видео (yt-dlp), magnet-ссылки и URL на .torrent файл.
+        Добавляет загрузку по одному URL. Поддерживаются ссылки на видео (yt-dlp), magnet-ссылки, URL на .torrent файл и (при настроенном Prowlarr) прокси-URL Prowlarr. Опциональное поле title задаёт отображаемое имя (например из результата поиска).
         Ответ содержит id созданной загрузки и название. Загрузки, добавленные через API, не отправляют уведомления в Telegram;
         при настройке TMS_WEBHOOK_URL при завершении/ошибке вызывается webhook.
       operationId: addDownload
@@ -213,6 +213,7 @@ components:
       required: [url]
       properties:
         url: { type: string, format: uri, description: URL видео, magnet или .torrent }
+        title: { type: string, description: Опциональное отображаемое имя (например из результата поиска) }
 
     AddDownloadResponse:
       type: object
