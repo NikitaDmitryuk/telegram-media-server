@@ -350,7 +350,7 @@ func TestAPI_AddDownload_201(t *testing.T) {
 	a := &app.App{Config: cfg, DownloadManager: dm}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	body, _ := json.Marshal(AddDownloadRequest{URL: "magnet:?xt=urn:btih:abc123&dn=Test+Movie"})
+	body, _ := json.Marshal(AddDownloadRequest{URL: "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test+Movie"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")
@@ -379,7 +379,7 @@ func TestAPI_AddDownload_CompletionDrainsChannels(t *testing.T) {
 	a := &app.App{Config: cfg, DownloadManager: dm, DB: db}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	body, _ := json.Marshal(AddDownloadRequest{URL: "magnet:?xt=urn:btih:xyz&dn=API+Movie"})
+	body, _ := json.Marshal(AddDownloadRequest{URL: "magnet:?xt=urn:btih:ABCDEFGHIJKLMNOPQRSTUVWXYZ234567&dn=API+Movie"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")

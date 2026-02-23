@@ -3,6 +3,7 @@ package aria2
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
@@ -282,6 +283,66 @@ func TestHasValidBencodeStructure(t *testing.T) {
 			result := hasValidBencodeStructure(tt.data, len(tt.data))
 			if result != tt.expected {
 				t.Errorf("hasValidBencodeStructure() = %v, expected %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValidateMagnetBtih(t *testing.T) {
+	tests := []struct {
+		name        string
+		magnet      string
+		expectError bool
+		contains    string
+	}{
+		{
+			name:        "Valid 40 hex btih",
+			magnet:      "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=test",
+			expectError: false,
+		},
+		{
+			name:        "Valid 32 base32 btih",
+			magnet:      "magnet:?xt=urn:btih:ABCDEFGHIJKLMNOPQRSTUVWXYZ234567&dn=test",
+			expectError: false,
+		},
+		{
+			name:        "Valid 24 hex btih (some indexes use short hex)",
+			magnet:      "magnet:?xt=urn:btih:3A26B5C7D0E082D990F4F24B&dn=test",
+			expectError: false,
+		},
+		{
+			name:        "Not a magnet",
+			magnet:      "http://example.com/file.torrent",
+			expectError: false,
+		},
+		{
+			name:        "Magnet without btih",
+			magnet:      "magnet:?dn=test",
+			expectError: false,
+		},
+		{
+			name:        "Valid 32 base32 with percent-encoded ampersand",
+			magnet:      "magnet:?xt=urn:btih:ABCDEFGHIJKLMNOPQRSTUVWXYZ234567%26tr=udp://tracker.example.com:80",
+			expectError: false,
+		},
+		{
+			name:        "Valid 40 hex with percent-encoded question",
+			magnet:      "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678%3Ftr=udp://tracker.example.com",
+			expectError: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateMagnetBtih(tt.magnet)
+			if tt.expectError {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.contains != "" && !strings.Contains(err.Error(), tt.contains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.contains)
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 		})
 	}

@@ -60,10 +60,11 @@ func TestStagnantProgress_NormalCloseBeforeThreshold(t *testing.T) {
 
 	go dm.monitorDownload(1, &job, outerErrChan)
 
-	// Send some progress, then close progressChan to signal "done".
+	// Send some progress, then close progressChan and send result on errChan.
 	progressChan <- 50.0
 	time.Sleep(20 * time.Millisecond)
 	close(progressChan)
+	errChan <- nil
 
 	select {
 	case err := <-outerErrChan:
@@ -127,6 +128,7 @@ func TestEpisodeChanResetsStagnantTimer(t *testing.T) {
 
 	// Complete the download normally.
 	close(progressChan)
+	errChan <- nil
 
 	select {
 	case err := <-outerErrChan:
@@ -170,6 +172,7 @@ func TestProgressChanClose_CompletesDownload(t *testing.T) {
 	progressChan <- 100.0
 	time.Sleep(20 * time.Millisecond)
 	close(progressChan)
+	errChan <- nil
 
 	select {
 	case err := <-outerErrChan:
@@ -298,6 +301,7 @@ func TestEpisodeChanClosed_DoesNotPanic(t *testing.T) {
 
 	// Complete download via progressChan close.
 	close(progressChan)
+	errChan <- nil
 
 	select {
 	case err := <-outerErrChan:
@@ -424,8 +428,9 @@ func TestProgressOver100_IsClamped(t *testing.T) {
 	progressChan <- 150.0
 	time.Sleep(20 * time.Millisecond)
 
-	// Complete normally.
+	// Complete normally: progressChan close then result on errChan (monitor waits for errChan).
 	close(progressChan)
+	errChan <- nil
 
 	select {
 	case err := <-outerErrChan:
@@ -478,6 +483,7 @@ func TestMultipleEpisodes_SequentialCompletion(t *testing.T) {
 	}
 
 	close(progressChan)
+	errChan <- nil
 
 	select {
 	case err := <-outerErrChan:
@@ -521,6 +527,7 @@ func TestNoEpisodesChan_NilHandling(t *testing.T) {
 	progressChan <- 100.0
 	time.Sleep(20 * time.Millisecond)
 	close(progressChan)
+	errChan <- nil
 
 	select {
 	case err := <-outerErrChan:

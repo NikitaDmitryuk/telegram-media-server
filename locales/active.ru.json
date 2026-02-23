@@ -16,7 +16,6 @@
             "progress": "Загрузка {{.Name}}: {{.Progress}}%"
         },
         "video_downloading": "⬇️ Загрузка видео: {{.Title}}",
-
         "downloaded_list": "ID:{{.ID}} {{.Sticker}}[{{.Progress}}] {{.Episodes}}{{.SizeGB}} ГБ\n{{.Name}}\n",
         "first_episode_ready": "▶️ Первая серия «{{.Title}}» готова к просмотру.",
         "video_not_supported": "⚠️ Видео «{{.Title}}» не поддерживается вашим ТВ (кодек/уровень H.264). Загрузка отменена.",
@@ -76,7 +75,9 @@
             "video_title_error": "Ошибка получения названия видео: {{.Error}}",
             "video_size_error": "Ошибка получения размера видео: {{.Error}}",
             "video_download_error": "Ошибка загрузки видео: {{.Error}}",
-            "document_download_error": "Произошла ошибка при загрузке файла (файлы больше 50МБ не поддерживаются)."
+            "document_download_error": "Произошла ошибка при загрузке файла (файлы больше 50МБ не поддерживаются).",
+            "download_start_error": "Не удалось начать загрузку: {{.Error}}",
+            "invalid_magnet_format": "Некорректная magnet-ссылка: хеш должен быть 32 (base32) или 40 (hex) символов."
         },
         "database": {
             "delete_movie_error": "Ошибка при удалении записи фильма из базы данных."

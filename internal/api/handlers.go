@@ -16,6 +16,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/prowlarr"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
 // Health returns 200 and {"status":"ok"}.
@@ -123,6 +124,16 @@ func DeleteDownload(w http.ResponseWriter, r *http.Request, a *app.App, id uint)
 // maxAddDownloadBodyBytes limits POST /api/v1/downloads body size to avoid DoS.
 const maxAddDownloadBodyBytes = 1024 * 1024 // 1 MiB
 
+// downloadErrorMessage returns a readable error message for API (root cause, friendly text for invalid magnet).
+func downloadErrorMessage(err error) string {
+	rootErr := utils.RootError(err)
+	msg := rootErr.Error()
+	if strings.Contains(msg, "invalid magnet") {
+		return "Invalid magnet link: hash must be 32 (base32) or 40 (hex) characters."
+	}
+	return msg
+}
+
 // AddDownload handles POST /api/v1/downloads. Body: {"url":"..."}.
 func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 	ctx := r.Context()
@@ -144,14 +155,14 @@ func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 	dl, err := factory.CreateDownloaderFromURL(ctx, req.URL, a.Config.MoviePath, a.Config)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Debug("AddDownload: CreateDownloaderFromURL failed")
-		writeError(w, http.StatusBadRequest, "invalid URL")
+		writeError(w, http.StatusBadRequest, downloadErrorMessage(err))
 		return
 	}
 	title, _ := dl.GetTitle()
 	movieID, progressChan, errChan, err := a.DownloadManager.StartDownload(dl, 0)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Error("AddDownload: StartDownload failed")
-		writeError(w, http.StatusInternalServerError, "failed to start download")
+		writeError(w, http.StatusInternalServerError, downloadErrorMessage(err))
 		return
 	}
 	if strings.TrimSpace(req.Title) != "" {
@@ -197,7 +208,7 @@ func handleAPIDownloadCompletion(
 			logutils.Log.WithError(deleteErr).Error("Failed to delete movie after API download failed")
 		}
 		if a.Config.TMSWebhookURL != "" {
-			SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, title, "failed", err.Error())
+			SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, title, "failed", downloadErrorMessage(err))
 		}
 		return
 	}

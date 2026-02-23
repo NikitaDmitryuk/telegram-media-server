@@ -63,7 +63,12 @@ func TestIsValidLink(t *testing.T) {
 		{
 			name:     "Magnet link",
 			input:    "magnet:?xt=urn:btih:example",
-			expected: false,
+			expected: true,
+		},
+		{
+			name:     "Magnet link with leading and trailing spaces",
+			input:    "  magnet:?xt=urn:btih:abc123&dn=Test  ",
+			expected: true,
 		},
 		{
 			name:     "Local file path",

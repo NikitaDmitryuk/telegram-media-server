@@ -3,6 +3,7 @@ package aria2
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -106,4 +107,67 @@ func ValidateTorrentFile(filePath string) error {
 	}
 
 	return ValidateContent(data, len(data))
+}
+
+// btih hex length (20 bytes) and base32 length (32 chars)
+const btihHexLen = 40
+const btihHexLenShort = 24 // some indexes use 24-char hex
+const btihBase32Len = 32
+
+var btihHexRe = regexp.MustCompile(`^[0-9a-fA-F]+$`)
+var btihBase32Re = regexp.MustCompile(`^[2-7A-Za-z]+$`)
+
+// endOfBtih returns true when s[i] starts a param delimiter: '&', '?', or percent-encoded %26, %3F.
+func endOfBtih(s string, i int) bool {
+	if i >= len(s) {
+		return true
+	}
+	if s[i] == '&' || s[i] == '?' {
+		return true
+	}
+	if s[i] == '%' && i+2 < len(s) {
+		hex := strings.ToLower(s[i+1 : i+3])
+		if hex == "26" || hex == "3f" {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateMagnetBtih checks that the magnet URI contains a valid btih (40 hex or 32 base32 chars).
+// Returns nil if valid or no btih present; error if btih is present but invalid length/format.
+// Stops at &, ?, %26, %3F so URL-encoded magnet links are parsed correctly.
+func ValidateMagnetBtih(magnet string) error {
+	magnet = strings.TrimSpace(magnet)
+	if !strings.HasPrefix(strings.ToLower(magnet), "magnet:") {
+		return nil
+	}
+	idx := strings.Index(strings.ToLower(magnet), "urn:btih:")
+	if idx == -1 {
+		return nil // no btih, let aria2 handle
+	}
+	hashStart := idx + len("urn:btih:")
+	hashEnd := hashStart
+	for hashEnd < len(magnet) && !endOfBtih(magnet, hashEnd) {
+		hashEnd++
+	}
+	hash := magnet[hashStart:hashEnd]
+	switch len(hash) {
+	case btihHexLen, btihHexLenShort:
+		if !btihHexRe.MatchString(hash) {
+			return fmt.Errorf("invalid magnet: btih must be 40 hex or 32 base32 characters")
+		}
+		return nil
+	case btihBase32Len:
+		if !btihBase32Re.MatchString(hash) {
+			return fmt.Errorf("invalid magnet: btih must be 40 hex or 32 base32 characters")
+		}
+		return nil
+	default:
+		// Some clients send magnet without & after btih (e.g. whole tail as one token); accept if first 32 chars are valid base32
+		if len(hash) >= btihBase32Len && btihBase32Re.MatchString(hash[:btihBase32Len]) {
+			return nil
+		}
+		return fmt.Errorf("invalid magnet: btih length must be 24 or 40 (hex) or 32 (base32) characters, got %d", len(hash))
+	}
 }

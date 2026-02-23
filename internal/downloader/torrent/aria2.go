@@ -24,11 +24,13 @@ import (
 )
 
 const (
-	sigintTimeout       = 60 * time.Second // stop is async (deletion queue), no need to rush
-	sigkillTimeout      = 120 * time.Second
-	aria2ExitUnfinished = 7  // aria2c exit code for unfinished downloads
-	signalExitTerm      = 15 // SIGTERM exit code
-	signalExitKill      = 9  // SIGKILL exit code
+	sigintTimeout           = 60 * time.Second // stop is async (deletion queue), no need to rush
+	sigkillTimeout          = 120 * time.Second
+	aria2ExitUnfinished     = 7   // aria2c exit code for unfinished downloads
+	signalExitTerm          = 15  // SIGTERM exit code
+	signalExitKill          = 9   // SIGKILL exit code
+	stderrChanBufSize       = 64  // buffer for aria2 stderr lines when checking for failure
+	maxFailureSummaryLength = 300 // max chars for aria2 error summary in user-facing message
 )
 
 type Aria2Downloader struct {
@@ -59,10 +61,8 @@ func (d *Aria2Downloader) StartDownload(
 ) (progressChan chan float64, errChan chan error, episodesChan <-chan int, err error) {
 	aria2Cfg := d.config.GetAria2Settings()
 	torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
+	// For magnet we pass path to .magnet file so buildAria2Args can use --input-file (avoids long URI in argv).
 	aria2Source := torrentPath
-	if d.magnetURI != "" {
-		aria2Source = d.magnetURI
-	}
 
 	meta, metaErr := d.parseTorrentMeta()
 	if metaErr != nil {
@@ -83,8 +83,51 @@ func (d *Aria2Downloader) StartDownload(
 	return progressChan, errChan, episodesChan, nil
 }
 
+// aria2OutputIndicatesFailure returns true if aria2 output (stdout or stderr) shows the download did not start
+// (e.g. "No files to download", "Unrecognized URI or unsupported protocol"). aria2 often writes these to stdout.
+func aria2OutputIndicatesFailure(outputText string) bool {
+	lower := strings.ToLower(outputText)
+	return strings.Contains(lower, "no files to download") ||
+		strings.Contains(lower, "unrecognized uri") ||
+		strings.Contains(lower, "unsupported protocol")
+}
+
+// ansiEscapeSeq strips ANSI escape sequences (e.g. [1;36m, [0m) so output is readable in error messages.
+var ansiEscapeSeq = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// aria2FailureSummary returns a short, human-readable summary from combined output for the error message:
+// strips ANSI, picks the line that indicates failure (No files to download / Unrecognized URI / unsupported protocol),
+// or the last non-empty line, and truncates to a reasonable length.
+func aria2FailureSummary(combinedOutput string) string {
+	trimmed := strings.TrimSpace(ansiEscapeSeq.ReplaceAllString(combinedOutput, ""))
+	lines := strings.Split(trimmed, "\n")
+	var lastErr string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "no files to download") ||
+			strings.Contains(lower, "unrecognized uri") ||
+			strings.Contains(lower, "unsupported protocol") {
+			lastErr = line
+		}
+	}
+	if lastErr != "" {
+		if len(lastErr) > maxFailureSummaryLength {
+			return lastErr[:maxFailureSummaryLength-3] + "..."
+		}
+		return lastErr
+	}
+	if len(trimmed) > maxFailureSummaryLength {
+		return trimmed[:maxFailureSummaryLength-3] + "..."
+	}
+	return trimmed
+}
+
 // runSingleDownload runs one aria2 process for single-file torrent or multi-file without ordering.
-// torrentPathOrMagnet is either a path to .torrent file or a magnet URI.
+// torrentPathOrMagnet is either a path to .torrent file or a magnet URI (or .magnet file path when using --input-file).
 func (d *Aria2Downloader) runSingleDownload(
 	ctx context.Context,
 	torrentPathOrMagnet string,
@@ -115,23 +158,59 @@ func (d *Aria2Downloader) runSingleDownload(
 		return
 	}
 
+	stderrCh := make(chan string, stderrChanBufSize)
 	go func() {
+		defer close(stderrCh)
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			logutils.Log.Errorf("aria2c stderr: %s", scanner.Text())
+			line := scanner.Text()
+			logutils.Log.Errorf("aria2c stderr: %s", line)
+			stderrCh <- line
 		}
 	}()
 
-	// parseProgress will close progressChan when done
-	go d.parseProgressAndClose(stdout, progressChan)
+	// parseProgressAndClose reads stdout (progress + aria2 console log); collect lines to detect failure on stdout too
+	stdoutCh := make(chan string, stderrChanBufSize)
+	go d.parseProgressAndClose(stdout, progressChan, stdoutCh)
 
 	waitErr := d.cmd.Wait()
+	combinedOutput := drainAria2Output(stderrCh, stdoutCh)
 	if waitErr != nil && !d.stoppedManually {
 		logutils.Log.WithError(waitErr).Warn("aria2c exited with error")
 		errChan <- waitErr
-	} else {
-		errChan <- nil
+		return
 	}
+	if waitErr == nil && aria2OutputIndicatesFailure(combinedOutput) {
+		errChan <- fmt.Errorf("aria2 reported failure (no files downloaded): %s", aria2FailureSummary(combinedOutput))
+		return
+	}
+	errChan <- nil
+}
+
+// errForMultiFileWait returns the error to send to errChan after cmd.Wait(), or nil for success.
+func errForMultiFileWait(waitErr error, stderrText string, stoppedManually bool) error {
+	if waitErr != nil && !stoppedManually {
+		return waitErr
+	}
+	if stoppedManually {
+		return downloader.ErrStoppedByUser
+	}
+	if aria2OutputIndicatesFailure(stderrText) {
+		return fmt.Errorf("aria2 reported failure (no files downloaded): %s", aria2FailureSummary(stderrText))
+	}
+	return nil
+}
+
+// drainAria2Output reads stderr and stdout channels until closed and returns combined text for failure detection.
+func drainAria2Output(stderrCh, stdoutCh <-chan string) string {
+	var a, b []string
+	for line := range stderrCh {
+		a = append(a, line)
+	}
+	for line := range stdoutCh {
+		b = append(b, line)
+	}
+	return strings.Join(a, "\n") + "\n" + strings.Join(b, "\n")
 }
 
 // runMultiFileDownload runs aria2 for multi-file torrent (torrentPathOrMagnet is file path; magnet uses runSingleDownload).
@@ -193,24 +272,24 @@ func (d *Aria2Downloader) runMultiFileDownload(
 		return
 	}
 
+	stderrCh := make(chan string, stderrChanBufSize)
 	go func() {
+		defer close(stderrCh)
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			logutils.Log.Errorf("aria2c stderr: %s", scanner.Text())
+			line := scanner.Text()
+			logutils.Log.Errorf("aria2c stderr: %s", line)
+			stderrCh <- line
 		}
 	}()
 
-	// parseProgressAndClose will close progressChan when done
-	go d.parseProgressAndClose(stdout, progressChan)
+	stdoutCh := make(chan string, stderrChanBufSize)
+	go d.parseProgressAndClose(stdout, progressChan, stdoutCh)
 
 	waitErr := cmd.Wait()
-	if waitErr != nil && !d.stoppedManually {
-		logutils.Log.WithError(waitErr).Warn("aria2c exited with error")
-		errChan <- waitErr
-		return
-	}
-	if d.stoppedManually {
-		errChan <- downloader.ErrStoppedByUser
+	combinedOutput := drainAria2Output(stderrCh, stdoutCh)
+	if err := errForMultiFileWait(waitErr, combinedOutput, d.stoppedManually); err != nil {
+		errChan <- err
 		return
 	}
 	if episodesChan != nil && totalVideo > 0 {
@@ -253,13 +332,16 @@ func sortedFileIndicesByPath(meta *Meta) (indices []int, sizes []int64, isVideo 
 	return indices, sizes, isVideo, totalSize
 }
 
-func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
+func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64, stdoutLines chan<- string) {
 	reProgress := regexp.MustCompile(`\(\s*(\d+\.?\d*)%\s*\)`)
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		logutils.Log.Debugf("aria2c output: %s", line)
+		if stdoutLines != nil {
+			stdoutLines <- line
+		}
 
 		matches := reProgress.FindStringSubmatch(line)
 		if len(matches) > 1 {
@@ -276,10 +358,13 @@ func (*Aria2Downloader) parseProgress(r io.Reader, progressChan chan float64) {
 }
 
 // parseProgressAndClose parses progress and closes the channel when done.
-// This ensures the channel is closed only after all progress updates are sent.
-func (d *Aria2Downloader) parseProgressAndClose(r io.Reader, progressChan chan float64) {
+// If stdoutLines is non-nil, each line read from r is sent to it (for failure detection); caller must drain it.
+func (d *Aria2Downloader) parseProgressAndClose(r io.Reader, progressChan chan float64, stdoutLines chan<- string) {
 	defer close(progressChan)
-	d.parseProgress(r, progressChan)
+	if stdoutLines != nil {
+		defer close(stdoutLines)
+	}
+	d.parseProgress(r, progressChan, stdoutLines)
 }
 
 func (d *Aria2Downloader) StopDownload() error {
@@ -665,8 +750,12 @@ func (d *Aria2Downloader) buildAria2Args(torrentPathOrMagnet string, cfg *config
 		args = append(args, "--follow-torrent=true")
 	}
 
-	// Add the torrent file path or magnet URI at the end
-	args = append(args, torrentPathOrMagnet)
+	// Add the torrent file path, or --input-file for .magnet (aria2 reads URI from file)
+	if strings.HasSuffix(strings.ToLower(torrentPathOrMagnet), ".magnet") {
+		args = append(args, "--input-file", torrentPathOrMagnet)
+	} else {
+		args = append(args, torrentPathOrMagnet)
+	}
 
 	logutils.Log.WithField("aria2_args", args).Debug("Built aria2c command arguments")
 	return args

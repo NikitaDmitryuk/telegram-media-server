@@ -39,8 +39,11 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 		return nil, fmt.Errorf("empty URL")
 	}
 
-	// Magnet link: write to a .magnet file and use torrent downloader
+	// Magnet link: validate first, then write to a .magnet file and use torrent downloader
 	if strings.HasPrefix(strings.ToLower(rawURL), "magnet:") {
+		if err := aria2.ValidateMagnetBtih(rawURL); err != nil {
+			return nil, err
+		}
 		name := "magnet_" + uuid.New().String()[:8] + ".magnet"
 		path := filepath.Join(moviePath, name)
 		if err := os.WriteFile(path, []byte(rawURL), ownerOnlyFileMode); err != nil {

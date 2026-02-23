@@ -3,6 +3,7 @@ package downloads
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/api"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
@@ -10,7 +11,20 @@ import (
 	filemanager "github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
 	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
+
+// sendDownloadStartError sends a user-facing message for download start failure (root error, no wrapper text).
+// replyMarkup can be nil (Bot.SendMessage accepts any).
+func sendDownloadStartError(a *app.App, chatID int64, err error, replyMarkup any) {
+	rootErr := utils.RootError(err)
+	msg := rootErr.Error()
+	if strings.Contains(msg, "invalid magnet") {
+		a.Bot.SendMessage(chatID, tmslang.Translate("error.downloads.invalid_magnet_format", nil), replyMarkup)
+		return
+	}
+	a.Bot.SendMessage(chatID, tmslang.Translate("error.downloads.download_start_error", map[string]any{"Error": msg}), replyMarkup)
+}
 
 func HandleDownload(
 	a *app.App,
@@ -74,7 +88,7 @@ func handleDownloadAsync(
 	movieID, progressChan, errChan, err := a.DownloadManager.StartDownload(downloaderInstance, chatID)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to start download")
-		a.Bot.SendMessage(chatID, tmslang.Translate("error.downloads.document_download_error", nil), nil)
+		sendDownloadStartError(a, chatID, err, nil)
 		return
 	}
 
