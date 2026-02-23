@@ -110,7 +110,12 @@ func (dm *DownloadManager) startDownloadImmediately(
 			}
 		}
 	}
-	// Persist qBittorrent torrent hash so we can remove it from Web UI when the user deletes the movie.
+	// Persist qBittorrent torrent hash so we can remove it from Web UI when the user deletes the movie (survives process restart).
+	if setter, ok := dl.(downloader.OnHashKnownSetter); ok {
+		setter.SetOnHashKnown(func(hash string) {
+			_ = dm.db.SetQBittorrentHash(context.Background(), movieID, hash)
+		})
+	}
 	if hd, ok := dl.(downloader.QBittorrentHashDownloader); ok {
 		go func() {
 			if hash, ok := <-hd.QBittorrentHashChan(); ok && hash != "" {

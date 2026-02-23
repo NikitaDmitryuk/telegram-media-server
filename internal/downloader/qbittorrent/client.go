@@ -139,6 +139,8 @@ type TorrentInfo struct {
 	Size        int64   `json:"size"`
 	TotalSize   int64   `json:"total_size"`
 	Downloaded  int64   `json:"downloaded"`
+	AmountLeft  int64   `json:"amount_left"` // bytes left to download
+	Completed   int64   `json:"completed"`   // bytes completed (transfer)
 	AddedOn     int64   `json:"added_on"`
 	SavePath    string  `json:"save_path"`
 	ContentPath string  `json:"content_path"`

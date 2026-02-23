@@ -24,6 +24,13 @@
 
 An [OpenClaw](https://openclaw.ai/) skill for managing TMS downloads via the REST API (add by URL/magnet/torrent, list, delete, search) lives in **[openclaw-skill-tms/](openclaw-skill-tms/)**. Install from [ClawHub](https://clawhub.ai/): `clawhub install tms`, or copy the `openclaw-skill-tms` folder into your agent's `skills` directory. See [openclaw-skill-tms/README.md](openclaw-skill-tms/README.md) for setup (`TMS_API_URL`, `TMS_API_KEY`) and usage.
 
+**Integration requirements:** the skill uses the TMS REST API (enabled by default; see [`.env.example`](.env.example) — `TMS_API_ENABLED`, `TMS_API_KEY`). To have OpenClaw notified when a download completes, fails, or is stopped, configure the webhook in TMS:
+
+- **TMS side** (in `.env`): set `TMS_WEBHOOK_URL` to the OpenClaw gateway hooks endpoint (e.g. `http://127.0.0.1:18789/hooks/tms`). Set `TMS_WEBHOOK_TOKEN` to the same value as `hooks.token` in your OpenClaw config — TMS sends it as `Authorization: Bearer <token>`. Generate a token with `openssl rand -hex 32` if needed.
+- **OpenClaw side:** enable gateway hooks and add a hook mapping for `tms` pointing to the path you used in `TMS_WEBHOOK_URL` (e.g. `/hooks/tms`), and set `hooks.token` to the same value as `TMS_WEBHOOK_TOKEN`.
+
+TMS will POST JSON `{ id, title, status, error?, event_id }` to the webhook on completion/failure/stopped. Full webhook details: [openclaw-skill-tms/README.md](openclaw-skill-tms/README.md#optional--webhook).
+
 ---
 
 ## REST API и Swagger / REST API and Swagger
@@ -38,9 +45,6 @@ REST API is enabled by default. Without `TMS_API_KEY`, only localhost requests a
 
 Маршруты документации при пустом `TMS_API_KEY` доступны только с localhost.  
 Documentation routes without API key are available only from localhost.
-
-**Swagger не открывается?** 1) В логах при старте должно быть сообщение `TMS API server starting` и адрес (например `127.0.0.1:8080`). Если видите `TMS REST API is disabled`, в `.env` указано `TMS_API_ENABLED=false` — замените на `TMS_API_ENABLED=true` или удалите эту строку. 2) Проверьте доступность API с той же машины, где запущен TMS: `curl -s http://127.0.0.1:8080/api/v1/health` — должен вернуть `{"status":"ok"}`; при `Connection refused` API не слушает (проверьте .env и логи). 3) Если страница Swagger открывается, но остаётся пустой — откройте консоль браузера (F12 → Console/Network): запрос к `openapi.yaml` не должен возвращать 401. Переменные: при **make run** (Docker) берутся из `.env` в корне проекта; при **systemd** — из `/etc/telegram-media-server/.env`.  
-**Swagger not loading?** 1) On startup you should see `TMS API server starting`. If you see `TMS REST API is disabled`, set `TMS_API_ENABLED=true` in `.env` or remove that line. 2) From the host where TMS runs, run `curl -s http://127.0.0.1:8080/api/v1/health` — expect `{"status":"ok"}`; if you get connection refused, the API is not listening. 3) If the Swagger page opens but stays blank, check the browser console (F12); the request to `openapi.yaml` should not return 401.
 
 ---
 
@@ -75,17 +79,6 @@ git clone https://github.com/NikitaDmitryuk/telegram-media-server.git
 cd telegram-media-server
 sudo make install
 ```
-
-Или напрямую: `sudo ./scripts/install.sh`.  
-Or directly: `sudo ./scripts/install.sh`.
-
-При уже установленной системе скрипт предложит **только обновить бинарник и сервис** (конфиг не меняется). Если нужно что-то дописать в конфиг, ответьте «n» — будут запрошены только недостающие параметры.  
-If the system is already installed, the script will offer to **only update the binary and service** (config unchanged). Answer «n» to add or change config — only missing values will be prompted.
-
-### Важно: пароли по умолчанию / Important: default passwords
-
-По умолчанию используются **стандартные пароли** (например, qBittorrent Web UI: `admin` / `adminadmin`). **Не используйте этот установщик на сервере, доступном из интернета**, без смены паролей в процессе установки или сразу после неё. В скрипте можно задать свои пароли и при желании сгенерировать случайный пароль для qBittorrent.  
-By default **default passwords** are used (e.g. qBittorrent Web UI: `admin` / `adminadmin`). **Do not use this installer on an internet-exposed server** without changing passwords during or right after setup. The script lets you set your own passwords and optionally generate a random one for qBittorrent.
 
 ---
 

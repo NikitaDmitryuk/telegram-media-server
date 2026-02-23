@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -25,6 +26,8 @@ func newLogsUpdate(chatID int64) *tgbotapi.Update {
 func TestLogsHandler_Success(t *testing.T) {
 	originalRunCommand := RunCommand
 	defer func() { RunCommand = originalRunCommand }()
+	os.Setenv("RUNNING_IN_DOCKER", "")
+	defer os.Unsetenv("RUNNING_IN_DOCKER")
 
 	logOutput := []byte(
 		"Feb 17 12:00:00 server telegram-media-server[1234]: started\nFeb 17 12:01:00 server telegram-media-server[1234]: processing\n",
@@ -60,6 +63,8 @@ func TestLogsHandler_Success(t *testing.T) {
 func TestLogsHandler_EmptyOutput(t *testing.T) {
 	originalRunCommand := RunCommand
 	defer func() { RunCommand = originalRunCommand }()
+	os.Setenv("RUNNING_IN_DOCKER", "")
+	defer os.Unsetenv("RUNNING_IN_DOCKER")
 
 	RunCommand = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
 		return []byte{}, nil
@@ -89,6 +94,8 @@ func TestLogsHandler_EmptyOutput(t *testing.T) {
 func TestLogsHandler_CommandError(t *testing.T) {
 	originalRunCommand := RunCommand
 	defer func() { RunCommand = originalRunCommand }()
+	os.Setenv("RUNNING_IN_DOCKER", "")
+	defer os.Unsetenv("RUNNING_IN_DOCKER")
 
 	RunCommand = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
 		return nil, errors.New("journalctl: command not found")
@@ -118,6 +125,8 @@ func TestLogsHandler_CommandError(t *testing.T) {
 func TestLogsHandler_SendDocumentError(t *testing.T) {
 	originalRunCommand := RunCommand
 	defer func() { RunCommand = originalRunCommand }()
+	os.Setenv("RUNNING_IN_DOCKER", "")
+	defer os.Unsetenv("RUNNING_IN_DOCKER")
 
 	RunCommand = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
 		return []byte("some log data"), nil
@@ -148,9 +157,43 @@ func TestLogsHandler_SendDocumentError(t *testing.T) {
 	}
 }
 
+func TestLogsHandler_DockerSkipsJournalctl(t *testing.T) {
+	os.Setenv("RUNNING_IN_DOCKER", "true")
+	defer os.Unsetenv("RUNNING_IN_DOCKER")
+
+	runCommandCalled := false
+	originalRunCommand := RunCommand
+	RunCommand = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		runCommandCalled = true
+		return nil, nil
+	}
+	defer func() { RunCommand = originalRunCommand }()
+
+	bot := &testutils.MockBot{}
+	a := &app.App{Bot: bot}
+	update := newLogsUpdate(111)
+
+	LogsHandler(a, update)
+
+	if runCommandCalled {
+		t.Error("expected RunCommand not to be called when RUNNING_IN_DOCKER=true")
+	}
+	if len(bot.SentDocuments) != 0 {
+		t.Errorf("expected no document sent, got %d", len(bot.SentDocuments))
+	}
+	if len(bot.SentMessages) != 1 {
+		t.Fatalf("expected 1 message (Docker hint), got %d", len(bot.SentMessages))
+	}
+	if !strings.Contains(bot.SentMessages[0].Text, "docker") && !strings.Contains(bot.SentMessages[0].Text, "Docker") {
+		t.Errorf("expected Docker hint in message, got %q", bot.SentMessages[0].Text)
+	}
+}
+
 func TestLogsHandler_CommandArguments(t *testing.T) {
 	originalRunCommand := RunCommand
 	defer func() { RunCommand = originalRunCommand }()
+	os.Setenv("RUNNING_IN_DOCKER", "")
+	defer os.Unsetenv("RUNNING_IN_DOCKER")
 
 	var capturedName string
 	var capturedArgs []string

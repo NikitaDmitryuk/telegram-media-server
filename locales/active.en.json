@@ -62,7 +62,9 @@
         "commands": {
             "unknown_command": "Unknown command. Use /start to see available commands.",
             "invalid_format": "Invalid command format.",
-            "logs_error": "Error retrieving logs"
+            "logs_error": "Error retrieving logs",
+            "logs_docker": "In Docker, view logs with: {{.Hint}}",
+            "logs_journal_hint": "Add the TMS user to the systemd-journal group and restart the service."
         },
         "movies": {
             "fetch_error": "An error occurred while fetching the movie list. Please try again later.",

@@ -13,20 +13,24 @@ const (
 )
 
 func (c *Config) validate() error {
+	var errs []error
 	if err := c.validateRequiredFields(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 	if err := c.validatePasswords(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 	if err := c.validateProwlarr(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 	if err := c.validateTMSAPI(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 	if err := c.validateDownloadSettings(); err != nil {
-		return err
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	return nil
 }
@@ -46,7 +50,29 @@ func (c *Config) validateRequiredFields() error {
 		return fmt.Errorf("MOVIE_PATH directory does not exist: %s", c.MoviePath)
 	}
 
+	// Ensure aria2 and qBittorrent can write here (same or dedicated user must have write access).
+	if err := checkDirWritable(c.MoviePath); err != nil {
+		return fmt.Errorf("MOVIE_PATH is not writable (aria2/qBittorrent cannot save files): %w", err)
+	}
+
 	return nil
+}
+
+// checkDirWritable verifies the process can create and write a file in dir (e.g. for downloaders).
+func checkDirWritable(dir string) error {
+	f, err := os.CreateTemp(dir, ".write_check_")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.WriteString("ok"); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	// #nosec G703 -- path from CreateTemp(dir, ...) in validated MOVIE_PATH, not user input
+	return os.Remove(f.Name())
 }
 
 func (c *Config) validatePasswords() error {

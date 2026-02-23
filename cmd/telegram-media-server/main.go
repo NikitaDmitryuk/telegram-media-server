@@ -31,7 +31,9 @@ var (
 func main() {
 	config, err := tmsconfig.NewConfig()
 	if err != nil {
-		logutils.Log.WithError(err).Fatal("Failed to initialize configuration")
+		logutils.Log.WithError(err).Fatal(
+			"Configuration validation failed — fix the reported variable(s) in .env and restart " +
+				"(e.g. BOT_TOKEN, MOVIE_PATH, ADMIN_PASSWORD; if PROWLARR_URL is set, PROWLARR_API_KEY is required)")
 	}
 
 	logutils.InitLogger(config.LogLevel)

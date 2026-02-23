@@ -33,7 +33,9 @@ func Router(
 	auth.LoggingMiddleware(update)
 
 	if update.Message.IsCommand() {
-		if !auth.CheckAccess(update, a.DB) && update.Message.Command() != "login" {
+		cmd := update.Message.Command()
+		allowWithoutAccess := cmd == "login" || cmd == "start"
+		if !allowWithoutAccess && !auth.CheckAccess(update, a.DB) {
 			a.Bot.SendMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil), nil)
 			return
 		}

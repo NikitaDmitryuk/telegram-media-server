@@ -34,7 +34,8 @@ type QBittorrentDownloader struct {
 
 	mu              sync.Mutex
 	hash            string
-	hashChan        chan string // sends qBittorrent torrent hash once when known (for DB persistence)
+	hashChan        chan string       // sends qBittorrent torrent hash once when known (for DB persistence)
+	onHashKnown     func(hash string) // optional; called synchronously when hash is known so manager can persist to DB before restart
 	stoppedManually bool
 }
 
@@ -188,6 +189,11 @@ func (d *QBittorrentDownloader) QBittorrentHashChan() <-chan string {
 	return d.hashChan
 }
 
+// SetOnHashKnown implements downloader.OnHashKnownSetter.
+func (d *QBittorrentDownloader) SetOnHashKnown(cb func(hash string)) {
+	d.onHashKnown = cb
+}
+
 //nolint:gocyclo // run orchestrates login, add, find hash, poll loop; splitting would obscure flow.
 func (d *QBittorrentDownloader) run(
 	ctx context.Context,
@@ -250,7 +256,11 @@ func (d *QBittorrentDownloader) run(
 		our = &list[0]
 	}
 	d.setHash(our.Hash)
-	// Notify manager so it can persist hash for removal from qBittorrent on movie delete
+	// Persist hash synchronously so it survives process restart (callback runs in this goroutine before channel send).
+	if d.onHashKnown != nil {
+		d.onHashKnown(our.Hash)
+	}
+	// Notify manager via channel (fallback / idempotent second persist).
 	if d.hashChan != nil {
 		select {
 		case d.hashChan <- our.Hash:
@@ -300,15 +310,19 @@ func (d *QBittorrentDownloader) run(
 				return
 			}
 			t := info[0]
-			// Use API progress (0–1); fallback to downloaded/size when progress is 0 but we have partial data
+			logutils.Log.WithFields(map[string]any{
+				"progress":    t.Progress,
+				"size":        t.Size,
+				"total_size":  t.TotalSize,
+				"downloaded":  t.Downloaded,
+				"amount_left": t.AmountLeft,
+				"completed":   t.Completed,
+				"state":       t.State,
+			}).Debug("qBittorrent API torrents/info response")
 			progress := t.Progress * 100
-			if progress <= 0 && t.Size > 0 && t.Downloaded > 0 {
-				progress = float64(t.Downloaded) / float64(t.Size) * 100
-			}
 			if progress > progressPercentMax {
 				progress = progressPercentMax
 			}
-			// Send whenever progress changed so the UI updates (including intermediate values)
 			if progress != lastProgress {
 				lastProgress = progress
 				select {
@@ -322,7 +336,8 @@ func (d *QBittorrentDownloader) run(
 					return
 				}
 			}
-			if t.Progress >= 1.0 {
+			// Complete when API progress >= 1 or amount_left is 0 (e.g. state=stalledUP)
+			if t.Progress >= 1.0 || (t.Size > 0 && t.AmountLeft == 0) {
 				if episodesChan != nil && totalVideo > 0 {
 					episodesChan <- totalVideo
 				}
@@ -367,9 +382,10 @@ func (d *QBittorrentDownloader) GetEarlyTvCompatibility(_ context.Context) (stri
 	return compat, nil
 }
 
-// Ensure QBittorrentDownloader implements downloader.Downloader and optional EarlyCompatDownloader.
+// Ensure QBittorrentDownloader implements downloader.Downloader and optional interfaces.
 var (
 	_ downloader.Downloader                = (*QBittorrentDownloader)(nil)
 	_ downloader.EarlyCompatDownloader     = (*QBittorrentDownloader)(nil)
 	_ downloader.QBittorrentHashDownloader = (*QBittorrentDownloader)(nil)
+	_ downloader.OnHashKnownSetter         = (*QBittorrentDownloader)(nil)
 )

@@ -9,20 +9,18 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 )
 
-// RunCompletionLoop drains progress/error channels, performs cleanup (temp files, delete on failure),
-// and notifies via the given notifier. Single place for all download completion handling.
+// RunCompletionLoop waits for the download to complete (via completionChan from the manager),
+// then performs cleanup (temp files, delete on failure) and notifies via the given notifier.
+// It must not read progressChan — the manager's monitor is the only consumer of progress so it can write progress to the DB.
 func RunCompletionLoop(
 	a *App,
-	progressChan <-chan float64,
-	errChan <-chan error,
+	completionChan <-chan error,
 	dl downloader.Downloader,
 	movieID uint,
 	title string,
 	compl notifier.CompletionNotifier,
 ) {
-	for range progressChan {
-	}
-	err := <-errChan
+	err := <-completionChan
 	if errors.Is(err, downloader.ErrStoppedByDeletion) {
 		logutils.Log.Info("Download stopped by deletion queue (no user notification)")
 		return

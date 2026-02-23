@@ -62,7 +62,7 @@ func handleDownloadAsync(
 	}
 
 	tgNotifier := telegramNotifier{chatID: chatID, app: a}
-	movieID, progressChan, errChan, err := a.DownloadManager.StartDownload(downloaderInstance, tgNotifier)
+	movieID, _, completionChan, err := a.DownloadManager.StartDownload(downloaderInstance, tgNotifier)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Failed to start download")
 		sendDownloadStartError(a, chatID, err, nil)
@@ -73,7 +73,7 @@ func handleDownloadAsync(
 		"Title": videoTitle,
 	}), nil)
 
-	go app.RunCompletionLoop(a, progressChan, errChan, downloaderInstance, movieID, videoTitle, tgNotifier)
+	go app.RunCompletionLoop(a, completionChan, downloaderInstance, movieID, videoTitle, tgNotifier)
 }
 
 // telegramNotifier implements notifier.CompletionNotifier and notifier.QueueNotifier for bot-originated downloads.

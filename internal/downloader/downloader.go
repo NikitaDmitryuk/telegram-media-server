@@ -27,6 +27,12 @@ type QBittorrentHashDownloader interface {
 	QBittorrentHashChan() <-chan string // sends the qBittorrent torrent hash once when known, then closes
 }
 
+// OnHashKnownSetter: optional; manager sets callback to persist hash synchronously
+// so it survives process restart (channel-based persist can be lost between send and DB write).
+type OnHashKnownSetter interface {
+	SetOnHashKnown(cb func(hash string))
+}
+
 type Updater interface {
 	RunUpdate(ctx context.Context)
 }
