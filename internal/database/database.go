@@ -30,6 +30,7 @@ type MovieWriter interface {
 	UpdateConversionStatus(ctx context.Context, movieID uint, status string) error
 	UpdateConversionPercentage(ctx context.Context, movieID uint, percentage int) error
 	SetTvCompatibility(ctx context.Context, movieID uint, compat string) error
+	SetQBittorrentHash(ctx context.Context, movieID uint, hash string) error
 	RemoveFilesByMovieID(ctx context.Context, movieID uint) error
 	RemoveTempFilesByMovieID(ctx context.Context, movieID uint) error
 }

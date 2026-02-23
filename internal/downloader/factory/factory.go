@@ -13,6 +13,7 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/qbittorrent"
 	aria2 "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
 	ytdlp "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/video"
 	"github.com/google/uuid"
@@ -25,6 +26,13 @@ const (
 )
 
 func NewTorrentDownloader(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
+	if cfg.QBittorrentURL != "" {
+		dl, err := qbittorrent.NewQBittorrentDownloader(torrentFileName, moviePath, cfg)
+		if err == nil {
+			return dl
+		}
+		// Fallback to aria2 on misconfiguration (e.g. invalid QBittorrentURL)
+	}
 	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg)
 }
 
@@ -49,7 +57,7 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 		if err := os.WriteFile(path, []byte(rawURL), ownerOnlyFileMode); err != nil {
 			return nil, fmt.Errorf("write magnet file: %w", err)
 		}
-		return aria2.NewAria2Downloader(name, moviePath, cfg), nil
+		return newTorrentDownloaderOrAria2(name, moviePath, cfg), nil
 	}
 
 	// HTTP(S) URL ending with .torrent or with torrent content: download to temp file
@@ -60,7 +68,7 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 				return nil, err
 			}
 			base := filepath.Base(localPath)
-			return aria2.NewAria2Downloader(base, moviePath, cfg), nil
+			return newTorrentDownloaderOrAria2(base, moviePath, cfg), nil
 		}
 		// Prowlarr download proxy URL: GET and resolve to magnet or .torrent
 		if dl, err := resolveProwlarrDownload(ctx, rawURL, moviePath, cfg); err == nil {
@@ -173,7 +181,17 @@ func writeMagnetAndReturnDownloader(moviePath, magnetURI string, cfg *config.Con
 	if err := os.WriteFile(path, []byte(magnetURI), ownerOnlyFileMode); err != nil {
 		return nil, err
 	}
-	return aria2.NewAria2Downloader(name, moviePath, cfg), nil
+	return newTorrentDownloaderOrAria2(name, moviePath, cfg), nil
+}
+
+func newTorrentDownloaderOrAria2(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
+	if cfg.QBittorrentURL != "" {
+		dl, err := qbittorrent.NewQBittorrentDownloader(torrentFileName, moviePath, cfg)
+		if err == nil {
+			return dl
+		}
+	}
+	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg)
 }
 
 func isTorrentResponse(data []byte, contentType string) bool {
@@ -193,7 +211,7 @@ func writeTorrentAndReturnDownloader(moviePath string, data []byte, cfg *config.
 	if err := os.WriteFile(fpath, data, ownerOnlyFileMode); err != nil {
 		return nil, err
 	}
-	return aria2.NewAria2Downloader(fname, moviePath, cfg), nil
+	return newTorrentDownloaderOrAria2(fname, moviePath, cfg), nil
 }
 
 func downloadTorrentFile(ctx context.Context, fileURL, moviePath string) (string, error) {

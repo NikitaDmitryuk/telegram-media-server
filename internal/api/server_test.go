@@ -64,6 +64,7 @@ func (m *mockDM) GetQueueItems() []map[string]any {
 	}
 	return nil
 }
+func (*mockDM) RemoveQBittorrentTorrent(_ context.Context, _ uint) error { return nil }
 
 // mockDMCompletion is like mockDM but returns channels that are closed/sent after a short delay,
 // so that app.RunCompletionLoop can drain them and exit (tests API download completion flow).
@@ -94,11 +95,12 @@ func (m *mockDMCompletion) StartDownload(
 	}()
 	return id, progressChan, errChan, nil
 }
-func (*mockDMCompletion) StopDownload(_ uint) error       { return nil }
-func (*mockDMCompletion) StopDownloadSilent(_ uint) error { return nil }
-func (*mockDMCompletion) StopAllDownloads()               {}
-func (*mockDMCompletion) GetActiveDownloads() []uint      { return nil }
-func (*mockDMCompletion) GetQueueItems() []map[string]any { return nil }
+func (*mockDMCompletion) StopDownload(_ uint) error                                { return nil }
+func (*mockDMCompletion) StopDownloadSilent(_ uint) error                          { return nil }
+func (*mockDMCompletion) StopAllDownloads()                                        {}
+func (*mockDMCompletion) GetActiveDownloads() []uint                               { return nil }
+func (*mockDMCompletion) GetQueueItems() []map[string]any                          { return nil }
+func (*mockDMCompletion) RemoveQBittorrentTorrent(_ context.Context, _ uint) error { return nil }
 
 // dbWithMovie returns a movie for GetMovieByID(1); other methods from stub.
 type dbWithMovie struct {

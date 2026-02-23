@@ -9,6 +9,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/qbittorrent"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
@@ -109,6 +110,14 @@ func (dm *DownloadManager) startDownloadImmediately(
 			}
 		}
 	}
+	// Persist qBittorrent torrent hash so we can remove it from Web UI when the user deletes the movie.
+	if hd, ok := dl.(downloader.QBittorrentHashDownloader); ok {
+		go func() {
+			if hash, ok := <-hd.QBittorrentHashChan(); ok && hash != "" {
+				_ = dm.db.SetQBittorrentHash(context.Background(), movieID, hash)
+			}
+		}()
+	}
 
 	outerErrChan = make(chan error, 1)
 
@@ -177,6 +186,34 @@ func (dm *DownloadManager) stopDownloadNotFound(movieID uint) error {
 
 	// It's normal for completed downloads to not be found in active downloads or queue
 	logutils.Log.WithField("movie_id", movieID).Debug("Download not found in active downloads or queue (likely already completed)")
+	return nil
+}
+
+func (dm *DownloadManager) RemoveQBittorrentTorrent(ctx context.Context, movieID uint) error {
+	if dm.cfg.QBittorrentURL == "" {
+		return nil
+	}
+	movie, err := dm.db.GetMovieByID(ctx, movieID)
+	if err != nil || movie.QBittorrentHash == "" {
+		return nil
+	}
+	client, err := qbittorrent.NewClient(dm.cfg.QBittorrentURL, dm.cfg.QBittorrentUsername, dm.cfg.QBittorrentPassword)
+	if err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to create qBittorrent client for removal")
+		return err
+	}
+	if err := client.Login(ctx); err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("qBittorrent login failed for removal")
+		return err
+	}
+	if err := client.DeleteTorrent(ctx, movie.QBittorrentHash, false); err != nil {
+		logutils.Log.WithError(err).
+			WithField("movie_id", movieID).
+			WithField("hash", movie.QBittorrentHash).
+			Warn("Failed to delete torrent from qBittorrent")
+		return err
+	}
+	logutils.Log.WithField("movie_id", movieID).Info("Removed torrent from qBittorrent Web UI")
 	return nil
 }
 

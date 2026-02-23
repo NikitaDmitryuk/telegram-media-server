@@ -51,7 +51,8 @@ To build and install Telegram Media Server using `sudo make install`, the follow
 
 - **Go**: Необходим для сборки бота. Required for building the bot.  
 - **yt-dlp**: Необходим для загрузки потокового видео. Required for downloading streaming videos.  
-- **aria2**: Необходим для загрузки торрент-файлов. Required for downloading torrent files.  
+- **aria2**: Необходим для загрузки торрент-файлов (если не используется qBittorrent). Required for downloading torrents (unless qBittorrent is used).
+- **qbittorrent-nox** (опционально / optional): альтернатива aria2 для торрентов; при заданном `QBITTORRENT_URL` бот использует Web API. См. [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) — порты, запуск, автозагрузка (systemd). Alternative to aria2 for torrents; when `QBITTORRENT_URL` is set the bot uses Web API. See [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) for ports, running, and systemd.
 - **minidlna** (опционально / optional): Необходим для раздачи через DLNA. Required for DLNA distribution.
 - **prowlarr** (опционально / optional): Необходим для поиска торрентов. Required for searching torrents.
 
@@ -65,25 +66,26 @@ Install these dependencies using your system's package manager before proceeding
 
 ## Установка / Installation
 
-Предпочтительный способ установки, который добавляет бота как системный сервис.  
-The preferred method, installing the bot as a system service.
 
-1. **Клонируйте репозиторий / Clone the repository**:
+**Только Arch Linux.** Установщик запросит обязательные параметры (токен бота, каталог загрузок, пароль админа). По выбору в меню: **qBittorrent** (pacman, systemd, порт 8081), **Prowlarr** (AUR: yay/paru, порт 9696, API key подставляется автоматически). Индексеры в Prowlarr добавляются вручную.  
+**Arch Linux only.** The installer prompts for required settings, and optionally installs **qBittorrent** (pacman, systemd, port 8081) and **Prowlarr** (AUR via yay/paru, systemd, port 9696), writing URL and API key to `.env`. Add indexers in Prowlarr’s web UI manually.
 
-   ```bash
-   git clone https://github.com/NikitaDmitryuk/telegram-media-server.git
-   cd telegram-media-server
-   ```
+```bash
+git clone https://github.com/NikitaDmitryuk/telegram-media-server.git
+cd telegram-media-server
+sudo make install
+```
 
-2. **Соберите и установите бота / Build and install the bot**:
+Или напрямую: `sudo ./scripts/install.sh`.  
+Or directly: `sudo ./scripts/install.sh`.
 
-   ```bash
-   sudo make install
-   ```
+При уже установленной системе скрипт предложит **только обновить бинарник и сервис** (конфиг не меняется). Если нужно что-то дописать в конфиг, ответьте «n» — будут запрошены только недостающие параметры.  
+If the system is already installed, the script will offer to **only update the binary and service** (config unchanged). Answer «n» to add or change config — only missing values will be prompted.
 
-3. **Настройте бота / Configure the bot**:  
-   См. раздел **Конфигурация / Configuration**.  
-   See the **Configuration** section.
+### Важно: пароли по умолчанию / Important: default passwords
+
+По умолчанию используются **стандартные пароли** (например, qBittorrent Web UI: `admin` / `adminadmin`). **Не используйте этот установщик на сервере, доступном из интернета**, без смены паролей в процессе установки или сразу после неё. В скрипте можно задать свои пароли и при желании сгенерировать случайный пароль для qBittorrent.  
+By default **default passwords** are used (e.g. qBittorrent Web UI: `admin` / `adminadmin`). **Do not use this installer on an internet-exposed server** without changing passwords during or right after setup. The script lets you set your own passwords and optionally generate a random one for qBittorrent.
 
 ---
 
@@ -149,6 +151,12 @@ Create a `.env` file based on `.env.example` and configure the required paramete
 
 **Docker и сеть:** по умолчанию в `docker-compose.yml` порт API проброшен на хост (`8080:8080`), приложение слушает `0.0.0.0:8080` — Swagger и API доступны по http://localhost:8080 на Mac, Windows и Linux. На macOS/Windows режим `network_mode: host` в Docker Desktop не даёт доступа к портам контейнера с хоста, поэтому используется проброс портов. На Linux при необходимости лучшего приёма пиров для торрентов можно включить `network_mode: host` в `docker-compose.yml` (тогда порт 8080 будет доступен на хосте без явного маппинга).  
 **Docker and network:** by default, the API port is published to the host (`8080:8080`) and the app listens on `0.0.0.0:8080`, so Swagger is at http://localhost:8080 on Mac, Windows, and Linux. On macOS/Windows, `network_mode: host` in Docker Desktop does not expose container ports to the host, so port mapping is used. On Linux, you can enable `network_mode: host` in `docker-compose.yml` for better torrent peer acceptance (port 8080 will then be available on the host without explicit mapping).
+
+**Docker + qBittorrent (локальная связка):** в `docker-compose.yml` добавлен сервис `qbittorrent` (Web UI на порту 8081). TMS подключается по `QBITTORRENT_URL=http://qbittorrent:8081`. Конфиг с логином **admin** и паролем **adminadmin** подмонтирован из `docker/qbittorrent.conf` — в `.env` укажите `MOVIE_PATH=/app/media` и при необходимости `QBITTORRENT_USERNAME=admin`, `QBITTORRENT_PASSWORD=adminadmin`.  
+**Docker + qBittorrent (local testing):** the compose file includes a `qbittorrent` service (Web UI on port 8081). TMS connects via `QBITTORRENT_URL=http://qbittorrent:8081`. A config with login **admin** and password **adminadmin** is mounted from `docker/qbittorrent.conf`; set `MOVIE_PATH=/app/media` in `.env` and optionally `QBITTORRENT_USERNAME=admin`, `QBITTORRENT_PASSWORD=adminadmin`.
+
+**qBittorrent:** при использовании qbittorrent-nox задайте в `.env` `QBITTORRENT_URL` (например `http://localhost:8081`). Чтобы не конфликтовать с API (порт 8080), запускайте qBittorrent с `QBT_WEBUI_PORT=8081`. Подробно: [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) (запуск и автозагрузка через systemd).  
+**qBittorrent:** when using qbittorrent-nox set `QBITTORRENT_URL` in `.env` (e.g. `http://localhost:8081`). To avoid conflict with the API (port 8080), run qBittorrent with `QBT_WEBUI_PORT=8081`. See [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) for running and systemd.
 
 Совместимость с ТВ: если видео не воспроизводится — `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости пройдут remux. Опции: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — отклонять несовместимое видео.  
 TV compatibility: if video won't play on your TV, set `VIDEO_COMPATIBILITY_MODE=true`. Files may be remuxed. Options: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — reject incompatible video.

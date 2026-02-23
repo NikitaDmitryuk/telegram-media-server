@@ -31,6 +31,9 @@ type Service interface {
 	StopAllDownloads()
 	GetActiveDownloads() []uint
 	GetQueueItems() []map[string]any
+	// RemoveQBittorrentTorrent removes the torrent from qBittorrent Web UI by movie ID (looks up hash in DB).
+	// No-op if not qBittorrent or hash missing.
+	RemoveQBittorrentTorrent(ctx context.Context, movieID uint) error
 }
 
 // conversionJob is sent to the conversion worker; Done is closed when conversion (or skip) is finished.

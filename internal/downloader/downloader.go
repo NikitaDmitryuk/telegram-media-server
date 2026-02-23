@@ -20,6 +20,13 @@ type EarlyCompatDownloader interface {
 	GetEarlyTvCompatibility(ctx context.Context) (string, error)
 }
 
+// QBittorrentHashDownloader: optional; manager uses QBittorrentHashChan to persist the torrent hash
+// for removal from qBittorrent on movie delete.
+type QBittorrentHashDownloader interface {
+	Downloader
+	QBittorrentHashChan() <-chan string // sends the qBittorrent torrent hash once when known, then closes
+}
+
 type Updater interface {
 	RunUpdate(ctx context.Context)
 }

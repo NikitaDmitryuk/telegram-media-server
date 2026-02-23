@@ -70,6 +70,8 @@ func (*DatabaseStub) UpdateConversionPercentage(_ context.Context, _ uint, _ int
 
 func (*DatabaseStub) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
 
+func (*DatabaseStub) SetQBittorrentHash(_ context.Context, _ uint, _ string) error { return nil }
+
 func (*DatabaseStub) RemoveFilesByMovieID(_ context.Context, _ uint) error { return nil }
 
 func (*DatabaseStub) RemoveTempFilesByMovieID(_ context.Context, _ uint) error { return nil }

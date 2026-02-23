@@ -200,6 +200,7 @@ func (*TestSQLiteDatabase) UpdateConversionPercentage(_ context.Context, _ uint,
 	return nil
 }
 func (*TestSQLiteDatabase) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
+func (*TestSQLiteDatabase) SetQBittorrentHash(_ context.Context, _ uint, _ string) error { return nil }
 func (*TestSQLiteDatabase) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
 	return database.Movie{}, nil
 }
