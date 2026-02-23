@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
@@ -45,12 +46,13 @@ func TestStagnantProgress_NormalCloseBeforeThreshold(t *testing.T) {
 	defer cancel()
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()
@@ -106,6 +108,7 @@ func TestEpisodeChanResetsStagnantTimer(t *testing.T) {
 		episodesChan:  episodesChan,
 		ctx:           ctx,
 		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 		totalEpisodes: 5,
 	}
 
@@ -153,12 +156,13 @@ func TestProgressChanClose_CompletesDownload(t *testing.T) {
 	defer cancel()
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()
@@ -196,12 +200,13 @@ func TestErrChanReceivesError(t *testing.T) {
 	defer cancel()
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()
@@ -234,12 +239,13 @@ func TestContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()
@@ -283,6 +289,7 @@ func TestEpisodeChanClosed_DoesNotPanic(t *testing.T) {
 		episodesChan:  episodesChan,
 		ctx:           ctx,
 		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 		totalEpisodes: 3,
 	}
 
@@ -330,12 +337,13 @@ func TestDownloadTimeout_FromMonitor(t *testing.T) {
 	defer cancel()
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()
@@ -370,12 +378,13 @@ func TestErrChanNilError(t *testing.T) {
 	defer cancel()
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()
@@ -409,12 +418,13 @@ func TestProgressOver100_IsClamped(t *testing.T) {
 	defer cancel()
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()
@@ -464,6 +474,7 @@ func TestMultipleEpisodes_SequentialCompletion(t *testing.T) {
 		episodesChan:  episodesChan,
 		ctx:           ctx,
 		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 		totalEpisodes: 4,
 	}
 
@@ -508,13 +519,14 @@ func TestNoEpisodesChan_NilHandling(t *testing.T) {
 	defer cancel()
 
 	job := downloadJob{
-		downloader:   &testutils.MockDownloader{ShouldBlock: true},
-		startTime:    time.Now(),
-		progressChan: progressChan,
-		errChan:      errChan,
-		episodesChan: nil, // no episodes channel
-		ctx:          ctx,
-		cancel:       cancel,
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		episodesChan:  nil, // no episodes channel
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
 	}
 
 	dm.mu.Lock()

@@ -18,7 +18,6 @@ import (
 	tmsfactory "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
 	tmsdownloadmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/common"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -69,8 +68,6 @@ func main() {
 		DownloadManager: downloadManager,
 		DeleteQueue:     deleteQueue,
 	}
-
-	downloads.InitNotificationHandler(a)
 
 	var apiServer *api.Server
 	if config.TMSAPIEnabled {

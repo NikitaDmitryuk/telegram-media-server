@@ -17,6 +17,7 @@ import (
 	tmsdownloader "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	tmsdmanager "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/manager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
@@ -34,7 +35,10 @@ type mockDM struct {
 	startReturn uint
 }
 
-func (m *mockDM) StartDownload(_ tmsdownloader.Downloader, _ int64) (id uint, progressChan chan float64, errChan chan error, err error) {
+func (m *mockDM) StartDownload(
+	_ tmsdownloader.Downloader,
+	_ notifier.QueueNotifier,
+) (id uint, progressChan chan float64, errChan chan error, err error) {
 	if m.startErr != nil {
 		return 0, nil, nil, m.startErr
 	}
@@ -48,11 +52,6 @@ func (m *mockDM) StartDownload(_ tmsdownloader.Downloader, _ int64) (id uint, pr
 func (m *mockDM) StopDownload(_ uint) error     { return m.stopErr }
 func (*mockDM) StopDownloadSilent(_ uint) error { return nil }
 func (*mockDM) StopAllDownloads()               {}
-func (*mockDM) GetNotificationChan() <-chan tmsdmanager.QueueNotification {
-	ch := make(chan tmsdmanager.QueueNotification)
-	close(ch)
-	return ch
-}
 func (m *mockDM) GetActiveDownloads() []uint {
 	if m.activeIDs != nil {
 		return m.activeIDs
@@ -67,14 +66,20 @@ func (m *mockDM) GetQueueItems() []map[string]any {
 }
 
 // mockDMCompletion is like mockDM but returns channels that are closed/sent after a short delay,
-// so that handleAPIDownloadCompletion can drain them and exit (tests API download completion flow).
+// so that app.RunCompletionLoop can drain them and exit (tests API download completion flow).
 type mockDMCompletion struct {
 	startReturn uint
 }
 
+// Ensure mocks implement the manager Service interface.
+var (
+	_ tmsdmanager.Service = (*mockDM)(nil)
+	_ tmsdmanager.Service = (*mockDMCompletion)(nil)
+)
+
 func (m *mockDMCompletion) StartDownload(
 	_ tmsdownloader.Downloader,
-	_ int64,
+	_ notifier.QueueNotifier,
 ) (id uint, progressChan chan float64, errChan chan error, err error) {
 	id = m.startReturn
 	if id == 0 {
@@ -92,11 +97,6 @@ func (m *mockDMCompletion) StartDownload(
 func (*mockDMCompletion) StopDownload(_ uint) error       { return nil }
 func (*mockDMCompletion) StopDownloadSilent(_ uint) error { return nil }
 func (*mockDMCompletion) StopAllDownloads()               {}
-func (*mockDMCompletion) GetNotificationChan() <-chan tmsdmanager.QueueNotification {
-	ch := make(chan tmsdmanager.QueueNotification)
-	close(ch)
-	return ch
-}
 func (*mockDMCompletion) GetActiveDownloads() []uint      { return nil }
 func (*mockDMCompletion) GetQueueItems() []map[string]any { return nil }
 
@@ -347,7 +347,8 @@ func TestAPI_AddDownload_400EmptyURL(t *testing.T) {
 func TestAPI_AddDownload_201(t *testing.T) {
 	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret", MoviePath: t.TempDir()}
 	dm := &mockDM{startReturn: 42}
-	a := &app.App{Config: cfg, DownloadManager: dm}
+	db := &testutils.DatabaseStub{}
+	a := &app.App{Config: cfg, DownloadManager: dm, DB: db}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
 	body, _ := json.Marshal(AddDownloadRequest{URL: "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test+Movie"})

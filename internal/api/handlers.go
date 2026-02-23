@@ -11,10 +11,9 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/prowlarr"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
@@ -124,16 +123,6 @@ func DeleteDownload(w http.ResponseWriter, r *http.Request, a *app.App, id uint)
 // maxAddDownloadBodyBytes limits POST /api/v1/downloads body size to avoid DoS.
 const maxAddDownloadBodyBytes = 1024 * 1024 // 1 MiB
 
-// downloadErrorMessage returns a readable error message for API (root cause, friendly text for invalid magnet).
-func downloadErrorMessage(err error) string {
-	rootErr := utils.RootError(err)
-	msg := rootErr.Error()
-	if strings.Contains(msg, "invalid magnet") {
-		return "Invalid magnet link: hash must be 32 (base32) or 40 (hex) characters."
-	}
-	return msg
-}
-
 // AddDownload handles POST /api/v1/downloads. Body: {"url":"..."}.
 func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 	ctx := r.Context()
@@ -155,14 +144,30 @@ func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 	dl, err := factory.CreateDownloaderFromURL(ctx, req.URL, a.Config.MoviePath, a.Config)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Debug("AddDownload: CreateDownloaderFromURL failed")
-		writeError(w, http.StatusBadRequest, downloadErrorMessage(err))
+		writeError(w, http.StatusBadRequest, utils.DownloadErrorMessage(err))
 		return
 	}
 	title, _ := dl.GetTitle()
-	movieID, progressChan, errChan, err := a.DownloadManager.StartDownload(dl, 0)
+	if validateErr := app.ValidateDownloadStart(ctx, a, dl); validateErr != nil {
+		logutils.Log.WithError(validateErr).
+			WithField("request_id", RequestIDFromContext(ctx)).
+			Debug("AddDownload: ValidateDownloadStart failed")
+		switch {
+		case errors.Is(validateErr, app.ErrAlreadyExists):
+			writeError(w, http.StatusConflict, "media already exists")
+			return
+		case errors.Is(validateErr, app.ErrNotEnoughSpace):
+			writeError(w, http.StatusInsufficientStorage, "not enough disk space")
+			return
+		default:
+			writeError(w, http.StatusBadRequest, utils.DownloadErrorMessage(validateErr))
+			return
+		}
+	}
+	movieID, progressChan, errChan, err := a.DownloadManager.StartDownload(dl, notifier.Noop)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Error("AddDownload: StartDownload failed")
-		writeError(w, http.StatusInternalServerError, downloadErrorMessage(err))
+		writeError(w, http.StatusInternalServerError, utils.DownloadErrorMessage(err))
 		return
 	}
 	if strings.TrimSpace(req.Title) != "" {
@@ -174,51 +179,29 @@ func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 			title = strings.TrimSpace(req.Title)
 		}
 	}
-	go handleAPIDownloadCompletion(a, dl, movieID, title, progressChan, errChan)
+	go app.RunCompletionLoop(a, progressChan, errChan, dl, movieID, title, webhookNotifier{
+		webhookURL:   a.Config.TMSWebhookURL,
+		webhookToken: a.Config.TMSWebhookToken,
+	})
 	writeJSON(w, http.StatusCreated, AddDownloadResponse{ID: movieID, Title: title})
 }
 
-// handleAPIDownloadCompletion drains progress/error channels and runs webhook + temp file cleanup for API-originated downloads.
-// Mirrors handleDownloadCompletion in internal/handlers/downloads/common.go for chatID=0.
-func handleAPIDownloadCompletion(
-	a *app.App,
-	dl downloader.Downloader,
-	movieID uint,
-	title string,
-	progressChan <-chan float64,
-	errChan <-chan error,
-) {
-	for range progressChan {
-	}
-	err := <-errChan
-	if errors.Is(err, downloader.ErrStoppedByDeletion) {
-		logutils.Log.Info("API download stopped by deletion queue (no notification)")
-		return
-	}
-	if dl.StoppedManually() {
-		logutils.Log.Info("API download was manually stopped")
-		if a.Config.TMSWebhookURL != "" {
-			SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, title, "stopped", "")
-		}
-		return
-	}
-	if err != nil {
-		logutils.Log.WithError(err).Error("API download failed")
-		if deleteErr := filemanager.DeleteMovie(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); deleteErr != nil {
-			logutils.Log.WithError(deleteErr).Error("Failed to delete movie after API download failed")
-		}
-		if a.Config.TMSWebhookURL != "" {
-			SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, title, "failed", downloadErrorMessage(err))
-		}
-		return
-	}
-	logutils.Log.Info("API download completed successfully")
-	if err := filemanager.DeleteTemporaryFilesByMovieID(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); err != nil {
-		logutils.Log.WithError(err).Error("Failed to delete temporary files after API download")
-	}
-	if a.Config.TMSWebhookURL != "" {
-		SendCompletionWebhook(a.Config.TMSWebhookURL, a.Config.TMSWebhookToken, movieID, title, "completed", "")
-	}
+// webhookNotifier implements notifier.CompletionNotifier for API-originated downloads.
+type webhookNotifier struct {
+	webhookURL   string
+	webhookToken string
+}
+
+func (n webhookNotifier) OnStopped(movieID uint, title string) {
+	SendCompletionWebhook(n.webhookURL, n.webhookToken, movieID, title, "stopped", "")
+}
+
+func (n webhookNotifier) OnFailed(movieID uint, title string, err error) {
+	SendCompletionWebhook(n.webhookURL, n.webhookToken, movieID, title, "failed", utils.DownloadErrorMessage(err))
+}
+
+func (n webhookNotifier) OnCompleted(movieID uint, title string) {
+	SendCompletionWebhook(n.webhookURL, n.webhookToken, movieID, title, "completed", "")
 }
 
 const prowlarrSearchTimeout = 15 * time.Second

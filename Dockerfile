@@ -14,6 +14,7 @@ RUN go build -o /telegram-media-server ./cmd/telegram-media-server
 
 FROM ubuntu:24.04 AS runtime
 
+# yt-dlp via pip: always correct for the runtime architecture, no arch detection needed.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     aria2 \
@@ -22,12 +23,15 @@ RUN apt-get update && \
     dnsutils \
     net-tools \
     iputils-ping \
-    yt-dlp \
+    python3 \
+    python3-pip \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 RUN update-ca-certificates
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV YTDLP_PATH=/usr/local/bin/yt-dlp
 
 COPY --from=builder /telegram-media-server /telegram-media-server
 COPY locales /app/locales

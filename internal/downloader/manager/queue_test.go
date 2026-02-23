@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
@@ -21,7 +22,6 @@ func newQueueTestManager(t *testing.T) *DownloadManager {
 		queue:            make([]queuedDownload, 0),
 		semaphore:        make(chan struct{}, cfg.GetDownloadSettings().MaxConcurrentDownloads),
 		downloadSettings: cfg.GetDownloadSettings(),
-		notificationChan: make(chan QueueNotification, NotificationChannelSize),
 		db:               db,
 		cfg:              cfg,
 		conversionQueue:  make(chan conversionJob, ConversionQueueSize),
@@ -68,9 +68,9 @@ func TestGetQueueCount_WithItems(t *testing.T) {
 
 	dm.queueMutex.Lock()
 	dm.queue = append(dm.queue,
-		queuedDownload{movieID: 1, title: "Movie 1", addedAt: time.Now(), chatID: 100},
-		queuedDownload{movieID: 2, title: "Movie 2", addedAt: time.Now(), chatID: 200},
-		queuedDownload{movieID: 3, title: "Movie 3", addedAt: time.Now(), chatID: 300},
+		queuedDownload{movieID: 1, title: "Movie 1", addedAt: time.Now(), queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 2, title: "Movie 2", addedAt: time.Now(), queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 3, title: "Movie 3", addedAt: time.Now(), queueNotifier: notifier.Noop},
 	)
 	dm.queueMutex.Unlock()
 
@@ -94,8 +94,8 @@ func TestGetQueueItems_Content(t *testing.T) {
 	now := time.Now()
 	dm.queueMutex.Lock()
 	dm.queue = append(dm.queue,
-		queuedDownload{movieID: 10, title: "Alpha", addedAt: now, chatID: 100},
-		queuedDownload{movieID: 20, title: "Beta", addedAt: now, chatID: 200},
+		queuedDownload{movieID: 10, title: "Alpha", addedAt: now, queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 20, title: "Beta", addedAt: now, queueNotifier: notifier.Noop},
 	)
 	dm.queueMutex.Unlock()
 
@@ -126,9 +126,9 @@ func TestRemoveFromQueue_Exists(t *testing.T) {
 
 	dm.queueMutex.Lock()
 	dm.queue = append(dm.queue,
-		queuedDownload{movieID: 1, title: "Movie 1"},
-		queuedDownload{movieID: 2, title: "Movie 2"},
-		queuedDownload{movieID: 3, title: "Movie 3"},
+		queuedDownload{movieID: 1, title: "Movie 1", queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 2, title: "Movie 2", queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 3, title: "Movie 3", queueNotifier: notifier.Noop},
 	)
 	dm.queueMutex.Unlock()
 
@@ -154,7 +154,7 @@ func TestRemoveFromQueue_NotExists(t *testing.T) {
 	dm := newQueueTestManager(t)
 
 	dm.queueMutex.Lock()
-	dm.queue = append(dm.queue, queuedDownload{movieID: 1, title: "Movie 1"})
+	dm.queue = append(dm.queue, queuedDownload{movieID: 1, title: "Movie 1", queueNotifier: notifier.Noop})
 	dm.queueMutex.Unlock()
 
 	removed := dm.RemoveFromQueue(999)
@@ -187,8 +187,8 @@ func TestGetTotalDownloads(t *testing.T) {
 	// Add queue items.
 	dm.queueMutex.Lock()
 	dm.queue = append(dm.queue,
-		queuedDownload{movieID: 1},
-		queuedDownload{movieID: 2},
+		queuedDownload{movieID: 1, queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 2, queueNotifier: notifier.Noop},
 	)
 	dm.queueMutex.Unlock()
 
@@ -262,9 +262,9 @@ func TestGetTotalDownloads_Mixed(t *testing.T) {
 	// 3 queued.
 	dm.queueMutex.Lock()
 	dm.queue = append(dm.queue,
-		queuedDownload{movieID: 10},
-		queuedDownload{movieID: 20},
-		queuedDownload{movieID: 30},
+		queuedDownload{movieID: 10, queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 20, queueNotifier: notifier.Noop},
+		queuedDownload{movieID: 30, queueNotifier: notifier.Noop},
 	)
 	dm.queueMutex.Unlock()
 

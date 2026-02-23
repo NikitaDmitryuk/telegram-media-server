@@ -6,6 +6,7 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 )
 
 func (dm *DownloadManager) processQueue() {
@@ -38,19 +39,13 @@ func (dm *DownloadManager) startQueuedDownload(queued *queuedDownload) {
 		"title":    queued.title,
 	}).Info("Starting queued download")
 
-	dm.notificationChan <- QueueNotification{
-		Type:          "started",
-		ChatID:        queued.chatID,
-		MovieID:       queued.movieID,
-		Title:         queued.title,
-		MaxConcurrent: dm.downloadSettings.MaxConcurrentDownloads,
-	}
+	queued.queueNotifier.OnStarted(queued.movieID, queued.title)
 
 	_, innerProgressChan, innerErrChan, err := dm.startDownloadImmediately(
 		queued.movieID,
 		queued.downloader,
 		queued.title,
-		queued.chatID,
+		queued.queueNotifier,
 	)
 	if err != nil {
 		logutils.Log.WithError(err).WithFields(map[string]any{
@@ -112,7 +107,7 @@ func (dm *DownloadManager) addToQueue(
 	movieID uint,
 	dl downloader.Downloader,
 	movieTitle string,
-	chatID int64,
+	queueNotifier notifier.QueueNotifier,
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error) {
 	// Create channels that will be used by the caller to track progress
 	// These channels will be forwarded to when the download actually starts
@@ -121,13 +116,13 @@ func (dm *DownloadManager) addToQueue(
 
 	dm.queueMutex.Lock()
 	dm.queue = append(dm.queue, queuedDownload{
-		downloader:   dl,
-		movieID:      movieID,
-		title:        movieTitle,
-		addedAt:      time.Now(),
-		chatID:       chatID,
-		progressChan: progressChan,
-		errChan:      outerErrChan,
+		downloader:    dl,
+		movieID:       movieID,
+		title:         movieTitle,
+		addedAt:       time.Now(),
+		queueNotifier: queueNotifier,
+		progressChan:  progressChan,
+		errChan:       outerErrChan,
 	})
 	queuePosition := len(dm.queue)
 	dm.queueMutex.Unlock()
@@ -138,17 +133,7 @@ func (dm *DownloadManager) addToQueue(
 		"position": queuePosition,
 	}).Info("Added download to queue")
 
-	estimatedWaitTime := dm.calculateEstimatedWaitTime(queuePosition)
-
-	dm.notificationChan <- QueueNotification{
-		Type:          "queued",
-		ChatID:        chatID,
-		MovieID:       movieID,
-		Title:         movieTitle,
-		Position:      queuePosition,
-		WaitTime:      estimatedWaitTime,
-		MaxConcurrent: dm.downloadSettings.MaxConcurrentDownloads,
-	}
+	queueNotifier.OnQueued(movieID, movieTitle, queuePosition, dm.downloadSettings.MaxConcurrentDownloads)
 
 	// Start a goroutine to monitor queue timeout only
 	// Note: We do NOT close channels here - they will be closed by startQueuedDownload
