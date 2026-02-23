@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
@@ -38,7 +39,7 @@ func TestConcurrentDownloads_TwoMoviesRunSimultaneously(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		movie1ID, _, _, err1 = dm.StartDownload(mock1, 100)
+		movie1ID, _, _, err1 = dm.StartDownload(mock1, notifier.Noop)
 	}()
 
 	// Wait a bit to ensure first download starts
@@ -48,7 +49,7 @@ func TestConcurrentDownloads_TwoMoviesRunSimultaneously(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		movie2ID, _, _, err2 = dm.StartDownload(mock2, 200)
+		movie2ID, _, _, err2 = dm.StartDownload(mock2, notifier.Noop)
 	}()
 
 	// Wait for both StartDownload calls to complete
@@ -109,7 +110,7 @@ func TestSemaphoreReleasedAfterCompletion(t *testing.T) {
 		Files:       []string{"/tmp/movie1_sem.mp4"},
 	}
 
-	movieID1, _, errChan1, err := dm.StartDownload(mock1, 100)
+	movieID1, _, errChan1, err := dm.StartDownload(mock1, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for Movie 1 failed: %v", err)
 	}
@@ -137,7 +138,7 @@ func TestSemaphoreReleasedAfterCompletion(t *testing.T) {
 		Files:       []string{"/tmp/movie2_sem.mp4"},
 	}
 
-	movieID2, _, _, err := dm.StartDownload(mock2, 200)
+	movieID2, _, _, err := dm.StartDownload(mock2, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for Movie 2 failed: %v", err)
 	}
@@ -175,7 +176,7 @@ func TestQueuedDownloadReceivesProgressAndCompletion(t *testing.T) {
 		Files:       []string{"/tmp/blocking.mp4"},
 	}
 
-	movie1ID, _, _, err := dm.StartDownload(mock1, 100)
+	movie1ID, _, _, err := dm.StartDownload(mock1, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for blocking movie failed: %v", err)
 	}
@@ -192,7 +193,7 @@ func TestQueuedDownloadReceivesProgressAndCompletion(t *testing.T) {
 		Files:       []string{"/tmp/queued.mp4"},
 	}
 
-	movie2ID, progressChan2, errChan2, err := dm.StartDownload(mock2, 200)
+	movie2ID, progressChan2, errChan2, err := dm.StartDownload(mock2, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for queued movie failed: %v", err)
 	}
@@ -257,7 +258,7 @@ func TestQueuedDownloadDoesNotCompleteImmediately(t *testing.T) {
 		Files:       []string{"/tmp/blocking_imm.mp4"},
 	}
 
-	movie1ID, _, _, err := dm.StartDownload(mock1, 100)
+	movie1ID, _, _, err := dm.StartDownload(mock1, notifier.Noop)
 	_ = movie1ID // Suppress unused warning; we only care that it starts
 	if err != nil {
 		t.Fatalf("StartDownload for blocking movie failed: %v", err)
@@ -270,7 +271,7 @@ func TestQueuedDownloadDoesNotCompleteImmediately(t *testing.T) {
 		Files:       []string{"/tmp/queued_imm.mp4"},
 	}
 
-	_, progressChan2, errChan2, err := dm.StartDownload(mock2, 200)
+	_, progressChan2, errChan2, err := dm.StartDownload(mock2, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for queued movie failed: %v", err)
 	}
@@ -342,7 +343,7 @@ func TestMultipleDownloadsWithSeries(t *testing.T) {
 	}
 
 	// Start series download
-	seriesID, _, _, err := dm.StartDownload(seriesMock, 100)
+	seriesID, _, _, err := dm.StartDownload(seriesMock, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for series failed: %v", err)
 	}
@@ -350,7 +351,7 @@ func TestMultipleDownloadsWithSeries(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Start movie download - should also be active (not queued)
-	movieID, _, _, err := dm.StartDownload(movieMock, 200)
+	movieID, _, _, err := dm.StartDownload(movieMock, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for movie failed: %v", err)
 	}
@@ -456,7 +457,7 @@ func TestSeriesCompletionUnblocksQueuedDownload(t *testing.T) {
 		EpisodesChan: make(chan int, 2),
 	}
 
-	seriesID, _, _, err := dm.StartDownload(seriesMock, 100)
+	seriesID, _, _, err := dm.StartDownload(seriesMock, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for series failed: %v", err)
 	}
@@ -474,7 +475,7 @@ func TestSeriesCompletionUnblocksQueuedDownload(t *testing.T) {
 		Files:       []string{"/tmp/queued_after_series.mp4"},
 	}
 
-	movieID, progressChan, errChan, err := dm.StartDownload(movieMock, 200)
+	movieID, progressChan, errChan, err := dm.StartDownload(movieMock, notifier.Noop)
 	if err != nil {
 		t.Fatalf("StartDownload for movie failed: %v", err)
 	}

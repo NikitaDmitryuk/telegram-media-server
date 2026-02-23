@@ -73,7 +73,7 @@ func TestEnqueueConversionIfNeeded_CompatibilityModeOff(t *testing.T) {
 	dm := NewDownloadManager(cfg, mockDB)
 	ctx := context.Background()
 
-	needWait, done, compatRed := dm.enqueueConversionIfNeeded(ctx, 1, 0, "test")
+	needWait, done, compatRed := dm.enqueueConversionIfNeeded(ctx, 1, "test")
 	if needWait || done != nil || compatRed {
 		t.Errorf(
 			"compatibility mode off: want needWait=false, done=nil, compatRed=false; got needWait=%v done=%v compatRed=%v",
@@ -104,7 +104,7 @@ func TestEnqueueConversionIfNeeded_CompatibilityModeOn_NoFiles_KeepsEarlyEstimat
 	dm := NewDownloadManager(cfg, mockDB)
 	ctx := context.Background()
 
-	needWait, done, compatRed := dm.enqueueConversionIfNeeded(ctx, 1, 0, "test")
+	needWait, done, compatRed := dm.enqueueConversionIfNeeded(ctx, 1, "test")
 	if needWait || done != nil || compatRed {
 		t.Errorf(
 			"unknown probe: want needWait=false, done=nil, compatRed=false; got needWait=%v done=%v compatRed=%v",
@@ -134,7 +134,7 @@ func TestEnqueueConversion_CompatibilityModeOff(t *testing.T) {
 	cfg.VideoSettings.CompatibilityMode = false
 	dm := NewDownloadManager(cfg, &conversionMockDB{})
 
-	_, _ = dm.EnqueueConversion(1, 0, "test")
+	_, _ = dm.EnqueueConversion(1, "test")
 	// Should not block or panic; conversion queue is not sent to when mode is off
 }
 

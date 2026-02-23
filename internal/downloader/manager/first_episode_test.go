@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,6 +67,25 @@ func (*firstEpisodeDownloader) StartDownload(
 	return progressChan, errChan, epCh, nil
 }
 
+// firstEpisodeTestNotifier records OnFirstEpisodeReady calls for assertion.
+type firstEpisodeTestNotifier struct {
+	mu       sync.Mutex
+	movieID  uint
+	title    string
+	received bool
+}
+
+func (*firstEpisodeTestNotifier) OnQueued(uint, string, int, int) {}
+func (*firstEpisodeTestNotifier) OnStarted(uint, string)          {}
+func (n *firstEpisodeTestNotifier) OnFirstEpisodeReady(movieID uint, title string) {
+	n.mu.Lock()
+	n.movieID = movieID
+	n.title = title
+	n.received = true
+	n.mu.Unlock()
+}
+func (*firstEpisodeTestNotifier) OnVideoNotSupported(uint, string) {}
+
 func TestFirstEpisodeReadyNotification(t *testing.T) {
 	logutils.InitLogger("debug")
 
@@ -74,12 +94,12 @@ func TestFirstEpisodeReadyNotification(t *testing.T) {
 	mockDB := &firstEpisodeMockDB{}
 
 	dm := NewDownloadManager(cfg, mockDB)
-	const chatID int64 = 456
 	const title = "Test Series S01"
 
 	mockDl := &firstEpisodeDownloader{title: title}
+	testNotifier := &firstEpisodeTestNotifier{}
 
-	movieID, _, errCh, err := dm.StartDownload(mockDl, chatID)
+	movieID, _, errCh, err := dm.StartDownload(mockDl, testNotifier)
 	if err != nil {
 		t.Fatalf("StartDownload: %v", err)
 	}
@@ -87,26 +107,32 @@ func TestFirstEpisodeReadyNotification(t *testing.T) {
 		t.Fatalf("expected movieID 1, got %d", movieID)
 	}
 
-	var notification QueueNotification
-	select {
-	case notification = <-dm.GetNotificationChan():
-	case err := <-errCh:
-		t.Fatalf("download failed: %v", err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for first_episode_ready notification")
+	// Wait for either first_episode_ready or download failure
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case err := <-errCh:
+			t.Fatalf("download failed: %v", err)
+		case <-timeout:
+			t.Fatal("timeout waiting for first_episode_ready notification")
+		default:
+			testNotifier.mu.Lock()
+			ok := testNotifier.received
+			testNotifier.mu.Unlock()
+			if ok {
+				goto asserted
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
 	}
-
-	if notification.Type != "first_episode_ready" {
-		t.Errorf("notification type: want first_episode_ready, got %q", notification.Type)
+asserted:
+	testNotifier.mu.Lock()
+	defer testNotifier.mu.Unlock()
+	if testNotifier.title != title {
+		t.Errorf("notification Title: want %q, got %q", title, testNotifier.title)
 	}
-	if notification.ChatID != chatID {
-		t.Errorf("notification ChatID: want %d, got %d", chatID, notification.ChatID)
-	}
-	if notification.Title != title {
-		t.Errorf("notification Title: want %q, got %q", title, notification.Title)
-	}
-	if notification.MovieID != 1 {
-		t.Errorf("notification MovieID: want 1, got %d", notification.MovieID)
+	if testNotifier.movieID != 1 {
+		t.Errorf("notification MovieID: want 1, got %d", testNotifier.movieID)
 	}
 
 	if len(mockDB.updateEpisodesCalls) < 1 {

@@ -10,6 +10,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
@@ -20,7 +21,6 @@ func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManag
 		queue:            make([]queuedDownload, 0),
 		semaphore:        make(chan struct{}, cfg.GetDownloadSettings().MaxConcurrentDownloads),
 		downloadSettings: cfg.GetDownloadSettings(),
-		notificationChan: make(chan QueueNotification, NotificationChannelSize),
 		db:               db,
 		cfg:              cfg,
 		conversionQueue:  make(chan conversionJob, ConversionQueueSize),
@@ -36,7 +36,7 @@ func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManag
 
 func (dm *DownloadManager) StartDownload(
 	dl downloader.Downloader,
-	chatID int64,
+	queueNotifier notifier.QueueNotifier,
 ) (
 	movieID uint,
 	progressChan chan float64,
@@ -75,9 +75,9 @@ func (dm *DownloadManager) StartDownload(
 
 	select {
 	case dm.semaphore <- struct{}{}:
-		return dm.startDownloadImmediately(movieID, dl, movieTitle, chatID)
+		return dm.startDownloadImmediately(movieID, dl, movieTitle, queueNotifier)
 	default:
-		queuedMovieID, progressChan, outerErrChan := dm.addToQueue(movieID, dl, movieTitle, chatID)
+		queuedMovieID, progressChan, outerErrChan := dm.addToQueue(movieID, dl, movieTitle, queueNotifier)
 		return queuedMovieID, progressChan, outerErrChan, nil
 	}
 }
@@ -86,7 +86,7 @@ func (dm *DownloadManager) startDownloadImmediately(
 	movieID uint,
 	dl downloader.Downloader,
 	movieTitle string,
-	chatID int64,
+	queueNotifier notifier.QueueNotifier,
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -120,7 +120,7 @@ func (dm *DownloadManager) startDownloadImmediately(
 		episodesChan:  episodesChan,
 		ctx:           ctx,
 		cancel:        cancel,
-		chatID:        chatID,
+		queueNotifier: queueNotifier,
 		title:         movieTitle,
 		totalEpisodes: dl.TotalEpisodes(),
 	}
@@ -243,7 +243,6 @@ func (dm *DownloadManager) removeMovieRollback(ctx context.Context, movieID uint
 func (dm *DownloadManager) enqueueConversionIfNeeded(
 	ctx context.Context,
 	movieID uint,
-	chatID int64,
 	title string,
 ) (needWait bool, done <-chan struct{}, compatRed bool) {
 	if !dm.cfg.VideoSettings.CompatibilityMode {
@@ -267,18 +266,18 @@ func (dm *DownloadManager) enqueueConversionIfNeeded(
 	}
 	_ = dm.db.UpdateConversionStatus(ctx, movieID, "pending")
 	_ = dm.db.UpdateConversionPercentage(ctx, movieID, 0)
-	needWait, ch := dm.EnqueueConversion(movieID, chatID, title)
+	needWait, ch := dm.EnqueueConversion(movieID, title)
 	return needWait, ch, false
 }
 
 // EnqueueConversion adds movieID to the conversion queue (no-op if compatibility mode is off).
 // Returns (enqueued, done). If enqueued, caller must <-done before signaling "download completed" to the user.
-func (dm *DownloadManager) EnqueueConversion(movieID uint, chatID int64, title string) (enqueued bool, done <-chan struct{}) {
+func (dm *DownloadManager) EnqueueConversion(movieID uint, title string) (enqueued bool, done <-chan struct{}) {
 	if !dm.cfg.VideoSettings.CompatibilityMode {
 		return false, nil
 	}
 	jobDone := make(chan struct{}, 1)
-	job := conversionJob{MovieID: movieID, ChatID: chatID, Title: title, Done: jobDone}
+	job := conversionJob{MovieID: movieID, Title: title, Done: jobDone}
 	select {
 	case dm.conversionQueue <- job:
 		logutils.Log.WithField("movie_id", movieID).Info("Movie enqueued for TV compatibility conversion")

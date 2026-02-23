@@ -13,6 +13,7 @@ services:
       - ${MOVIE_PATH}:/app/media
     ports:
       - "8080:8080"
+      - "6881-6999:6881-6999"
     # Optional: on Linux, use network_mode: host for direct host network (e.g. better
     # torrent peer acceptance). Then remove "ports" and set TMS_API_LISTEN=127.0.0.1:8080
     # in .env if you only need API from the same machine.

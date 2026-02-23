@@ -62,12 +62,7 @@ func (dm *DownloadManager) monitorDownload(
 			if completed == 1 {
 				// "First episode ready" only for series (multiple files); skip for single-file video/yt-dlp.
 				if job.totalEpisodes > 1 {
-					dm.notificationChan <- QueueNotification{
-						Type:    "first_episode_ready",
-						ChatID:  job.chatID,
-						MovieID: movieID,
-						Title:   job.title,
-					}
+					job.queueNotifier.OnFirstEpisodeReady(movieID, job.title)
 				}
 				// Probe TV compatibility as soon as first file is ready so user sees green/yellow/red immediately.
 				if dm.cfg.VideoSettings.CompatibilityMode {
@@ -128,14 +123,9 @@ func (dm *DownloadManager) monitorDownload(
 					"duration": time.Since(downloadStartTime),
 				}).Info("Download completed successfully")
 
-				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.chatID, job.title)
+				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.title)
 				if compatRed && dm.cfg.VideoSettings.RejectIncompatible {
-					dm.notificationChan <- QueueNotification{
-						Type:    "video_not_supported",
-						ChatID:  job.chatID,
-						MovieID: movieID,
-						Title:   job.title,
-					}
+					job.queueNotifier.OnVideoNotSupported(movieID, job.title)
 					outerErrChan <- nil
 					return
 				}
@@ -204,14 +194,9 @@ func (dm *DownloadManager) monitorDownload(
 			} else {
 				logutils.Log.WithField("movie_id", movieID).Info("Download completed successfully")
 
-				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.chatID, job.title)
+				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.title)
 				if compatRed && dm.cfg.VideoSettings.RejectIncompatible {
-					dm.notificationChan <- QueueNotification{
-						Type:    "video_not_supported",
-						ChatID:  job.chatID,
-						MovieID: movieID,
-						Title:   job.title,
-					}
+					job.queueNotifier.OnVideoNotSupported(movieID, job.title)
 					outerErrChan <- nil
 					return
 				}
@@ -252,12 +237,7 @@ func (dm *DownloadManager) monitorDownload(
 
 		case <-job.ctx.Done():
 			if job.rejectedIncompatible {
-				dm.notificationChan <- QueueNotification{
-					Type:    "video_not_supported",
-					ChatID:  job.chatID,
-					MovieID: movieID,
-					Title:   job.title,
-				}
+				job.queueNotifier.OnVideoNotSupported(movieID, job.title)
 				outerErrChan <- nil
 			} else {
 				logutils.Log.WithField("movie_id", movieID).Info("Download canceled")
@@ -301,8 +281,4 @@ func (dm *DownloadManager) GetDownloadCount() int {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
 	return len(dm.jobs)
-}
-
-func (dm *DownloadManager) GetNotificationChan() <-chan QueueNotification {
-	return dm.notificationChan
 }

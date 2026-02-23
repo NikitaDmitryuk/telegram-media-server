@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"strings"
 )
 
 var (
@@ -48,4 +49,15 @@ func RootError(err error) error {
 		err = e
 	}
 	return err
+}
+
+// DownloadErrorMessage returns a human-readable message for download errors (root cause, friendly text for invalid magnet).
+// Use from both API and Telegram so the same message shape is shown.
+func DownloadErrorMessage(err error) string {
+	rootErr := RootError(err)
+	msg := rootErr.Error()
+	if strings.Contains(msg, "invalid magnet") {
+		return "Invalid magnet link: hash must be 32 (base32) or 40 (hex) characters."
+	}
+	return msg
 }
