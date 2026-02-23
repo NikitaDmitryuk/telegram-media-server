@@ -306,9 +306,10 @@ func TestValidateMagnetBtih(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "Valid 24 hex btih (some indexes use short hex)",
+			name:        "Reject 24 hex btih (aria2 supports only 40 hex or 32 base32)",
 			magnet:      "magnet:?xt=urn:btih:3A26B5C7D0E082D990F4F24B&dn=test",
-			expectError: false,
+			expectError: true,
+			contains:    "24-character",
 		},
 		{
 			name:        "Not a magnet",

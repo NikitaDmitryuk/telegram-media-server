@@ -729,12 +729,14 @@ func (d *Aria2Downloader) buildAria2Args(torrentPathOrMagnet string, cfg *config
 		args = append(args, fmt.Sprintf("--user-agent=%s", cfg.UserAgent))
 	}
 
-	// Timeout and retry settings, plus fallback trackers for better connectivity
+	// Timeout and retry settings, plus fallback trackers for better connectivity.
+	// HTTP(S) trackers help when UDP is blocked (e.g. some Docker/restrictive networks).
 	args = append(args,
 		fmt.Sprintf("--timeout=%d", cfg.Timeout),
 		fmt.Sprintf("--max-tries=%d", cfg.MaxTries),
 		fmt.Sprintf("--retry-wait=%d", cfg.RetryWait),
 		"--bt-tracker=udp://tracker.opentrackr.org:1337/announce",
+		"--bt-tracker=http://tracker.opentrackr.org:1337/announce",
 		"--bt-tracker=udp://open.stealth.si:80/announce",
 		"--bt-tracker=udp://tracker.torrent.eu.org:451/announce",
 		"--bt-tracker=udp://exodus.desync.com:6969/announce",
@@ -742,6 +744,7 @@ func (d *Aria2Downloader) buildAria2Args(torrentPathOrMagnet string, cfg *config
 		"--bt-tracker=udp://tracker.leechers-paradise.org:6969/announce",
 		"--bt-tracker=udp://zer0day.ch:1337/announce",
 		"--bt-tracker=udp://open.demonii.si:1337/announce",
+		"--bt-tracker=https://tracker.nanoha.org:443/announce",
 	)
 
 	// Follow torrent setting

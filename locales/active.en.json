@@ -16,9 +16,10 @@
             "progress": "Downloading {{.Name}}: {{.Progress}}%"
         },
         "video_downloading": "⬇️ Downloading video: {{.Title}}",
-        "downloaded_list": "ID:{{.ID}} {{.Sticker}}[{{.Progress}}] {{.Episodes}}{{.SizeGB}} GB\n{{.Name}}\n",
+        "downloaded_list": "ID:{{.ID}} {{.Sticker}}[{{.Progress}}] {{.Episodes}}{{.SizeGB}}\n{{.Name}}\n",
         "first_episode_ready": "▶️ First episode of «{{.Title}}» is ready to watch.",
         "video_not_supported": "⚠️ Video «{{.Title}}» is not supported by your TV (codec/H.264 level). Download cancelled.",
+        "unit_gb": "GB",
         "disk_space_info": "Available disk space: {{.AvailableSpaceGB}} GB",
         "video_successfully_downloaded": "✅ Video successfully downloaded: {{.Title}}",
         "download_queued": "📋 Movie added to download queue: {{.Title}}\nPosition in queue: {{.Position}}\nMax concurrent downloads: {{.MaxConcurrent}}",

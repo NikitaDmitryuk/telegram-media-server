@@ -34,8 +34,14 @@ func ListMoviesHandler(a *app.App, update *tgbotapi.Update) {
 	var messages []string
 	for i := range movies {
 		movie := &movies[i]
-		sizeGB := float64(movie.FileSize) / (1024 * 1024 * 1024) // #nosec G115
-		formattedSize := fmt.Sprintf("%.2f", sizeGB)
+		var formattedSize string
+		if movie.FileSize == 0 {
+			formattedSize = "—" // unknown size (e.g. magnet before metadata)
+		} else {
+			sizeGB := float64(movie.FileSize) / (1024 * 1024 * 1024) // #nosec G115
+			unit := lang.Translate("general.unit_gb", nil)
+			formattedSize = fmt.Sprintf("%.2f %s", sizeGB, unit)
+		}
 		episodes := ""
 		if movie.TotalEpisodes > 1 {
 			episodes = fmt.Sprintf("%d/%d ", movie.CompletedEpisodes, movie.TotalEpisodes)

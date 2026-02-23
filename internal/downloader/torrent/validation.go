@@ -109,9 +109,9 @@ func ValidateTorrentFile(filePath string) error {
 	return ValidateContent(data, len(data))
 }
 
-// btih hex length (20 bytes) and base32 length (32 chars)
+// btih hex length (20 bytes) and base32 length (32 chars).
+// aria2 accepts only 40-char hex or 32-char base32; 24-char hex is not supported.
 const btihHexLen = 40
-const btihHexLenShort = 24 // some indexes use 24-char hex
 const btihBase32Len = 32
 
 var btihHexRe = regexp.MustCompile(`^[0-9a-fA-F]+$`)
@@ -153,7 +153,7 @@ func ValidateMagnetBtih(magnet string) error {
 	}
 	hash := magnet[hashStart:hashEnd]
 	switch len(hash) {
-	case btihHexLen, btihHexLenShort:
+	case btihHexLen:
 		if !btihHexRe.MatchString(hash) {
 			return fmt.Errorf("invalid magnet: btih must be 40 hex or 32 base32 characters")
 		}
@@ -164,10 +164,15 @@ func ValidateMagnetBtih(magnet string) error {
 		}
 		return nil
 	default:
-		// Some clients send magnet without & after btih (e.g. whole tail as one token); accept if first 32 chars are valid base32
-		if len(hash) >= btihBase32Len && btihBase32Re.MatchString(hash[:btihBase32Len]) {
+		// Accept exactly 32-char base32 when no & after btih (whole tail taken as hash)
+		if len(hash) == btihBase32Len && btihBase32Re.MatchString(hash) {
 			return nil
 		}
-		return fmt.Errorf("invalid magnet: btih length must be 24 or 40 (hex) or 32 (base32) characters, got %d", len(hash))
+		if len(hash) == 24 && btihHexRe.MatchString(hash) {
+			return fmt.Errorf(
+				"invalid magnet: aria2 does not support 24-character hex infohash; use a magnet with 40-character hex or 32-character base32 infohash",
+			)
+		}
+		return fmt.Errorf("invalid magnet: btih length must be 40 (hex) or 32 (base32) characters, got %d", len(hash))
 	}
 }

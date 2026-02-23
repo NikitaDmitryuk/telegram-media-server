@@ -14,6 +14,7 @@ const (
 	DefaultAria2BTMaxPeers              = 200
 	DefaultAria2BTMaxOpenFiles          = 100
 	DefaultAria2BTTrackerTimeout        = 60
+	DefaultAria2BTTrackerInterval       = 60 // re-announce every 60s so peers are discovered if first announce fails or returns empty
 	DefaultAria2Timeout                 = 60
 	DefaultAria2MaxTries                = 5
 	DefaultPasswordMinLength            = 8
@@ -70,7 +71,7 @@ func NewConfig() (*Config, error) {
 			SeedRatio:                getEnvFloat("ARIA2_SEED_RATIO", 0.0),
 			SeedTime:                 getEnvInt("ARIA2_SEED_TIME", 0),
 			BTTrackerTimeout:         getEnvInt("ARIA2_BT_TRACKER_TIMEOUT", DefaultAria2BTTrackerTimeout),
-			BTTrackerInterval:        getEnvInt("ARIA2_BT_TRACKER_INTERVAL", 0),
+			BTTrackerInterval:        getEnvInt("ARIA2_BT_TRACKER_INTERVAL", DefaultAria2BTTrackerInterval),
 			EnableDHT:                getEnvBool("ARIA2_ENABLE_DHT", true),
 			EnablePeerExchange:       getEnvBool("ARIA2_ENABLE_PEER_EXCHANGE", true),
 			EnableLocalPeerDiscovery: getEnvBool("ARIA2_ENABLE_LOCAL_PEER_DISCOVERY", true),

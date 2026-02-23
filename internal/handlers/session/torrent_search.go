@@ -11,6 +11,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
 	tmsbot "github.com/NikitaDmitryuk/telegram-media-server/internal/bot"
 	tmsfactory "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
+	aria2 "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/downloads"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/handlers/ui"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -242,7 +243,17 @@ func handleTorrentDownloadCallback(bot tmsbot.Service, chatID int64, data string
 		return "", errors.New(lang.Translate("general.torrent_search.download_failed", nil))
 	}
 
-	fileName := uuid.New().String() + ".torrent"
+	bodyStr := strings.TrimSpace(string(fileBytes))
+	// Some indexers return magnet in response body instead of .torrent; save as .magnet so aria2 gets correct format
+	var fileName string
+	if strings.HasPrefix(strings.ToLower(bodyStr), "magnet:") {
+		if err := aria2.ValidateMagnetBtih(bodyStr); err != nil {
+			return "", errors.New(lang.Translate("general.torrent_search.download_failed", nil))
+		}
+		fileName = "magnet_" + uuid.New().String()[:8] + ".magnet"
+	} else {
+		fileName = uuid.New().String() + ".torrent"
+	}
 	if err := bot.SaveFile(fileName, fileBytes); err != nil {
 		return "", errors.New(lang.Translate("general.torrent_search.save_failed", nil))
 	}
