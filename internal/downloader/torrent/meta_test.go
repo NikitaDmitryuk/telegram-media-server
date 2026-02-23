@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackpal/bencode-go"
 
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
 
@@ -175,6 +176,27 @@ func TestAria2DownloaderParseTorrentMeta(t *testing.T) {
 
 	if meta.Info.Name != "integration-test.txt" {
 		t.Errorf("Expected name 'integration-test.txt', but got '%s'", meta.Info.Name)
+	}
+}
+
+func TestMagnetDummyMetaExactLength(t *testing.T) {
+	tempDir := testutils.TempDir(t)
+	cfg := &config.Config{}
+
+	// Magnet with xl= (exact length in bytes, BEP 9) — size should be used
+	magnetWithXL := "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test+Movie&xl=1234567890"
+	magnetPath := filepath.Join(tempDir, "magnet_xl.magnet")
+	if err := os.WriteFile(magnetPath, []byte(magnetWithXL), 0600); err != nil {
+		t.Fatalf("write magnet file: %v", err)
+	}
+
+	dl := NewAria2Downloader(filepath.Base(magnetPath), tempDir, cfg).(*Aria2Downloader)
+	size, err := dl.GetFileSize()
+	if err != nil {
+		t.Fatalf("GetFileSize: %v", err)
+	}
+	if size != 1234567890 {
+		t.Errorf("expected size 1234567890 from xl=, got %d", size)
 	}
 }
 

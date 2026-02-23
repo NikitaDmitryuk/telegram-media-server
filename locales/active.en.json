@@ -76,7 +76,9 @@
             "video_title_error": "Error retrieving video title: {{.Error}}",
             "video_size_error": "Error retrieving video size: {{.Error}}",
             "video_download_error": "Error downloading video: {{.Error}}",
-            "document_download_error": "Error downloading file (files larger than 50MB are not supported)."
+            "document_download_error": "Error downloading file (files larger than 50MB are not supported).",
+            "download_start_error": "Failed to start download: {{.Error}}",
+            "invalid_magnet_format": "Invalid magnet link: hash must be 32 (base32) or 40 (hex) characters."
         },
         "database": {
             "delete_movie_error": "Error deleting movie record from database."

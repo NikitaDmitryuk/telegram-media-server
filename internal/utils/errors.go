@@ -41,3 +41,11 @@ func WrapError(err error, message string, ctx map[string]any) error {
 		Context: ctx,
 	}
 }
+
+// RootError returns the innermost error in the chain (for user-facing messages without wrapper text).
+func RootError(err error) error {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		err = e
+	}
+	return err
+}

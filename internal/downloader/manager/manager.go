@@ -2,6 +2,8 @@ package manager
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
@@ -92,6 +94,7 @@ func (dm *DownloadManager) startDownloadImmediately(
 	if err != nil {
 		cancel()
 		<-dm.semaphore
+		dm.removeMovieRollback(context.Background(), movieID)
 		return 0, nil, nil, utils.WrapError(err, "Failed to start download", map[string]any{
 			"movie_id": movieID,
 			"title":    movieTitle,
@@ -197,6 +200,41 @@ func (dm *DownloadManager) StopAllDownloads() {
 
 func (*DownloadManager) getCurrentTime() time.Time {
 	return time.Now()
+}
+
+// removeMovieRollback removes the movie and its file records from DB and deletes associated files from disk.
+// Used when StartDownload fails so the movie does not stay in the list.
+func (dm *DownloadManager) removeMovieRollback(ctx context.Context, movieID uint) {
+	moviePath := dm.cfg.MoviePath
+	for _, isTemp := range []bool{true, false} {
+		var files []database.MovieFile
+		var err error
+		if isTemp {
+			files, err = dm.db.GetTempFilesByMovieID(ctx, movieID)
+		} else {
+			files, err = dm.db.GetFilesByMovieID(ctx, movieID)
+		}
+		if err != nil {
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to get files for rollback")
+			continue
+		}
+		for _, f := range files {
+			path := filepath.Join(moviePath, f.FilePath)
+			if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+				logutils.Log.WithError(removeErr).WithField("path", path).Warn("Failed to remove file during rollback")
+			}
+		}
+		if isTemp {
+			_ = dm.db.RemoveTempFilesByMovieID(ctx, movieID)
+		} else {
+			_ = dm.db.RemoveFilesByMovieID(ctx, movieID)
+		}
+	}
+	if removeErr := dm.db.RemoveMovie(ctx, movieID); removeErr != nil {
+		logutils.Log.WithError(removeErr).WithField("movie_id", movieID).Error("Failed to remove movie during rollback")
+	} else {
+		logutils.Log.WithField("movie_id", movieID).Info("Movie removed after start download failure")
+	}
 }
 
 // enqueueConversionIfNeeded runs after download completes: probes TV compatibility, sets tv_compatibility,

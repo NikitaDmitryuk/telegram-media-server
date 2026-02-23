@@ -30,7 +30,7 @@ func TestCreateDownloaderFromURL_Magnet(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{}
 	ctx := context.Background()
-	magnet := "magnet:?xt=urn:btih:abc123&dn=Test+Movie"
+	magnet := "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test+Movie"
 	dl, err := CreateDownloaderFromURL(ctx, magnet, dir, cfg)
 	if err != nil {
 		t.Fatalf("CreateDownloaderFromURL(magnet): %v", err)
@@ -90,7 +90,7 @@ func TestCreateDownloaderFromURL_MagnetCreatesFile(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{}
 	ctx := context.Background()
-	magnet := "magnet:?xt=urn:btih:def456"
+	magnet := "magnet:?xt=urn:btih:ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 	_, err := CreateDownloaderFromURL(ctx, magnet, dir, cfg)
 	if err != nil {
 		t.Fatalf("CreateDownloaderFromURL: %v", err)

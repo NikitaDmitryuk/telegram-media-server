@@ -13,6 +13,9 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/utils"
 )
 
+// errChanWaitTimeout is how long to wait for download result after progress channel closes.
+const errChanWaitTimeout = 10 * time.Second
+
 //nolint:gocyclo // Complex monitoring logic is acceptable here
 func (dm *DownloadManager) monitorDownload(
 	movieID uint,
@@ -103,6 +106,23 @@ func (dm *DownloadManager) monitorDownload(
 					return
 				}
 
+				// progressChan closed: get actual result from downloader (success or failure).
+				// Do not assume success — e.g. aria2 may have exited with error (bad magnet, etc.).
+				logutils.Log.WithField("movie_id", movieID).Debug("Progress channel closed, waiting for result from errChan")
+				var finalErr error
+				select {
+				case finalErr = <-job.errChan:
+				case <-time.After(errChanWaitTimeout):
+					finalErr = fmt.Errorf("timeout waiting for download result after progress channel closed")
+				}
+				if finalErr != nil {
+					logutils.Log.WithError(finalErr).WithField("movie_id", movieID).Error("Download failed")
+					outerErrChan <- utils.WrapError(finalErr, "Download failed", map[string]any{
+						"movie_id": movieID,
+					})
+					return
+				}
+				logutils.Log.WithField("movie_id", movieID).Debug("errChan returned success")
 				logutils.Log.WithFields(map[string]any{
 					"movie_id": movieID,
 					"duration": time.Since(downloadStartTime),

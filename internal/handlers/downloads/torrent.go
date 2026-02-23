@@ -28,7 +28,7 @@ func HandleTorrentFile(
 
 	if err := a.Bot.DownloadFile(doc.FileID, doc.FileName); err != nil {
 		logutils.Log.WithError(err).Error("Failed to download torrent file")
-		a.Bot.SendMessage(chatID, lang.Translate("error.downloads.document_download_error", nil), tgbotapi.NewRemoveKeyboard(false))
+		sendDownloadStartError(a, chatID, err, tgbotapi.NewRemoveKeyboard(false))
 		return
 	}
 

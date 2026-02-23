@@ -69,7 +69,7 @@ func TestParseProgress(t *testing.T) {
 			reader := strings.NewReader(tt.input)
 			progressChan := make(chan float64, 100)
 
-			d.parseProgress(reader, progressChan)
+			d.parseProgress(reader, progressChan, nil)
 			close(progressChan)
 
 			var got []float64
@@ -98,7 +98,7 @@ func TestParseProgress_ChannelReceivable(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		d.parseProgress(reader, progressChan)
+		d.parseProgress(reader, progressChan, nil)
 		close(done)
 	}()
 
@@ -181,6 +181,24 @@ func TestBuildAria2Args(t *testing.T) {
 		assertContainsArg(t, args, "--summary-interval=3")
 	})
 
+	t.Run("Magnet uses input-file", func(t *testing.T) {
+		args := d.buildAria2Args("/app/media/magnet_abc12345.magnet", baseCfg)
+		assertContainsArg(t, args, "--input-file")
+		idx := -1
+		for i, a := range args {
+			if a == "--input-file" {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			t.Fatal("--input-file not found in args")
+		}
+		if idx+1 >= len(args) || args[idx+1] != "/app/media/magnet_abc12345.magnet" {
+			t.Errorf("expected path after --input-file, got args[%d:] = %v", idx, args[idx:])
+		}
+	})
+
 	t.Run("DHT enabled", func(t *testing.T) {
 		cfgDHT := *baseCfg
 		cfgDHT.EnableDHT = true
@@ -251,4 +269,29 @@ func assertContainsArg(t *testing.T, args []string, expected string) {
 		}
 	}
 	t.Errorf("Expected arg %q not found in args", expected)
+}
+
+func TestAria2OutputIndicatesFailure(t *testing.T) {
+	tests := []struct {
+		name   string
+		stderr string
+		want   bool
+	}{
+		{"no files to download", "No files to download.", true},
+		{"No files to download mixed case", "NO FILES TO DOWNLOAD", true},
+		{"unrecognized URI", "[ERROR] Unrecognized URI or unsupported protocol: magnet:...", true},
+		{"Unrecognized URI", "Unrecognized URI", true},
+		{"unsupported protocol", "unsupported protocol", true},
+		{"successful output", "Download complete.\n[#abc 1GB/1GB(100%)]", false},
+		{"empty", "", false},
+		{"other error", "Connection timeout", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := aria2OutputIndicatesFailure(tt.stderr)
+			if got != tt.want {
+				t.Errorf("aria2OutputIndicatesFailure() = %v, want %v (stderr: %q)", got, tt.want, tt.stderr)
+			}
+		})
+	}
 }
