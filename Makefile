@@ -194,6 +194,18 @@ run:
 	docker-compose up -d prowlarr
 	docker-compose up --build telegram-media-server
 
+# Run locally on the host (macOS/Linux, no Docker). Requires .env with BOT_TOKEN, MOVIE_PATH, etc.
+# LANG_PATH defaults to ./locales so locale files load from project root; override in .env if needed.
+.PHONY: run-local
+run-local:
+	@echo "Running locally (no Docker)..."
+	@$(MAKE) check-runtime-deps
+	@if [ ! -f .env ]; then \
+		echo "⚠️  .env not found. Copy .env.example to .env and set BOT_TOKEN, MOVIE_PATH, and other options."; \
+		exit 1; \
+	fi
+	@( set -a; . ./.env; [ -z "$$LANG_PATH" ] && export LANG_PATH=./locales; [ -z "$$YTDLP_PATH" ] && command -v yt-dlp >/dev/null 2>&1 && export YTDLP_PATH=$$(command -v yt-dlp); set +a; go run $(LDFLAGS) ./cmd/telegram-media-server )
+
 .PHONY: stop
 stop:
 	@echo "Stopping Docker Compose services..."
@@ -320,6 +332,7 @@ help:
 	@echo ""
 	@echo "Docker:"
 	@echo "  run            - Run with Docker Compose"
+	@echo "  run-local      - Run on host (macOS/Linux, no Docker). Requires .env and runtime deps (aria2, yt-dlp, ffmpeg)."
 	@echo "  stop           - Stop Docker Compose services"
 	@echo ""
 	@echo "Configuration:"
