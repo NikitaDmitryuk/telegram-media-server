@@ -23,6 +23,7 @@ const (
 	delayAfterAdd      = 500 * time.Millisecond
 	progressPercentMax = 100
 	stopTimeout        = 15 * time.Second
+	deleteTimeout      = 10 * time.Second
 )
 
 // QBittorrentDownloader implements downloader.Downloader using qBittorrent Web API.
@@ -325,9 +326,12 @@ func (d *QBittorrentDownloader) run(
 			our = &list[0]
 		}
 		d.setHash(our.Hash)
+		logutils.Log.WithField("hash", our.Hash).Info("qBittorrent torrent hash determined")
 		// Persist hash synchronously so it survives process restart (callback runs in this goroutine before channel send).
 		if d.onHashKnown != nil {
 			d.onHashKnown(our.Hash)
+		} else {
+			logutils.Log.Warn("onHashKnown callback is nil, hash will not be persisted to DB")
 		}
 		// Notify manager via channel (fallback / idempotent second persist).
 		if d.hashChan != nil {
@@ -436,11 +440,26 @@ func (d *QBittorrentDownloader) run(
 				if episodesChan != nil && totalVideo > 0 && lastCompletedEpisodes != totalVideo {
 					episodesChan <- totalVideo
 				}
+				d.removeTorrentOnCompletion(our.Hash)
 				errChan <- nil
 				return
 			}
 		}
 	}
+}
+
+// removeTorrentOnCompletion removes the torrent from qBittorrent immediately after
+// download finishes, using the existing authenticated client session. This is more
+// reliable than the DB-based fallback in RemoveQBittorrentTorrent because it doesn't
+// depend on hash persistence to the database.
+func (d *QBittorrentDownloader) removeTorrentOnCompletion(hash string) {
+	ctx, cancel := context.WithTimeout(context.Background(), deleteTimeout)
+	defer cancel()
+	if err := d.client.DeleteTorrent(ctx, hash, false); err != nil {
+		logutils.Log.WithError(err).WithField("hash", hash).Warn("Failed to remove torrent from qBittorrent on completion")
+		return
+	}
+	logutils.Log.WithField("hash", hash).Info("Removed completed torrent from qBittorrent")
 }
 
 func countCompletedVideoFiles(files []TorrentFileInfo) int {

@@ -156,10 +156,16 @@ func (dm *DownloadManager) startDownloadImmediately(
 	// where run() checks d.onHashKnown before the main goroutine sets it.
 	if setter, ok := dl.(downloader.OnHashKnownSetter); ok {
 		setter.SetOnHashKnown(func(hash string) {
+			logutils.Log.WithFields(map[string]any{
+				"movie_id": movieID,
+				"hash":     hash,
+			}).Info("Persisting qBittorrent hash to DB via onHashKnown callback")
 			if dbErr := dm.db.SetQBittorrentHash(context.Background(), movieID, hash); dbErr != nil {
 				logutils.Log.WithError(dbErr).WithField("movie_id", movieID).Warn("Failed to persist qBittorrent hash")
 			}
 		})
+	} else {
+		logutils.Log.WithField("movie_id", movieID).Warn("Downloader does not implement OnHashKnownSetter")
 	}
 
 	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
@@ -272,9 +278,14 @@ func (dm *DownloadManager) RemoveQBittorrentTorrent(ctx context.Context, movieID
 		return err
 	}
 	if movie.QBittorrentHash == "" {
-		logutils.Log.WithField("movie_id", movieID).Debug("RemoveQBittorrentTorrent: no qBittorrent hash stored, skipping")
+		logutils.Log.WithField("movie_id", movieID).
+			Warn("RemoveQBittorrentTorrent: no qBittorrent hash stored in DB, cannot remove torrent")
 		return nil
 	}
+	logutils.Log.WithFields(map[string]any{
+		"movie_id": movieID,
+		"hash":     movie.QBittorrentHash,
+	}).Info("RemoveQBittorrentTorrent: attempting to delete torrent")
 	client, err := qbittorrent.NewClient(dm.cfg.QBittorrentURL, dm.cfg.QBittorrentUsername, dm.cfg.QBittorrentPassword)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to create qBittorrent client for removal")
