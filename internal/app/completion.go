@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
@@ -41,6 +42,9 @@ func RunCompletionLoop(
 	logutils.Log.Info("Download completed successfully")
 	if err := filemanager.DeleteTemporaryFilesByMovieID(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); err != nil {
 		logutils.Log.WithError(err).Error("Failed to delete temporary files after download")
+	}
+	if err := a.DownloadManager.RemoveQBittorrentTorrent(context.Background(), movieID); err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Debug("Failed to remove torrent from qBittorrent after completion")
 	}
 	compl.OnCompleted(movieID, title)
 }

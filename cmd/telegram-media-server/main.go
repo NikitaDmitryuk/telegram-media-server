@@ -71,6 +71,8 @@ func main() {
 		DeleteQueue:     deleteQueue,
 	}
 
+	app.ResumeIncompleteDownloads(a)
+
 	var apiServer *api.Server
 	if config.TMSAPIEnabled {
 		apiServer = api.NewServer(a, config.TMSAPIListen, config.TMSAPIKey)

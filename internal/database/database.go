@@ -17,6 +17,7 @@ type MovieReader interface {
 	MovieExistsId(ctx context.Context, movieID uint) (bool, error)
 	MovieExistsFiles(ctx context.Context, files []string) (bool, error)
 	MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error)
+	GetIncompleteQBittorrentDownloads(ctx context.Context) ([]Movie, error)
 }
 
 // MovieWriter is the write subset for movies and files. Use together with MovieReader where both are needed.

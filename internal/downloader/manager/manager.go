@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -33,6 +34,66 @@ func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManag
 	}
 
 	return dm
+}
+
+func (dm *DownloadManager) ResumeDownload(
+	movieID uint,
+	dl downloader.Downloader,
+	title string,
+	totalEpisodes int,
+	queueNotifier notifier.QueueNotifier,
+) (chan error, error) {
+	select {
+	case dm.semaphore <- struct{}{}:
+		return dm.resumeDownloadImmediately(movieID, dl, title, totalEpisodes, queueNotifier)
+	default:
+		return nil, utils.WrapError(fmt.Errorf("no slot for resumed download"), "resume failed", map[string]any{
+			"movie_id": movieID,
+		})
+	}
+}
+
+func (dm *DownloadManager) resumeDownloadImmediately(
+	movieID uint,
+	dl downloader.Downloader,
+	title string,
+	totalEpisodes int,
+	queueNotifier notifier.QueueNotifier,
+) (chan error, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
+	if err != nil {
+		cancel()
+		<-dm.semaphore
+		return nil, utils.WrapError(err, "Failed to resume download", map[string]any{
+			"movie_id": movieID,
+			"title":    title,
+		})
+	}
+
+	outerErrChan := make(chan error, 1)
+
+	job := &downloadJob{
+		downloader:    dl,
+		startTime:     dm.getCurrentTime(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		episodesChan:  episodesChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: queueNotifier,
+		title:         title,
+		totalEpisodes: totalEpisodes,
+	}
+
+	dm.mu.Lock()
+	dm.jobs[movieID] = job
+	dm.mu.Unlock()
+
+	go dm.monitorDownload(movieID, job, outerErrChan)
+
+	return outerErrChan, nil
 }
 
 func (dm *DownloadManager) StartDownload(

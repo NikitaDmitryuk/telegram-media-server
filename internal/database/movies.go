@@ -126,6 +126,17 @@ func (s *SQLiteDatabase) GetMovieByID(ctx context.Context, movieID uint) (Movie,
 	return movie, nil
 }
 
+func (s *SQLiteDatabase) GetIncompleteQBittorrentDownloads(ctx context.Context) ([]Movie, error) {
+	var movies []Movie
+	result := s.db.WithContext(ctx).
+		Where("qbittorrent_hash != '' AND downloaded_percentage < 100").
+		Find(&movies)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return movies, nil
+}
+
 func (s *SQLiteDatabase) MovieExistsFiles(ctx context.Context, files []string) (bool, error) {
 	for _, file := range files {
 		var count int64

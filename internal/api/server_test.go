@@ -49,6 +49,16 @@ func (m *mockDM) StartDownload(
 	return id, make(chan float64), make(chan error), nil
 }
 
+func (*mockDM) ResumeDownload(
+	_ uint,
+	_ tmsdownloader.Downloader,
+	_ string,
+	_ int,
+	_ notifier.QueueNotifier,
+) (chan error, error) {
+	return make(chan error), nil
+}
+
 func (m *mockDM) StopDownload(_ uint) error     { return m.stopErr }
 func (*mockDM) StopDownloadSilent(_ uint) error { return nil }
 func (*mockDM) StopAllDownloads()               {}
@@ -94,6 +104,15 @@ func (m *mockDMCompletion) StartDownload(
 		errChan <- nil
 	}()
 	return id, progressChan, errChan, nil
+}
+func (*mockDMCompletion) ResumeDownload(
+	_ uint,
+	_ tmsdownloader.Downloader,
+	_ string,
+	_ int,
+	_ notifier.QueueNotifier,
+) (chan error, error) {
+	return make(chan error), nil
 }
 func (*mockDMCompletion) StopDownload(_ uint) error                                { return nil }
 func (*mockDMCompletion) StopDownloadSilent(_ uint) error                          { return nil }

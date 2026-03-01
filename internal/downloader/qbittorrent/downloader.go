@@ -33,11 +33,14 @@ type QBittorrentDownloader struct {
 	magnetURI       string
 	client          *Client
 
-	mu              sync.Mutex
-	hash            string
-	hashChan        chan string       // sends qBittorrent torrent hash once when known (for DB persistence)
-	onHashKnown     func(hash string) // optional; called synchronously when hash is known so manager can persist to DB before restart
-	stoppedManually bool
+	mu                       sync.Mutex
+	hash                     string
+	hashChan                 chan string       // sends qBittorrent torrent hash once when known (for DB persistence)
+	onHashKnown              func(hash string) // optional; called synchronously when hash is known so manager can persist to DB before restart
+	stoppedManually          bool
+	resumeHash               string // when set, skip add and poll by this hash (resume after restart)
+	initialCompletedEpisodes int    // for resume: episodes already completed before restart (from DB)
+	totalEpisodesStored      int    // for resume: total episode count when no torrent file (from DB)
 }
 
 // NewQBittorrentDownloader creates a downloader that uses qBittorrent.
@@ -65,6 +68,30 @@ func NewQBittorrentDownloader(torrentFileName, moviePath string, cfg *config.Con
 	return d, nil
 }
 
+// NewQBittorrentResumeDownloader creates a downloader that monitors an already-added torrent by hash (e.g. after bot restart).
+// completedEpisodes is the number of episodes already completed (from DB) so we do not re-send OnFirstEpisodeReady.
+func NewQBittorrentResumeDownloader(
+	hash, downloadDir string,
+	totalEpisodes, completedEpisodes int,
+	cfg *config.Config,
+) (downloader.Downloader, error) {
+	if cfg.QBittorrentURL == "" {
+		return nil, fmt.Errorf("QBittorrentURL is not set")
+	}
+	client, err := NewClient(cfg.QBittorrentURL, cfg.QBittorrentUsername, cfg.QBittorrentPassword)
+	if err != nil {
+		return nil, err
+	}
+	return &QBittorrentDownloader{
+		downloadDir:              downloadDir,
+		cfg:                      cfg,
+		client:                   client,
+		resumeHash:               hash,
+		initialCompletedEpisodes: completedEpisodes,
+		totalEpisodesStored:      totalEpisodes,
+	}, nil
+}
+
 func (d *QBittorrentDownloader) parseMeta() (*aria2pkg.Meta, error) {
 	if d.magnetURI != "" {
 		return d.magnetDummyMeta()
@@ -88,6 +115,9 @@ func (d *QBittorrentDownloader) magnetDummyMeta() (*aria2pkg.Meta, error) {
 }
 
 func (d *QBittorrentDownloader) GetTitle() (string, error) {
+	if d.resumeHash != "" {
+		return "", nil
+	}
 	meta, err := d.parseMeta()
 	if err != nil {
 		return "", err
@@ -96,6 +126,9 @@ func (d *QBittorrentDownloader) GetTitle() (string, error) {
 }
 
 func (d *QBittorrentDownloader) GetFiles() (mainFiles, tempFiles []string, err error) {
+	if d.resumeHash != "" {
+		return nil, nil, fmt.Errorf("resume downloader has no torrent meta")
+	}
 	meta, err := d.parseMeta()
 	if err != nil {
 		return nil, nil, err
@@ -118,6 +151,9 @@ func (d *QBittorrentDownloader) GetFiles() (mainFiles, tempFiles []string, err e
 }
 
 func (d *QBittorrentDownloader) GetFileSize() (int64, error) {
+	if d.resumeHash != "" {
+		return 0, nil
+	}
 	meta, err := d.parseMeta()
 	if err != nil {
 		logutils.Log.WithError(err).Warn("Failed to parse torrent metadata for file size, returning 0")
@@ -134,6 +170,9 @@ func (d *QBittorrentDownloader) GetFileSize() (int64, error) {
 }
 
 func (d *QBittorrentDownloader) TotalEpisodes() int {
+	if d.resumeHash != "" {
+		return d.totalEpisodesStored
+	}
 	meta, err := d.parseMeta()
 	if err != nil {
 		return 0
@@ -166,21 +205,30 @@ func (d *QBittorrentDownloader) setHash(h string) {
 func (d *QBittorrentDownloader) StartDownload(
 	ctx context.Context,
 ) (progressChan chan float64, errChan chan error, episodesChan <-chan int, err error) {
+	progressChan = make(chan float64)
+	errChan = make(chan error, 1)
+	var epCh chan int
+	var totalVideo int
+	var meta *aria2pkg.Meta
+	if d.resumeHash != "" {
+		totalVideo = d.totalEpisodesStored
+		if totalVideo > 1 {
+			epCh = make(chan int, 1)
+			episodesChan = epCh
+		}
+		go d.run(ctx, nil, totalVideo, progressChan, errChan, epCh)
+		return progressChan, errChan, episodesChan, nil
+	}
 	meta, metaErr := d.parseMeta()
 	if metaErr != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse torrent meta: %w", metaErr)
 	}
-
-	progressChan = make(chan float64)
-	errChan = make(chan error, 1)
 	d.hashChan = make(chan string, 1)
-	var epCh chan int
-	totalVideo := d.TotalEpisodes()
+	totalVideo = d.TotalEpisodes()
 	if totalVideo > 1 {
 		epCh = make(chan int, 1)
 		episodesChan = epCh
 	}
-
 	go d.run(ctx, meta, totalVideo, progressChan, errChan, epCh)
 	return progressChan, errChan, episodesChan, nil
 }
@@ -215,69 +263,84 @@ func (d *QBittorrentDownloader) run(
 		return
 	}
 
-	savepath := d.downloadDir
-	isSeries := totalVideo > 1
-	addOpts := &AddTorrentOptions{
-		SequentialDownload: isSeries,
-		FirstLastPiecePrio: isSeries,
-	}
-	if d.magnetURI != "" {
-		if err := d.client.AddTorrentFromURLs(ctx, d.magnetURI, savepath, addOpts); err != nil {
-			errChan <- fmt.Errorf("qBittorrent add magnet: %w", err)
-			return
-		}
-	} else {
-		torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
-		body, err := os.ReadFile(torrentPath)
-		if err != nil {
-			errChan <- fmt.Errorf("read torrent file: %w", err)
-			return
-		}
-		if err := d.client.AddTorrentFromFile(ctx, d.torrentFileName, body, savepath, addOpts); err != nil {
-			errChan <- fmt.Errorf("qBittorrent add file: %w", err)
-			return
-		}
-	}
-
-	// Find our torrent: last added (most recent added_on).
-	time.Sleep(delayAfterAdd)
-	list, err := d.client.TorrentsInfo(ctx, "", "added_on", true)
-	if err != nil {
-		errChan <- fmt.Errorf("qBittorrent list after add: %w", err)
-		return
-	}
-	if len(list) == 0 {
-		errChan <- fmt.Errorf("qBittorrent: torrent not found after add")
-		return
-	}
-	// Prefer match by name; otherwise take the newest.
 	var our *TorrentInfo
-	for i := range list {
-		if list[i].Name == meta.Info.Name {
-			our = &list[i]
-			break
+	if d.resumeHash != "" {
+		// Resume: skip add, verify torrent still exists in qBittorrent
+		info, err := d.client.TorrentsInfo(ctx, d.resumeHash, "", false)
+		if err != nil {
+			errChan <- fmt.Errorf("qBittorrent resume torrents/info: %w", err)
+			return
 		}
-	}
-	if our == nil {
-		our = &list[0]
-	}
-	d.setHash(our.Hash)
-	// Persist hash synchronously so it survives process restart (callback runs in this goroutine before channel send).
-	if d.onHashKnown != nil {
-		d.onHashKnown(our.Hash)
-	}
-	// Notify manager via channel (fallback / idempotent second persist).
-	if d.hashChan != nil {
-		select {
-		case d.hashChan <- our.Hash:
-		default:
+		if len(info) == 0 {
+			errChan <- fmt.Errorf("qBittorrent: resumed torrent not found (hash=%s)", d.resumeHash)
+			return
 		}
-		close(d.hashChan)
-		d.hashChan = nil
-	}
+		our = &info[0]
+		d.setHash(our.Hash)
+	} else {
+		savepath := d.downloadDir
+		isSeries := totalVideo > 1
+		addOpts := &AddTorrentOptions{
+			SequentialDownload: isSeries,
+			FirstLastPiecePrio: isSeries,
+		}
+		if d.magnetURI != "" {
+			if err := d.client.AddTorrentFromURLs(ctx, d.magnetURI, savepath, addOpts); err != nil {
+				errChan <- fmt.Errorf("qBittorrent add magnet: %w", err)
+				return
+			}
+		} else {
+			torrentPath := filepath.Join(d.downloadDir, d.torrentFileName)
+			body, err := os.ReadFile(torrentPath)
+			if err != nil {
+				errChan <- fmt.Errorf("read torrent file: %w", err)
+				return
+			}
+			if err := d.client.AddTorrentFromFile(ctx, d.torrentFileName, body, savepath, addOpts); err != nil {
+				errChan <- fmt.Errorf("qBittorrent add file: %w", err)
+				return
+			}
+		}
 
-	if isSeries {
-		d.applyLexicographicPriorities(ctx, our.Hash)
+		// Find our torrent: last added (most recent added_on).
+		time.Sleep(delayAfterAdd)
+		list, err := d.client.TorrentsInfo(ctx, "", "added_on", true)
+		if err != nil {
+			errChan <- fmt.Errorf("qBittorrent list after add: %w", err)
+			return
+		}
+		if len(list) == 0 {
+			errChan <- fmt.Errorf("qBittorrent: torrent not found after add")
+			return
+		}
+		// Prefer match by name; otherwise take the newest.
+		for i := range list {
+			if list[i].Name == meta.Info.Name {
+				our = &list[i]
+				break
+			}
+		}
+		if our == nil {
+			our = &list[0]
+		}
+		d.setHash(our.Hash)
+		// Persist hash synchronously so it survives process restart (callback runs in this goroutine before channel send).
+		if d.onHashKnown != nil {
+			d.onHashKnown(our.Hash)
+		}
+		// Notify manager via channel (fallback / idempotent second persist).
+		if d.hashChan != nil {
+			select {
+			case d.hashChan <- our.Hash:
+			default:
+			}
+			close(d.hashChan)
+			d.hashChan = nil
+		}
+
+		if totalVideo > 1 {
+			d.applyLexicographicPriorities(ctx, our.Hash)
+		}
 	}
 
 	// Send initial 0% so the UI shows progress from the start
@@ -295,6 +358,7 @@ func (d *QBittorrentDownloader) run(
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 	var lastProgress float64
+	lastCompletedEpisodes := d.initialCompletedEpisodes
 	for {
 		select {
 		case <-ctx.Done():
@@ -346,9 +410,29 @@ func (d *QBittorrentDownloader) run(
 					return
 				}
 			}
+			// Track completed video files so OnFirstEpisodeReady and episode progress fire incrementally
+			if episodesChan != nil && totalVideo > 1 {
+				files, fileErr := d.client.TorrentFiles(ctx, our.Hash)
+				if fileErr == nil {
+					completed := countCompletedVideoFiles(files)
+					if completed > lastCompletedEpisodes {
+						lastCompletedEpisodes = completed
+						select {
+						case episodesChan <- completed:
+						case <-ctx.Done():
+							if d.StoppedManually() {
+								errChan <- downloader.ErrStoppedByUser
+							} else {
+								errChan <- ctx.Err()
+							}
+							return
+						}
+					}
+				}
+			}
 			// Complete when API progress >= 1 or amount_left is 0 (e.g. state=stalledUP)
 			if t.Progress >= 1.0 || (t.Size > 0 && t.AmountLeft == 0) {
-				if episodesChan != nil && totalVideo > 0 {
+				if episodesChan != nil && totalVideo > 0 && lastCompletedEpisodes != totalVideo {
 					episodesChan <- totalVideo
 				}
 				errChan <- nil
@@ -356,6 +440,16 @@ func (d *QBittorrentDownloader) run(
 			}
 		}
 	}
+}
+
+func countCompletedVideoFiles(files []TorrentFileInfo) int {
+	n := 0
+	for _, f := range files {
+		if tvcompat.IsVideoFilePath(f.Name) && f.Progress >= 1.0 {
+			n++
+		}
+	}
+	return n
 }
 
 const (

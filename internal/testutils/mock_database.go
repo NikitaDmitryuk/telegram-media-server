@@ -42,6 +42,10 @@ func (*DatabaseStub) MovieExistsUploadedFile(_ context.Context, _ string) (bool,
 	return false, nil
 }
 
+func (*DatabaseStub) GetIncompleteQBittorrentDownloads(_ context.Context) ([]database.Movie, error) {
+	return nil, nil
+}
+
 // MovieWriter methods.
 
 func (*DatabaseStub) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {

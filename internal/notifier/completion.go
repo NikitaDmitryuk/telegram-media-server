@@ -7,3 +7,12 @@ type CompletionNotifier interface {
 	OnFailed(movieID uint, title string, err error)
 	OnCompleted(movieID uint, title string)
 }
+
+// CompletionNoop is a CompletionNotifier that does nothing. Use for resumed downloads (no chat context).
+var CompletionNoop CompletionNotifier = completionNoop{}
+
+type completionNoop struct{}
+
+func (completionNoop) OnStopped(uint, string)       {}
+func (completionNoop) OnFailed(uint, string, error) {}
+func (completionNoop) OnCompleted(uint, string)     {}
