@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -215,8 +216,13 @@ func (d *QBittorrentDownloader) run(
 	}
 
 	savepath := d.downloadDir
+	isSeries := totalVideo > 1
+	addOpts := &AddTorrentOptions{
+		SequentialDownload: isSeries,
+		FirstLastPiecePrio: isSeries,
+	}
 	if d.magnetURI != "" {
-		if err := d.client.AddTorrentFromURLs(ctx, d.magnetURI, savepath); err != nil {
+		if err := d.client.AddTorrentFromURLs(ctx, d.magnetURI, savepath, addOpts); err != nil {
 			errChan <- fmt.Errorf("qBittorrent add magnet: %w", err)
 			return
 		}
@@ -227,7 +233,7 @@ func (d *QBittorrentDownloader) run(
 			errChan <- fmt.Errorf("read torrent file: %w", err)
 			return
 		}
-		if err := d.client.AddTorrentFromFile(ctx, d.torrentFileName, body, savepath); err != nil {
+		if err := d.client.AddTorrentFromFile(ctx, d.torrentFileName, body, savepath, addOpts); err != nil {
 			errChan <- fmt.Errorf("qBittorrent add file: %w", err)
 			return
 		}
@@ -268,6 +274,10 @@ func (d *QBittorrentDownloader) run(
 		}
 		close(d.hashChan)
 		d.hashChan = nil
+	}
+
+	if isSeries {
+		d.applyLexicographicPriorities(ctx, our.Hash)
 	}
 
 	// Send initial 0% so the UI shows progress from the start
@@ -346,6 +356,59 @@ func (d *QBittorrentDownloader) run(
 			}
 		}
 	}
+}
+
+const (
+	priorityNormal  = 1
+	priorityHigh    = 6
+	priorityMaximal = 7
+)
+
+// applyLexicographicPriorities sets file download priorities so that earlier
+// video files (lexicographic order by name) are downloaded first. The first
+// video file gets maximal priority, the second gets high, and the rest get
+// normal. Combined with sequential download mode this ensures the first
+// episode finishes as soon as possible without blocking the rest.
+func (d *QBittorrentDownloader) applyLexicographicPriorities(ctx context.Context, hash string) {
+	files, err := d.client.TorrentFiles(ctx, hash)
+	if err != nil {
+		logutils.Log.WithError(err).Warn("Failed to get torrent files for priority setup")
+		return
+	}
+
+	type videoEntry struct {
+		index int
+		name  string
+	}
+	var videos []videoEntry
+	for _, f := range files {
+		if tvcompat.IsVideoFilePath(f.Name) {
+			videos = append(videos, videoEntry{index: f.Index, name: f.Name})
+		}
+	}
+	if len(videos) <= 1 {
+		return
+	}
+	sort.Slice(videos, func(i, j int) bool { return videos[i].name < videos[j].name })
+
+	for rank, v := range videos {
+		prio := priorityNormal
+		switch rank {
+		case 0:
+			prio = priorityMaximal
+		case 1:
+			prio = priorityHigh
+		}
+		if err := d.client.SetFilePriority(ctx, hash, fmt.Sprintf("%d", v.index), prio); err != nil {
+			logutils.Log.WithError(err).WithField("file", v.name).Warn("Failed to set file priority")
+		}
+	}
+
+	logutils.Log.WithFields(map[string]any{
+		"hash":        hash,
+		"video_files": len(videos),
+		"first_file":  videos[0].name,
+	}).Info("Applied lexicographic file priorities for series")
 }
 
 func (d *QBittorrentDownloader) StopDownload() error {
