@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# install.sh — Interactive installer for Telegram Media Server (Arch Linux only)
+# install.sh — Interactive installer for Telegram Media Server (Arch Linux, Ubuntu/Debian)
 #
 # Installs binary, systemd service, and .env config. Menu options:
-# — qBittorrent: install from pacman, systemd, port 8081, login/password in .env;
-# — Prowlarr: install from AUR (yay/paru), systemd, port 9696, API key from config.xml into .env.
+# — qBittorrent: install from package manager, systemd, port 8081, login/password in .env;
+# — Prowlarr: Arch = AUR (yay/paru), Ubuntu = apt repo; systemd, port 9696, API key from config.xml into .env.
 # Indexers in Prowlarr are added manually (web UI).
 # With existing .env: by default only offers to update binary and service (config untouched).
 # Answer "n" → then "Force reinstall?" [y/N]: "y" = re-enter all settings (backup .env to .env.bak.force), "n" = prompt only missing.
@@ -12,11 +12,10 @@
 #
 set -euo pipefail
 
-# --- constants (match Makefile) ---
+# --- constants (match Makefile); SERVICE_DIR set in main() after detect_distro ---
 BINARY_NAME=telegram-media-server
 INSTALL_DIR=/usr/local/bin
 CONFIG_DIR=/etc/telegram-media-server
-SERVICE_DIR=/usr/lib/systemd/system
 LOCALES_SRC=locales
 LOCALES_DEST=/usr/local/share/telegram-media-server/locales
 QBIT_SERVICE_NAME=qbittorrent-nox
@@ -64,10 +63,12 @@ ensure_user_tms() {
     ok "User $TMS_USER already exists."
     return 0
   fi
+  local nologin_path
+  nologin_path="$(command -v nologin 2>/dev/null || echo /usr/sbin/nologin)"
   useradd --system --user-group \
     --home-dir "$TMS_HOME" \
     --create-home \
-    --shell /usr/bin/nologin \
+    --shell "$nologin_path" \
     "$TMS_USER"
   ok "Created user $TMS_USER (home $TMS_HOME)."
 }
@@ -80,21 +81,43 @@ check_root() {
   fi
 }
 
-# --- Arch Linux only ---
-check_arch() {
-  if [[ ! -f /etc/arch-release ]] || ! command -v pacman &>/dev/null; then
-    err "This installer supports Arch Linux only."
-    err "Other OS detected. Use manual install: make install and configure .env from .env.example"
+# --- detect distro (Arch or Ubuntu/Debian) ---
+detect_distro() {
+  if [[ -f /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    case "${ID:-}" in
+      arch|endeavouros|manjaro) DISTRO=arch ;;
+      ubuntu|debian|linuxmint|pop) DISTRO=ubuntu ;;
+      *) err "Unsupported distro: ${ID:-unknown}. Supported: Arch Linux, Ubuntu/Debian."; exit 1 ;;
+    esac
+  else
+    err "Cannot detect distro (/etc/os-release missing)."
     exit 1
   fi
+  ok "Detected distro: $DISTRO"
 }
 
 # --- Arch packages (pacman) ---
 set_arch_packages() {
   PKG_UPDATE="true"
   PKG_INSTALL="pacman -S --noconfirm"
+  PKG_INSTALL_LABEL="pacman"
   PKG_QBIT=qbittorrent-nox
   PKG_GO=go
+  PKG_ARIA2=aria2
+  PKG_FFMPEG=ffmpeg
+  PKG_YTDLP=yt-dlp
+  PKG_MINIDLNA=minidlna
+}
+
+# --- Ubuntu/Debian packages (apt) ---
+set_ubuntu_packages() {
+  PKG_UPDATE="apt-get update -qq"
+  PKG_INSTALL="apt-get install -y -qq"
+  PKG_INSTALL_LABEL="apt"
+  PKG_QBIT=qbittorrent-nox
+  PKG_GO=golang-go
   PKG_ARIA2=aria2
   PKG_FFMPEG=ffmpeg
   PKG_YTDLP=yt-dlp
@@ -116,7 +139,7 @@ check_and_install_deps() {
     [[ $need_ffmpeg -eq 1 ]] && echo "  - ffmpeg"
     [[ $need_ytdlp -eq 1 ]] && echo "  - yt-dlp"
     echo
-    read -r -p "Install missing packages via pacman? [y/N] " ans
+    read -r -p "Install missing packages via ${PKG_INSTALL_LABEL:-package manager}? [y/N] " ans
     if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
       $PKG_UPDATE
       [[ $need_go -eq 1 ]]    && $PKG_INSTALL $PKG_GO
@@ -134,6 +157,24 @@ check_and_install_deps() {
     exit 1
   fi
   ok "Dependencies: go, aria2, ffmpeg, yt-dlp — OK."
+}
+
+# --- check Go version meets go.mod requirement (warn if too old) ---
+check_go_version() {
+  local repo_root="${1:?}"
+  [[ ! -f "$repo_root/go.mod" ]] && return 0
+  if ! command -v go &>/dev/null; then
+    return 0
+  fi
+  local required current first
+  required=$(grep '^go ' "$repo_root/go.mod" 2>/dev/null | awk '{print $2}')
+  current=$(go version 2>/dev/null | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
+  [[ -z "$required" || -z "$current" ]] && return 0
+  first=$(printf '%s\n' "$required" "$current" | sort -V | head -1)
+  if [[ "$first" == "$current" && "$current" != "$required" ]]; then
+    warn "Go $current installed, but go.mod requires $required."
+    warn "Install latest Go: https://go.dev/dl/"
+  fi
 }
 
 # --- read key value from .env (single line, no export) ---
@@ -159,7 +200,11 @@ is_placeholder() {
 
 # --- generate random password (safe for .env, min 12 chars) ---
 generate_password() {
-  openssl rand -base64 12 2>/dev/null | tr -d '\n/+=' | head -c 16
+  if command -v openssl &>/dev/null; then
+    openssl rand -base64 12 2>/dev/null | tr -d '\n/+=' | head -c 16
+  else
+    head -c 12 /dev/urandom 2>/dev/null | base64 | tr -d '\n/+=' | head -c 16
+  fi
   echo
 }
 
@@ -554,7 +599,7 @@ set_qbittorrent_save_path() {
 
 # --- install and configure minidlna for DLNA (media_dir = MOVIE_PATH, runs as user minidlna) ---
 # $1 = movie_path (must be readable by minidlna), $2 = run_user (if tms, we add minidlna to group tms and chmod 750)
-install_minidlna_arch() {
+install_minidlna() {
   local movie_path="${1:?}"
   local run_user="${2:-}"
   if ! command -v minidlnad &>/dev/null && [[ -n "${PKG_INSTALL:-}" ]]; then
@@ -599,40 +644,15 @@ install_minidlna_arch() {
   ok "minidlna configured (media_dir=$movie_path) and service started; DLNA clients can discover on port 8200."
 }
 
-# --- install Prowlarr from AUR, start service, extract API key from config.xml ---
-# Returns API key via echo (empty string on error).
-install_prowlarr_arch() {
-  local run_user
-  run_user=$(logname 2>/dev/null || echo "${SUDO_USER:-}")
-  if [[ -z "$run_user" || "$run_user" == root ]]; then
-    err "AUR install requires a non-root user (run: sudo -u your_user or set SUDO_USER)."
-    return 1
-  fi
-
-  local aur_helper=""
-  for h in yay paru; do
-    if sudo -u "$run_user" command -v "$h" &>/dev/null; then
-      aur_helper="$h"
-      break
-    fi
-  done
-  if [[ -z "$aur_helper" ]]; then
-    warn "AUR helper (yay or paru) not found. Install one and run the installer again."
-    return 1
-  fi
-
-  info "Installing Prowlarr from AUR (${aur_helper})..."
-  if ! sudo -u "$run_user" "$aur_helper" -S prowlarr-bin --noconfirm --needed 2>/dev/null; then
-    warn "Failed to install prowlarr-bin. Try manually: $aur_helper -S prowlarr-bin"
-    return 1
-  fi
-  ok "Prowlarr installed."
-
+# --- wait for Prowlarr to start and return API key (from config.xml or manual input) ---
+# Call after enabling/starting prowlarr service. Returns API key via echo (empty on skip).
+wait_prowlarr_and_get_key() {
   systemctl daemon-reload
   systemctl enable "$PROWLARR_SERVICE_NAME"
   systemctl start "$PROWLARR_SERVICE_NAME" 2>/dev/null || true
   info "Waiting for Prowlarr first start (up to 60s)..."
   local config_path=""
+  local i
   for i in {1..30}; do
     sleep 2
     for base in $PROWLARR_DATA_PATHS; do
@@ -641,7 +661,6 @@ install_prowlarr_arch() {
         break 2
       fi
     done
-    # trigger config generation by first request
     curl -s -o /dev/null "http://127.0.0.1:${PROWLARR_PORT}" 2>/dev/null || true
   done
   if [[ -z "$config_path" || ! -f "$config_path" ]]; then
@@ -671,6 +690,74 @@ install_prowlarr_arch() {
     fi
   fi
   return 0
+}
+
+# --- install Prowlarr from AUR (Arch), start service, extract API key ---
+# Returns API key via echo (empty string on error).
+install_prowlarr_arch() {
+  local run_user
+  run_user=$(logname 2>/dev/null || echo "${SUDO_USER:-}")
+  if [[ -z "$run_user" || "$run_user" == root ]]; then
+    err "AUR install requires a non-root user (run: sudo -u your_user or set SUDO_USER)."
+    return 1
+  fi
+
+  local aur_helper=""
+  for h in yay paru; do
+    if sudo -u "$run_user" command -v "$h" &>/dev/null; then
+      aur_helper="$h"
+      break
+    fi
+  done
+  if [[ -z "$aur_helper" ]]; then
+    warn "AUR helper (yay or paru) not found. Install one and run the installer again."
+    return 1
+  fi
+
+  info "Installing Prowlarr from AUR (${aur_helper})..."
+  if ! sudo -u "$run_user" "$aur_helper" -S prowlarr-bin --noconfirm --needed 2>/dev/null; then
+    warn "Failed to install prowlarr-bin. Try manually: $aur_helper -S prowlarr-bin"
+    return 1
+  fi
+  ok "Prowlarr installed."
+  wait_prowlarr_and_get_key
+  return 0
+}
+
+# --- install Prowlarr from Servarr apt repo (Ubuntu/Debian), start service, extract API key ---
+# Returns API key via echo (empty string on error).
+install_prowlarr_ubuntu() {
+  info "Installing Prowlarr from Servarr apt repo..."
+  mkdir -p /usr/share/keyrings
+  local key_file="/usr/share/keyrings/prowlarr-repo.key"
+  if [[ ! -s "$key_file" ]]; then
+    if command -v wget &>/dev/null; then
+      wget -qO "$key_file" "https://repo.prowlarr.com/prowlarr-repo.key" 2>/dev/null || true
+    fi
+  fi
+  if [[ -s "$key_file" ]]; then
+    echo "deb [signed-by=$key_file] https://apt.prowlarr.com/debian prowlarr-main main" > /etc/apt/sources.list.d/prowlarr.list
+  else
+    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 2009837CBFFD68F45BC180471F4F90DE2A9B4BF8 2>/dev/null || true
+    echo "deb https://apt.prowlarr.com/debian prowlarr-main main" > /etc/apt/sources.list.d/prowlarr.list
+  fi
+  apt-get update -qq
+  if ! apt-get install -y -qq prowlarr 2>/dev/null; then
+    warn "Failed to install prowlarr. Try: apt-get install -y prowlarr"
+    return 1
+  fi
+  ok "Prowlarr installed."
+  wait_prowlarr_and_get_key
+  return 0
+}
+
+# --- install Prowlarr (distro-specific), returns API key via echo ---
+install_prowlarr() {
+  if [[ "$DISTRO" == "arch" ]]; then
+    install_prowlarr_arch
+  else
+    install_prowlarr_ubuntu
+  fi
 }
 
 # --- main TMS installer (binary + unit + locales) ---
@@ -733,9 +820,23 @@ main() {
   echo "=============================================="
   echo
 
+  cleanup() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+      err "Installation failed (exit code $exit_code). Check output above."
+    fi
+  }
+  trap cleanup EXIT
+
   check_root
-  check_arch
-  set_arch_packages
+  detect_distro
+  if [[ "$DISTRO" == "arch" ]]; then
+    set_arch_packages
+    SERVICE_DIR=/usr/lib/systemd/system
+  else
+    set_ubuntu_packages
+    SERVICE_DIR=/etc/systemd/system
+  fi
 
   echo
   echo -e "${YELLOW}Warning: default passwords are used (e.g. qBittorrent Web UI: admin/adminadmin).${NC}"
@@ -755,6 +856,7 @@ main() {
     err "Repository root not found (expected cmd/telegram-media-server/main.go). Run from project directory."
     exit 1
   fi
+  check_go_version "$REPO_ROOT"
 
   mkdir -p "$CONFIG_DIR"
   ENV_FILE="${CONFIG_DIR}/.env"
@@ -820,10 +922,10 @@ main() {
         fi
       fi
       echo
-      read -r -p "Install and configure Prowlarr? (AUR, port $PROWLARR_PORT) [y/N] " ans
+      read -r -p "Install and configure Prowlarr? (port $PROWLARR_PORT) [y/N] " ans
       if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
         USE_PROWLARR=1
-        PROWLARR_API_KEY_AUTO=$(install_prowlarr_arch) || PROWLARR_API_KEY_AUTO=""
+        PROWLARR_API_KEY_AUTO=$(install_prowlarr) || PROWLARR_API_KEY_AUTO=""
       fi
       echo
       read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
@@ -850,19 +952,19 @@ main() {
               ok "Installed qbittorrent-nox"
             fi
           fi
+        fi
         if command -v qbittorrent-nox &>/dev/null; then
           info "qBittorrent: using admin/adminadmin for Web UI and .env (installer will write this into qBittorrent config). Change after first login in Settings → Web UI and update .env if needed."
         fi
+      else
+        ok "qBittorrent already configured (QBITTORRENT_URL set)."
       fi
-    else
-      ok "qBittorrent already configured (QBITTORRENT_URL set)."
-    fi
 
     if [[ -z "$EXISTING_PROWLARR_URL" && -z "$EXISTING_PROWLARR_KEY" ]]; then
-        read -r -p "Install and configure Prowlarr? (AUR, port $PROWLARR_PORT) [y/N] " ans
+        read -r -p "Install and configure Prowlarr? (port $PROWLARR_PORT) [y/N] " ans
         if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
           USE_PROWLARR=1
-          PROWLARR_API_KEY_AUTO=$(install_prowlarr_arch) || PROWLARR_API_KEY_AUTO=""
+          PROWLARR_API_KEY_AUTO=$(install_prowlarr) || PROWLARR_API_KEY_AUTO=""
         fi
       else
         ok "Prowlarr already configured (PROWLARR_* set)."
@@ -899,7 +1001,7 @@ main() {
     read -r -p "Install and configure Prowlarr (torrent search, AUR, port $PROWLARR_PORT)? [y/N] " ans
     if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
       USE_PROWLARR=1
-      PROWLARR_API_KEY_AUTO=$(install_prowlarr_arch) || PROWLARR_API_KEY_AUTO=""
+      PROWLARR_API_KEY_AUTO=$(install_prowlarr) || PROWLARR_API_KEY_AUTO=""
     fi
     echo
     read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
@@ -932,7 +1034,7 @@ main() {
 
   if [[ ${USE_MINIDLNA:-0} -eq 1 ]]; then
     if [[ -n "$movie_path_owner" ]]; then
-      install_minidlna_arch "$movie_path_owner" "$TMS_RUN_USER"
+      install_minidlna "$movie_path_owner" "$TMS_RUN_USER"
     else
       warn "MOVIE_PATH not set; skipping minidlna. Configure /etc/minidlna.conf manually (media_dir=V,<path>) and start minidlna."
     fi
