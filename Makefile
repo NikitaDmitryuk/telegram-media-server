@@ -90,7 +90,7 @@ clean:
 	rm -rf $(BUILD_DIR) $(BINARY_NAME)
 	go clean -cache -testcache
 
-# Единственный способ установки (Arch Linux): интерактивный скрипт — .env, qBittorrent, Prowlarr.
+# Установка (Arch Linux, Ubuntu/Debian): интерактивный скрипт — .env, qBittorrent, Prowlarr, minidlna.
 .PHONY: install
 install:
 	@bash scripts/install.sh
@@ -296,7 +296,7 @@ help:
 	@echo "Build:"
 	@echo "  build          - Build the application (with dependency check)"
 	@echo "  build-simple   - Build for CI (no dependencies check)"
-	@echo "  install        - Install (Arch Linux only, interactive script)"
+	@echo "  install        - Install (Arch/Ubuntu, interactive script)"
 	@echo "  uninstall      - Uninstall system service"
 	@echo "  clean          - Clean build artifacts"
 	@echo ""

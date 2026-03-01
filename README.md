@@ -56,7 +56,7 @@ To build and install Telegram Media Server using `sudo make install`, the follow
 - **Go**: Необходим для сборки бота. Required for building the bot.  
 - **yt-dlp**: Необходим для загрузки потокового видео. Required for downloading streaming videos.  
 - **aria2**: Необходим для загрузки торрент-файлов (если не используется qBittorrent). Required for downloading torrents (unless qBittorrent is used).
-- **qbittorrent-nox** (опционально / optional): альтернатива aria2 для торрентов; при заданном `QBITTORRENT_URL` бот использует Web API. См. [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) — порты, запуск, автозагрузка (systemd). Alternative to aria2 for torrents; when `QBITTORRENT_URL` is set the bot uses Web API. See [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) for ports, running, and systemd.
+- **qbittorrent-nox** (опционально / optional): альтернатива aria2 для торрентов; при заданном `QBITTORRENT_URL` бот использует Web API. Установщик может настроить systemd и порт 8081. Alternative to aria2 for torrents; when `QBITTORRENT_URL` is set the bot uses Web API. The installer can set up systemd and port 8081.
 - **minidlna** (опционально / optional): Необходим для раздачи через DLNA. Required for DLNA distribution.
 - **prowlarr** (опционально / optional): Необходим для поиска торрентов. Required for searching torrents.
 
@@ -71,8 +71,8 @@ Install these dependencies using your system's package manager before proceeding
 ## Установка / Installation
 
 
-**Только Arch Linux.** Установщик запросит обязательные параметры (токен бота, каталог загрузок, пароль админа). По выбору в меню: **qBittorrent** (pacman, systemd, порт 8081), **Prowlarr** (AUR: yay/paru, порт 9696, API key подставляется автоматически). Индексеры в Prowlarr добавляются вручную.  
-**Arch Linux only.** The installer prompts for required settings, and optionally installs **qBittorrent** (pacman, systemd, port 8081) and **Prowlarr** (AUR via yay/paru, systemd, port 9696), writing URL and API key to `.env`. Add indexers in Prowlarr’s web UI manually.
+Поддерживаются **Arch Linux** и **Ubuntu/Debian**. Установщик запросит обязательные параметры (токен бота, каталог загрузок, пароль админа). По выбору в меню: **qBittorrent** (пакетный менеджер, systemd, порт 8081), **Prowlarr** (на Arch — AUR через yay/paru, на Ubuntu — apt-репозиторий; порт 9696, API key подставляется автоматически), **minidlna** (DLNA). Индексеры в Prowlarr добавляются вручную в веб-интерфейсе.  
+Supported distros: **Arch Linux** and **Ubuntu/Debian**. The installer prompts for required settings, and optionally installs **qBittorrent** (package manager, systemd, port 8081), **Prowlarr** (on Arch: AUR via yay/paru; on Ubuntu: apt repo; port 9696, API key written to `.env`), and **minidlna** (DLNA). Add indexers in Prowlarr’s web UI manually.
 
 ```bash
 git clone https://github.com/NikitaDmitryuk/telegram-media-server.git
@@ -84,33 +84,15 @@ sudo make install
 
 ### Установка и настройка minidlna / Installing and configuring minidlna
 
-Если вы хотите использовать DLNA, выполните следующие шаги:  
-If you plan to use DLNA, follow these steps:
+Установщик может установить и настроить minidlna (media_dir = MOVIE_PATH, порт 8200). Если вы ставите вручную или через Docker:  
+The installer can install and configure minidlna (media_dir = MOVIE_PATH, port 8200). For manual or Docker setup:
 
-1. **Установите minidlna / Install minidlna**:
+1. **Установите minidlna / Install minidlna** (например: `apt install minidlna` или `pacman -S minidlna`).
 
-   ```bash
-   sudo apt install minidlna
-   ```
+2. **Настройте minidlna / Configure minidlna**: отредактируйте **/etc/minidlna.conf** — укажите в `media_dir=V,...` тот же путь, что и `MOVIE_PATH` в `.env`.  
+   Edit **/etc/minidlna.conf**: set `media_dir=V,/path/to/dir` to match `MOVIE_PATH` in `.env`.
 
-2. **Настройте minidlna / Configure minidlna**:  
-   Отредактируйте файл **/etc/minidlna.conf**:  
-   Edit the configuration file **/etc/minidlna.conf**:
-
-   ```conf
-   media_dir=V,/path/to/dir
-   friendly_name=My DLNA Server
-   ```
-
-   Укажите в **/path/to/dir** тот же путь, что и в параметре `MOVIE_PATH` файла `.env`.  
-   Replace **/path/to/dir** with the path specified in the `MOVIE_PATH` parameter of the `.env` file.
-
-3. **Запустите minidlna / Start minidlna**:
-
-   ```bash
-   sudo systemctl enable minidlna
-   sudo systemctl start minidlna
-   ```
+3. **Запустите minidlna / Start minidlna**: `systemctl enable --now minidlna`.
 
 ---
 
@@ -148,8 +130,8 @@ Create a `.env` file based on `.env.example` and configure the required paramete
 **Docker + qBittorrent (локальная связка):** в `docker-compose.yml` добавлен сервис `qbittorrent` (Web UI на порту 8081). TMS подключается по `QBITTORRENT_URL=http://qbittorrent:8081`. Конфиг с логином **admin** и паролем **adminadmin** подмонтирован из `docker/qbittorrent.conf` — в `.env` укажите `MOVIE_PATH=/app/media` и при необходимости `QBITTORRENT_USERNAME=admin`, `QBITTORRENT_PASSWORD=adminadmin`.  
 **Docker + qBittorrent (local testing):** the compose file includes a `qbittorrent` service (Web UI on port 8081). TMS connects via `QBITTORRENT_URL=http://qbittorrent:8081`. A config with login **admin** and password **adminadmin** is mounted from `docker/qbittorrent.conf`; set `MOVIE_PATH=/app/media` in `.env` and optionally `QBITTORRENT_USERNAME=admin`, `QBITTORRENT_PASSWORD=adminadmin`.
 
-**qBittorrent:** при использовании qbittorrent-nox задайте в `.env` `QBITTORRENT_URL` (например `http://localhost:8081`). Чтобы не конфликтовать с API (порт 8080), запускайте qBittorrent с `QBT_WEBUI_PORT=8081`. Подробно: [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) (запуск и автозагрузка через systemd).  
-**qBittorrent:** when using qbittorrent-nox set `QBITTORRENT_URL` in `.env` (e.g. `http://localhost:8081`). To avoid conflict with the API (port 8080), run qBittorrent with `QBT_WEBUI_PORT=8081`. See [docs/qbittorrent-systemd.md](docs/qbittorrent-systemd.md) for running and systemd.
+**qBittorrent:** при использовании qbittorrent-nox задайте в `.env` `QBITTORRENT_URL` (например `http://localhost:8081`). Чтобы не конфликтовать с API (порт 8080), запускайте qBittorrent с `QBT_WEBUI_PORT=8081`. Установщик настраивает systemd и порт за вас.  
+**qBittorrent:** when using qbittorrent-nox set `QBITTORRENT_URL` in `.env` (e.g. `http://localhost:8081`). Run with `QBT_WEBUI_PORT=8081` to avoid conflict with the API (port 8080). The installer configures systemd and port for you.
 
 Совместимость с ТВ: если видео не воспроизводится — `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости пройдут remux. Опции: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — отклонять несовместимое видео.  
 TV compatibility: if video won't play on your TV, set `VIDEO_COMPATIBILITY_MODE=true`. Files may be remuxed. Options: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — reject incompatible video.
