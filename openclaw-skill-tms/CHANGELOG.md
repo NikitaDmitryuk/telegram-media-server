@@ -2,6 +2,10 @@
 
 All notable changes to this skill are documented here.
 
+## [1.0.6] - Inline API spec (no fetch required)
+
+- **Full API contract in SKILL.md:** The complete OpenAPI spec (paths, schemas, examples) is now embedded in the skill document. The agent no longer needs to request `{base_url}/api/v1/openapi-llm.yaml` to use the TMS API — all information for building and invoking API calls is available immediately. Base URL and authentication rules are stated explicitly; full URL for each endpoint is `{BaseURL}/api/v1/...`.
+
 ## [1.0.4] - Optional TMS_API_URL (default for same-host)
 
 - **TMS_API_URL is optional:** When agent and TMS run on the same host, default base URL is `http://127.0.0.1:8080` (TMS default API listen). No env vars are required for same-host; skill metadata `requires.env` is now `[]`.
