@@ -33,8 +33,8 @@ func NewConfig() (*Config, error) {
 		RegularPassword:     getEnv("REGULAR_PASSWORD", ""),
 		Lang:                getEnv("LANG", "en"),
 		TelegramProxy:       getEnv("TELEGRAM_PROXY", ""),
-		Proxy:               getEnv("PROXY", ""),
-		ProxyDomains:        getEnv("PROXY_DOMAINS", ""),
+		Proxy:               getEnv("CONTENT_PROXY", getEnv("PROXY", "")),
+		ProxyDomains:        getEnv("CONTENT_PROXY_DOMAINS", getEnv("PROXY_DOMAINS", "")),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
 		LangPath:            getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
 		ProwlarrURL:         getEnv("PROWLARR_URL", ""),
@@ -47,6 +47,9 @@ func NewConfig() (*Config, error) {
 		YtdlpPath:           getEnv("YTDLP_PATH", "/usr/bin/yt-dlp"),
 		YtdlpUpdateOnStart:  getEnvBool("YTDLP_UPDATE_ON_START", true),
 		YtdlpUpdateInterval: getEnvDuration("YTDLP_UPDATE_INTERVAL", DefaultYtdlpUpdateInterval),
+		QBittorrentURL:      getEnv("QBITTORRENT_URL", ""),
+		QBittorrentUsername: getEnv("QBITTORRENT_USERNAME", "admin"),
+		QBittorrentPassword: getEnv("QBITTORRENT_PASSWORD", "adminadmin"),
 
 		DownloadSettings: DownloadConfig{
 			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", DefaultMaxConcurrentDownloads),
@@ -156,6 +159,9 @@ type Config struct {
 	YtdlpPath           string // Path to yt-dlp binary; use standalone from GitHub for auto-update via -U (pacman/pip builds refuse -U)
 	YtdlpUpdateOnStart  bool
 	YtdlpUpdateInterval time.Duration
+	QBittorrentURL      string // When set, torrents are handled by qBittorrent Web API instead of aria2 (e.g. http://localhost:8080)
+	QBittorrentUsername string
+	QBittorrentPassword string
 
 	DownloadSettings DownloadConfig
 	SecuritySettings SecurityConfig

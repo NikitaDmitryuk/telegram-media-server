@@ -13,6 +13,7 @@ import (
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/qbittorrent"
 	aria2 "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/torrent"
 	ytdlp "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/video"
 	"github.com/google/uuid"
@@ -25,6 +26,13 @@ const (
 )
 
 func NewTorrentDownloader(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
+	if cfg.QBittorrentURL != "" {
+		dl, err := qbittorrent.NewQBittorrentDownloader(torrentFileName, moviePath, cfg)
+		if err == nil {
+			return dl
+		}
+		// Fallback to aria2 on misconfiguration (e.g. invalid QBittorrentURL)
+	}
 	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg)
 }
 
@@ -49,7 +57,7 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 		if err := os.WriteFile(path, []byte(rawURL), ownerOnlyFileMode); err != nil {
 			return nil, fmt.Errorf("write magnet file: %w", err)
 		}
-		return aria2.NewAria2Downloader(name, moviePath, cfg), nil
+		return newTorrentDownloaderOrAria2(name, moviePath, cfg), nil
 	}
 
 	// HTTP(S) URL ending with .torrent or with torrent content: download to temp file
@@ -60,7 +68,7 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 				return nil, err
 			}
 			base := filepath.Base(localPath)
-			return aria2.NewAria2Downloader(base, moviePath, cfg), nil
+			return newTorrentDownloaderOrAria2(base, moviePath, cfg), nil
 		}
 		// Prowlarr download proxy URL: GET and resolve to magnet or .torrent
 		if dl, err := resolveProwlarrDownload(ctx, rawURL, moviePath, cfg); err == nil {
@@ -80,7 +88,6 @@ func resolveProwlarrDownload(ctx context.Context, rawURL, moviePath string, cfg 
 	if _, err := isProwlarrDownloadURL(cfg, rawURL); err != nil {
 		return nil, err
 	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
 	if err != nil {
 		return nil, err
@@ -100,20 +107,34 @@ func resolveProwlarrDownload(ctx context.Context, rawURL, moviePath string, cfg 
 	}
 	defer resp.Body.Close()
 
-	// Redirect to magnet: use it
-	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		loc := resp.Header.Get("Location")
-		if strings.HasPrefix(strings.TrimSpace(loc), "magnet:") {
-			return writeMagnetAndReturnDownloader(moviePath, strings.TrimSpace(loc), cfg)
-		}
+	if dl, ok, resolveErr := tryRedirectMagnet(resp, moviePath, cfg); ok {
+		return dl, resolveErr
 	}
-
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("prowlarr download returned status %d", resp.StatusCode)
 	}
+	return handleProwlarrBody(resp, moviePath, cfg)
+}
 
-	// Body: .torrent (bencode dict starts with 'd') or Content-Type
-	contentType := resp.Header.Get("Content-Type")
+// tryRedirectMagnet handles 3xx with Location: magnet. Returns (downloader, true, nil) on success,
+// (nil, true, err) on validation error, (nil, false, nil) if not a magnet redirect.
+func tryRedirectMagnet(resp *http.Response, moviePath string, cfg *config.Config) (downloader.Downloader, bool, error) {
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+		return nil, false, nil
+	}
+	loc := strings.TrimSpace(resp.Header.Get("Location"))
+	if !strings.HasPrefix(strings.ToLower(loc), "magnet:") {
+		return nil, false, nil
+	}
+	if validateErr := aria2.ValidateMagnetBtih(loc); validateErr != nil {
+		return nil, true, validateErr
+	}
+	dl, err := writeMagnetAndReturnDownloader(moviePath, loc, cfg)
+	return dl, true, err
+}
+
+// handleProwlarrBody reads the response body and returns a downloader for .torrent or magnet content.
+func handleProwlarrBody(resp *http.Response, moviePath string, cfg *config.Config) (downloader.Downloader, error) {
 	if resp.ContentLength > torrentMaxSizeBytes {
 		return nil, fmt.Errorf("prowlarr download response too large")
 	}
@@ -124,10 +145,17 @@ func resolveProwlarrDownload(ctx context.Context, rawURL, moviePath string, cfg 
 	if int64(len(data)) > torrentMaxSizeBytes {
 		return nil, fmt.Errorf("prowlarr download response too large")
 	}
+	contentType := resp.Header.Get("Content-Type")
 	if isTorrentResponse(data, contentType) {
 		return writeTorrentAndReturnDownloader(moviePath, data, cfg)
 	}
-
+	bodyStr := strings.TrimSpace(string(data))
+	if strings.HasPrefix(strings.ToLower(bodyStr), "magnet:") {
+		if validateErr := aria2.ValidateMagnetBtih(bodyStr); validateErr != nil {
+			return nil, validateErr
+		}
+		return writeMagnetAndReturnDownloader(moviePath, bodyStr, cfg)
+	}
 	return nil, fmt.Errorf("prowlarr download URL did not return torrent or magnet")
 }
 
@@ -173,7 +201,17 @@ func writeMagnetAndReturnDownloader(moviePath, magnetURI string, cfg *config.Con
 	if err := os.WriteFile(path, []byte(magnetURI), ownerOnlyFileMode); err != nil {
 		return nil, err
 	}
-	return aria2.NewAria2Downloader(name, moviePath, cfg), nil
+	return newTorrentDownloaderOrAria2(name, moviePath, cfg), nil
+}
+
+func newTorrentDownloaderOrAria2(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
+	if cfg.QBittorrentURL != "" {
+		dl, err := qbittorrent.NewQBittorrentDownloader(torrentFileName, moviePath, cfg)
+		if err == nil {
+			return dl
+		}
+	}
+	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg)
 }
 
 func isTorrentResponse(data []byte, contentType string) bool {
@@ -193,7 +231,7 @@ func writeTorrentAndReturnDownloader(moviePath string, data []byte, cfg *config.
 	if err := os.WriteFile(fpath, data, ownerOnlyFileMode); err != nil {
 		return nil, err
 	}
-	return aria2.NewAria2Downloader(fname, moviePath, cfg), nil
+	return newTorrentDownloaderOrAria2(fname, moviePath, cfg), nil
 }
 
 func downloadTorrentFile(ctx context.Context, fileURL, moviePath string) (string, error) {

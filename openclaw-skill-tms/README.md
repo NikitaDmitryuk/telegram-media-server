@@ -69,7 +69,7 @@ After installation and config, ask the agent in natural language. Examples:
 - *"Delete download 3"*
 - *"Search torrents for Inception 1080p"* (requires Prowlarr on TMS)
 
-The agent will use the TMS API (health, list, add, delete, search) as described in SKILL.md and in the OpenAPI spec at `{base_url}/api/v1/openapi-llm.yaml` (base_url is `TMS_API_URL` if set, else `http://127.0.0.1:8080` for same-host).
+The agent will use the TMS API (health, list, add, delete, search) as described in SKILL.md. The full OpenAPI spec is embedded in the skill, so the agent has everything needed to call the API without requesting documentation from the server.
 
 ## Examples
 
@@ -92,6 +92,7 @@ After publication, the skill page on ClawHub may list the exact slug if it diffe
 
 ## API docs
 
+- The skill (SKILL.md) includes the full OpenAPI spec inline so the agent can call the API without fetching docs. For humans or tooling:
 - Human-readable Swagger UI: `{TMS_API_URL}/api/v1/docs`
 - OpenAPI YAML (human): `{TMS_API_URL}/api/v1/openapi.yaml`
 - OpenAPI YAML (LLM-oriented): `{TMS_API_URL}/api/v1/openapi-llm.yaml`
@@ -105,7 +106,7 @@ After publication, the skill page on ClawHub may list the exact slug if it diffe
 
 ## Security and trust
 
-This skill is **instruction-only**: it contains no install scripts, no code to execute, and no extra binaries. OpenClaw uses it to decide when and how to call your TMS API. No env required when agent and TMS run on the same host (default `http://127.0.0.1:8080`, no key). Optional: `TMS_API_URL` (base URL), `TMS_API_KEY` (for auth from another host). These are used solely for HTTP requests to the TMS endpoints described in SKILL.md (health, list, add, delete, search). The full OpenAPI spec is at `{base_url}/api/v1/openapi-llm.yaml`. The skill does not read unrelated files, harvest other env vars, or send data to third-party endpoints. Optional webhook support is configured on the TMS side (`TMS_WEBHOOK_URL`, and `TMS_WEBHOOK_TOKEN` for OpenClaw hooks auth), not by the skill.
+This skill is **instruction-only**: it contains no install scripts, no code to execute, and no extra binaries. OpenClaw uses it to decide when and how to call your TMS API. No env required when agent and TMS run on the same host (default `http://127.0.0.1:8080`, no key). Optional: `TMS_API_URL` (base URL), `TMS_API_KEY` (for auth from another host). These are used solely for HTTP requests to the TMS endpoints described in SKILL.md (health, list, add, delete, search). The full OpenAPI spec is embedded in SKILL.md. The skill does not read unrelated files, harvest other env vars, or send data to third-party endpoints. Optional webhook support is configured on the TMS side (`TMS_WEBHOOK_URL`, and `TMS_WEBHOOK_TOKEN` for OpenClaw hooks auth), not by the skill.
 
 **Before installing:**
 

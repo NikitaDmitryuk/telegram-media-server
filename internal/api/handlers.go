@@ -164,7 +164,7 @@ func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 			return
 		}
 	}
-	movieID, progressChan, errChan, err := a.DownloadManager.StartDownload(dl, notifier.Noop)
+	movieID, _, completionChan, err := a.DownloadManager.StartDownload(dl, notifier.Noop)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Error("AddDownload: StartDownload failed")
 		writeError(w, http.StatusInternalServerError, utils.DownloadErrorMessage(err))
@@ -179,7 +179,7 @@ func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 			title = strings.TrimSpace(req.Title)
 		}
 	}
-	go app.RunCompletionLoop(a, progressChan, errChan, dl, movieID, title, webhookNotifier{
+	go app.RunCompletionLoop(a, completionChan, dl, movieID, title, webhookNotifier{
 		webhookURL:   a.Config.TMSWebhookURL,
 		webhookToken: a.Config.TMSWebhookToken,
 	})

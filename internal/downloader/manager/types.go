@@ -25,12 +25,24 @@ const (
 // Consumers outside the manager package should depend on this interface.
 type Service interface {
 	StartDownload(dl downloader.Downloader, queueNotifier notifier.QueueNotifier) (uint, chan float64, chan error, error)
+	// ResumeDownload reattaches monitoring to an existing qBittorrent torrent (e.g. after bot restart).
+	// movieID, title, totalEpisodes are from DB; no new movie is added.
+	ResumeDownload(
+		movieID uint,
+		dl downloader.Downloader,
+		title string,
+		totalEpisodes int,
+		queueNotifier notifier.QueueNotifier,
+	) (chan error, error)
 	StopDownload(movieID uint) error
 	// StopDownloadSilent stops the download without triggering "download stopped" user notification (e.g. when stopping from deletion queue).
 	StopDownloadSilent(movieID uint) error
 	StopAllDownloads()
 	GetActiveDownloads() []uint
 	GetQueueItems() []map[string]any
+	// RemoveQBittorrentTorrent removes the torrent from qBittorrent Web UI by movie ID (looks up hash in DB).
+	// No-op if not qBittorrent or hash missing.
+	RemoveQBittorrentTorrent(ctx context.Context, movieID uint) error
 }
 
 // conversionJob is sent to the conversion worker; Done is closed when conversion (or skip) is finished.

@@ -90,24 +90,10 @@ clean:
 	rm -rf $(BUILD_DIR) $(BINARY_NAME)
 	go clean -cache -testcache
 
+# Установка (Arch Linux, Ubuntu/Debian): интерактивный скрипт — .env, qBittorrent, Prowlarr, minidlna.
 .PHONY: install
-install: build
-	@echo "Installing $(BINARY_NAME)..."
-	install -Dm755 $(BUILD_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
-	install -Dm644 .env.example $(CONFIG_DIR)/.env.example
-	install -Dm644 telegram-media-server.service $(SERVICE_DIR)/telegram-media-server.service
-	install -d $(LOCALES_DEST)
-	install -Dm644 $(LOCALES_SRC)/* $(LOCALES_DEST)/
-	@if [ -f $(CONFIG_DIR)/.env ]; then \
-		echo "Merging new parameters into existing .env..."; \
-		bash scripts/merge-env.sh $(CONFIG_DIR)/.env $(CONFIG_DIR)/.env.example; \
-	else \
-		echo "Please create $(CONFIG_DIR)/.env based on $(CONFIG_DIR)/.env.example"; \
-	fi
-	systemctl daemon-reload
-	systemctl enable --now telegram-media-server
-	systemctl restart telegram-media-server
-	@echo "Installation complete"
+install:
+	@bash scripts/install.sh
 
 .PHONY: uninstall
 uninstall:
@@ -310,7 +296,7 @@ help:
 	@echo "Build:"
 	@echo "  build          - Build the application (with dependency check)"
 	@echo "  build-simple   - Build for CI (no dependencies check)"
-	@echo "  install        - Install as system service"
+	@echo "  install        - Install (Arch/Ubuntu, interactive script)"
 	@echo "  uninstall      - Uninstall system service"
 	@echo "  clean          - Clean build artifacts"
 	@echo ""

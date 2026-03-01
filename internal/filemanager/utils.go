@@ -66,6 +66,11 @@ func DeleteMovie(movieID uint, moviePath string, db tmsdb.Database, downloadMana
 		logutils.Log.WithError(err).Debugf("Attempted to stop download for movieID %d (may already be completed)", movieID)
 	}
 
+	// Remove torrent from qBittorrent Web UI if it was downloaded via qBittorrent (so it doesn't stay in the list).
+	if err := downloadManager.RemoveQBittorrentTorrent(context.Background(), movieID); err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Debug("RemoveQBittorrentTorrent failed (torrent may already be removed)")
+	}
+
 	if err := DeleteTemporaryFilesByMovieID(movieID, moviePath, db, downloadManager); err != nil {
 		logutils.Log.WithError(err).Error("Failed to delete temporary files")
 	}

@@ -41,7 +41,7 @@ func (dm *DownloadManager) startQueuedDownload(queued *queuedDownload) {
 
 	queued.queueNotifier.OnStarted(queued.movieID, queued.title)
 
-	_, innerProgressChan, innerErrChan, err := dm.startDownloadImmediately(
+	_, _, innerErrChan, err := dm.startDownloadImmediately(
 		queued.movieID,
 		queued.downloader,
 		queued.title,
@@ -69,36 +69,15 @@ func (dm *DownloadManager) startQueuedDownload(queued *queuedDownload) {
 		"title":    queued.title,
 	}).Info("Successfully started queued download")
 
-	// Forward progress and errors from inner channels to the original caller's channels
+	// Forward only the completion/error signal. Progress is tracked exclusively
+	// by monitorDownload → DB; reading innerProgressChan here would create a
+	// dual-consumer race stealing updates from the monitor.
 	go func() {
 		defer close(queued.progressChan)
 		defer close(queued.errChan)
 
-		// Use select to handle both channels concurrently
-		// This prevents deadlock if errChan receives value before progressChan closes
-		progressDone := false
-		errDone := false
-
-		for !progressDone || !errDone {
-			select {
-			case progress, ok := <-innerProgressChan:
-				if !ok {
-					progressDone = true
-					continue
-				}
-				select {
-				case queued.progressChan <- progress:
-				default:
-					// Drop progress if channel is full (non-blocking)
-				}
-			case innerErr, ok := <-innerErrChan:
-				if !ok {
-					errDone = true
-					continue
-				}
-				queued.errChan <- innerErr
-				errDone = true
-			}
+		if innerErr, ok := <-innerErrChan; ok {
+			queued.errChan <- innerErr
 		}
 	}()
 }

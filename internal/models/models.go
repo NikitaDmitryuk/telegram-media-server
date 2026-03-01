@@ -13,7 +13,9 @@ type Movie struct {
 	ConversionStatus     string `json:"conversion_status"     gorm:"not null;default:''"`
 	ConversionPercentage int    `json:"conversion_percentage" gorm:"not null;default:0"`
 	// TvCompatibility: "", "green", "yellow", "red" (only in compatibility mode)
-	TvCompatibility string      `json:"tv_compatibility"      gorm:"not null;default:''"`
+	TvCompatibility string `json:"tv_compatibility"      gorm:"not null;default:''"`
+	// QBittorrentHash: set when downloaded via qBittorrent; used to remove from Web UI on delete.
+	QBittorrentHash string      `json:"qbittorrent_hash"      gorm:"not null;default:''"`
 	Files           []MovieFile `json:"files"                 gorm:"foreignKey:MovieID"`
 	CreatedAt       time.Time   `json:"created_at"            gorm:"autoCreateTime"`
 	UpdatedAt       time.Time   `json:"updated_at"            gorm:"autoUpdateTime"`

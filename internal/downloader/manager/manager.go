@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/qbittorrent"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/tvcompat"
@@ -32,6 +34,66 @@ func NewDownloadManager(cfg *config.Config, db database.Database) *DownloadManag
 	}
 
 	return dm
+}
+
+func (dm *DownloadManager) ResumeDownload(
+	movieID uint,
+	dl downloader.Downloader,
+	title string,
+	totalEpisodes int,
+	queueNotifier notifier.QueueNotifier,
+) (chan error, error) {
+	select {
+	case dm.semaphore <- struct{}{}:
+		return dm.resumeDownloadImmediately(movieID, dl, title, totalEpisodes, queueNotifier)
+	default:
+		return nil, utils.WrapError(fmt.Errorf("no slot for resumed download"), "resume failed", map[string]any{
+			"movie_id": movieID,
+		})
+	}
+}
+
+func (dm *DownloadManager) resumeDownloadImmediately(
+	movieID uint,
+	dl downloader.Downloader,
+	title string,
+	totalEpisodes int,
+	queueNotifier notifier.QueueNotifier,
+) (chan error, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
+	if err != nil {
+		cancel()
+		<-dm.semaphore
+		return nil, utils.WrapError(err, "Failed to resume download", map[string]any{
+			"movie_id": movieID,
+			"title":    title,
+		})
+	}
+
+	outerErrChan := make(chan error, 1)
+
+	job := &downloadJob{
+		downloader:    dl,
+		startTime:     dm.getCurrentTime(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		episodesChan:  episodesChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: queueNotifier,
+		title:         title,
+		totalEpisodes: totalEpisodes,
+	}
+
+	dm.mu.Lock()
+	dm.jobs[movieID] = job
+	dm.mu.Unlock()
+
+	go dm.monitorDownload(movieID, job, outerErrChan)
+
+	return outerErrChan, nil
 }
 
 func (dm *DownloadManager) StartDownload(
@@ -90,6 +152,22 @@ func (dm *DownloadManager) startDownloadImmediately(
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Set hash callback BEFORE starting the download goroutine to avoid a data race
+	// where run() checks d.onHashKnown before the main goroutine sets it.
+	if setter, ok := dl.(downloader.OnHashKnownSetter); ok {
+		setter.SetOnHashKnown(func(hash string) {
+			logutils.Log.WithFields(map[string]any{
+				"movie_id": movieID,
+				"hash":     hash,
+			}).Info("Persisting qBittorrent hash to DB via onHashKnown callback")
+			if dbErr := dm.db.SetQBittorrentHash(context.Background(), movieID, hash); dbErr != nil {
+				logutils.Log.WithError(dbErr).WithField("movie_id", movieID).Warn("Failed to persist qBittorrent hash")
+			}
+		})
+	} else {
+		logutils.Log.WithField("movie_id", movieID).Warn("Downloader does not implement OnHashKnownSetter")
+	}
+
 	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
 	if err != nil {
 		cancel()
@@ -107,6 +185,16 @@ func (dm *DownloadManager) startDownloadImmediately(
 			if compat, earlyErr := early.GetEarlyTvCompatibility(ctx); earlyErr == nil && compat != "" {
 				_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
 			}
+		}
+	}
+	// Fallback: also persist hash via channel (idempotent second persist).
+	if hd, ok := dl.(downloader.QBittorrentHashDownloader); ok {
+		if ch := hd.QBittorrentHashChan(); ch != nil {
+			go func() {
+				if hash, ok := <-ch; ok && hash != "" {
+					_ = dm.db.SetQBittorrentHash(context.Background(), movieID, hash)
+				}
+			}()
 		}
 	}
 
@@ -177,6 +265,44 @@ func (dm *DownloadManager) stopDownloadNotFound(movieID uint) error {
 
 	// It's normal for completed downloads to not be found in active downloads or queue
 	logutils.Log.WithField("movie_id", movieID).Debug("Download not found in active downloads or queue (likely already completed)")
+	return nil
+}
+
+func (dm *DownloadManager) RemoveQBittorrentTorrent(ctx context.Context, movieID uint) error {
+	if dm.cfg.QBittorrentURL == "" {
+		return nil
+	}
+	movie, err := dm.db.GetMovieByID(ctx, movieID)
+	if err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("RemoveQBittorrentTorrent: failed to get movie from DB")
+		return err
+	}
+	if movie.QBittorrentHash == "" {
+		logutils.Log.WithField("movie_id", movieID).
+			Warn("RemoveQBittorrentTorrent: no qBittorrent hash stored in DB, cannot remove torrent")
+		return nil
+	}
+	logutils.Log.WithFields(map[string]any{
+		"movie_id": movieID,
+		"hash":     movie.QBittorrentHash,
+	}).Info("RemoveQBittorrentTorrent: attempting to delete torrent")
+	client, err := qbittorrent.NewClient(dm.cfg.QBittorrentURL, dm.cfg.QBittorrentUsername, dm.cfg.QBittorrentPassword)
+	if err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to create qBittorrent client for removal")
+		return err
+	}
+	if err := client.Login(ctx); err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("qBittorrent login failed for removal")
+		return err
+	}
+	if err := client.DeleteTorrent(ctx, movie.QBittorrentHash, false); err != nil {
+		logutils.Log.WithError(err).
+			WithField("movie_id", movieID).
+			WithField("hash", movie.QBittorrentHash).
+			Warn("Failed to delete torrent from qBittorrent")
+		return err
+	}
+	logutils.Log.WithField("movie_id", movieID).Info("Removed torrent from qBittorrent Web UI")
 	return nil
 }
 

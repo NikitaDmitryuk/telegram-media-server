@@ -109,6 +109,14 @@ func (s *SQLiteDatabase) SetTvCompatibility(ctx context.Context, movieID uint, c
 	return nil
 }
 
+func (s *SQLiteDatabase) SetQBittorrentHash(ctx context.Context, movieID uint, hash string) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("qbittorrent_hash", hash)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func (s *SQLiteDatabase) GetMovieByID(ctx context.Context, movieID uint) (Movie, error) {
 	var movie Movie
 	result := s.db.WithContext(ctx).First(&movie, movieID)
@@ -116,6 +124,17 @@ func (s *SQLiteDatabase) GetMovieByID(ctx context.Context, movieID uint) (Movie,
 		return Movie{}, result.Error
 	}
 	return movie, nil
+}
+
+func (s *SQLiteDatabase) GetIncompleteQBittorrentDownloads(ctx context.Context) ([]Movie, error) {
+	var movies []Movie
+	result := s.db.WithContext(ctx).
+		Where("qbittorrent_hash != '' AND downloaded_percentage < 100").
+		Find(&movies)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return movies, nil
 }
 
 func (s *SQLiteDatabase) MovieExistsFiles(ctx context.Context, files []string) (bool, error) {

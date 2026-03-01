@@ -9,15 +9,40 @@ services:
       # Listen on all interfaces so the host can reach the API (port mapping).
       # Default 127.0.0.1:8080 is only reachable inside the container.
       - TMS_API_LISTEN=0.0.0.0:8080
+      # qBittorrent in the same stack: TMS will use it for torrents (same path /app/media).
+      - QBITTORRENT_URL=http://qbittorrent:8081
     volumes:
       - ${MOVIE_PATH}:/app/media
     ports:
       - "8080:8080"
       - "6881-6999:6881-6999"
+    depends_on:
+      - qbittorrent
     # Optional: on Linux, use network_mode: host for direct host network (e.g. better
     # torrent peer acceptance). Then remove "ports" and set TMS_API_LISTEN=127.0.0.1:8080
     # in .env if you only need API from the same machine.
     # network_mode: host
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - WEBUI_PORT=8081
+      - TORRENTING_PORT=6881
+    volumes:
+      - ${MOVIE_PATH}/qbittorrent-config:/config
+      # Preconfigured admin/adminadmin and SavePath=/app/media (see docker/qbittorrent.conf)
+      - ./docker/qbittorrent.conf:/config/qBittorrent/qBittorrent.conf
+      # Same path as TMS so downloads appear in MOVIE_PATH
+      - ${MOVIE_PATH}:/app/media
+    ports:
+      - "8081:8081"
+      - "16881:6881"
+      - "16881:6881/udp"
+    restart: unless-stopped
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest

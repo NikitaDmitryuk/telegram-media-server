@@ -42,6 +42,10 @@ func (*DatabaseStub) MovieExistsUploadedFile(_ context.Context, _ string) (bool,
 	return false, nil
 }
 
+func (*DatabaseStub) GetIncompleteQBittorrentDownloads(_ context.Context) ([]database.Movie, error) {
+	return nil, nil
+}
+
 // MovieWriter methods.
 
 func (*DatabaseStub) AddMovie(_ context.Context, _ string, _ int64, _, _ []string, _ int) (uint, error) {
@@ -69,6 +73,8 @@ func (*DatabaseStub) UpdateConversionPercentage(_ context.Context, _ uint, _ int
 }
 
 func (*DatabaseStub) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
+
+func (*DatabaseStub) SetQBittorrentHash(_ context.Context, _ uint, _ string) error { return nil }
 
 func (*DatabaseStub) RemoveFilesByMovieID(_ context.Context, _ uint) error { return nil }
 
