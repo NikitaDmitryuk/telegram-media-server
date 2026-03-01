@@ -152,6 +152,16 @@ func (dm *DownloadManager) startDownloadImmediately(
 ) (movieIDOut uint, progressChan chan float64, outerErrChan chan error, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Set hash callback BEFORE starting the download goroutine to avoid a data race
+	// where run() checks d.onHashKnown before the main goroutine sets it.
+	if setter, ok := dl.(downloader.OnHashKnownSetter); ok {
+		setter.SetOnHashKnown(func(hash string) {
+			if dbErr := dm.db.SetQBittorrentHash(context.Background(), movieID, hash); dbErr != nil {
+				logutils.Log.WithError(dbErr).WithField("movie_id", movieID).Warn("Failed to persist qBittorrent hash")
+			}
+		})
+	}
+
 	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
 	if err != nil {
 		cancel()
@@ -171,18 +181,15 @@ func (dm *DownloadManager) startDownloadImmediately(
 			}
 		}
 	}
-	// Persist qBittorrent torrent hash so we can remove it from Web UI when the user deletes the movie (survives process restart).
-	if setter, ok := dl.(downloader.OnHashKnownSetter); ok {
-		setter.SetOnHashKnown(func(hash string) {
-			_ = dm.db.SetQBittorrentHash(context.Background(), movieID, hash)
-		})
-	}
+	// Fallback: also persist hash via channel (idempotent second persist).
 	if hd, ok := dl.(downloader.QBittorrentHashDownloader); ok {
-		go func() {
-			if hash, ok := <-hd.QBittorrentHashChan(); ok && hash != "" {
-				_ = dm.db.SetQBittorrentHash(context.Background(), movieID, hash)
-			}
-		}()
+		if ch := hd.QBittorrentHashChan(); ch != nil {
+			go func() {
+				if hash, ok := <-ch; ok && hash != "" {
+					_ = dm.db.SetQBittorrentHash(context.Background(), movieID, hash)
+				}
+			}()
+		}
 	}
 
 	outerErrChan = make(chan error, 1)
@@ -260,7 +267,12 @@ func (dm *DownloadManager) RemoveQBittorrentTorrent(ctx context.Context, movieID
 		return nil
 	}
 	movie, err := dm.db.GetMovieByID(ctx, movieID)
-	if err != nil || movie.QBittorrentHash == "" {
+	if err != nil {
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("RemoveQBittorrentTorrent: failed to get movie from DB")
+		return err
+	}
+	if movie.QBittorrentHash == "" {
+		logutils.Log.WithField("movie_id", movieID).Debug("RemoveQBittorrentTorrent: no qBittorrent hash stored, skipping")
 		return nil
 	}
 	client, err := qbittorrent.NewClient(dm.cfg.QBittorrentURL, dm.cfg.QBittorrentUsername, dm.cfg.QBittorrentPassword)

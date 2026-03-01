@@ -44,7 +44,7 @@ func RunCompletionLoop(
 		logutils.Log.WithError(err).Error("Failed to delete temporary files after download")
 	}
 	if err := a.DownloadManager.RemoveQBittorrentTorrent(context.Background(), movieID); err != nil {
-		logutils.Log.WithError(err).WithField("movie_id", movieID).Debug("Failed to remove torrent from qBittorrent after completion")
+		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to remove torrent from qBittorrent after completion")
 	}
 	compl.OnCompleted(movieID, title)
 }

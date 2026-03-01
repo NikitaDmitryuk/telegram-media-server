@@ -58,6 +58,7 @@ func NewQBittorrentDownloader(torrentFileName, moviePath string, cfg *config.Con
 		downloadDir:     moviePath,
 		cfg:             cfg,
 		client:          client,
+		hashChan:        make(chan string, 1),
 	}
 	if strings.HasSuffix(strings.ToLower(torrentFileName), ".magnet") {
 		path := filepath.Join(moviePath, torrentFileName)
