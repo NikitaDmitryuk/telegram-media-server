@@ -76,9 +76,13 @@ func (dm *DownloadManager) startQueuedDownload(queued *queuedDownload) {
 		defer close(queued.progressChan)
 		defer close(queued.errChan)
 
-		if innerErr, ok := <-innerErrChan; ok {
-			queued.errChan <- innerErr
+		innerErr, ok := <-innerErrChan
+		if !ok {
+			logutils.Log.WithField("movie_id", queued.movieID).Error("Queued download: inner completion channel closed without result")
+			queued.errChan <- fmt.Errorf("download manager: inner completion channel closed unexpectedly")
+			return
 		}
+		queued.errChan <- innerErr
 	}()
 }
 

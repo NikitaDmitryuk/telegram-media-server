@@ -44,6 +44,7 @@ func NewConfig() (*Config, error) {
 		TMSAPIKey:           getEnv("TMS_API_KEY", ""),
 		TMSWebhookURL:       getEnv("TMS_WEBHOOK_URL", ""),
 		TMSWebhookToken:     getEnv("TMS_WEBHOOK_TOKEN", ""),
+		TMSWebhookFormat:    getEnv("TMS_WEBHOOK_FORMAT", ""),
 		YtdlpPath:           getEnv("YTDLP_PATH", "/usr/bin/yt-dlp"),
 		YtdlpUpdateOnStart:  getEnvBool("YTDLP_UPDATE_ON_START", true),
 		YtdlpUpdateInterval: getEnvDuration("YTDLP_UPDATE_INTERVAL", DefaultYtdlpUpdateInterval),
@@ -139,23 +140,25 @@ func NewConfig() (*Config, error) {
 }
 
 type Config struct {
-	BotToken            string
-	MoviePath           string
-	AdminPassword       string
-	RegularPassword     string
-	Lang                string
-	TelegramProxy       string
-	Proxy               string
-	ProxyDomains        string
-	LogLevel            string
-	LangPath            string
-	ProwlarrURL         string
-	ProwlarrAPIKey      string
-	TMSAPIEnabled       bool
-	TMSAPIListen        string // e.g. "127.0.0.1:8080" or "0.0.0.0:8080"
-	TMSAPIKey           string
-	TMSWebhookURL       string // optional; POST on download completion/failure
-	TMSWebhookToken     string // optional; sent as Authorization: Bearer <token> when calling TMS_WEBHOOK_URL (e.g. for OpenClaw hooks)
+	BotToken        string
+	MoviePath       string
+	AdminPassword   string
+	RegularPassword string
+	Lang            string
+	TelegramProxy   string
+	Proxy           string
+	ProxyDomains    string
+	LogLevel        string
+	LangPath        string
+	ProwlarrURL     string
+	ProwlarrAPIKey  string
+	TMSAPIEnabled   bool
+	TMSAPIListen    string // e.g. "127.0.0.1:8080" or "0.0.0.0:8080"
+	TMSAPIKey       string
+	TMSWebhookURL   string // optional; POST on download completion/failure
+	TMSWebhookToken string // optional; sent as Authorization: Bearer <token> when calling TMS_WEBHOOK_URL (e.g. for OpenClaw hooks)
+	// TMSWebhookFormat: json|tms (default), openclaw_wake, openclaw_agent. Empty = auto from URL (/hooks/wake, /hooks/agent).
+	TMSWebhookFormat    string
 	YtdlpPath           string // Path to yt-dlp binary; use standalone from GitHub for auto-update via -U (pacman/pip builds refuse -U)
 	YtdlpUpdateOnStart  bool
 	YtdlpUpdateInterval time.Duration

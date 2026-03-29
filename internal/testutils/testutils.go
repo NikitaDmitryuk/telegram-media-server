@@ -192,7 +192,11 @@ func (*TestSQLiteDatabase) UpdateDownloadedPercentage(_ context.Context, _ uint,
 func (*TestSQLiteDatabase) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
 	return nil
 }
-func (*TestSQLiteDatabase) SetLoaded(_ context.Context, _ uint) error { return nil }
+func (*TestSQLiteDatabase) SetLoaded(_ context.Context, _ uint, _ string) error { return nil }
+
+func (*TestSQLiteDatabase) RefreshMovieFileSizeFromDisk(_ context.Context, _ uint, _ string) (int64, error) {
+	return 0, nil
+}
 func (*TestSQLiteDatabase) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
 	return nil
 }
@@ -211,6 +215,15 @@ func (*TestSQLiteDatabase) GetFilesByMovieID(_ context.Context, _ uint) ([]datab
 	return nil, nil
 }
 func (*TestSQLiteDatabase) RemoveFilesByMovieID(_ context.Context, _ uint) error {
+	return nil
+}
+func (*TestSQLiteDatabase) ReplaceMainMovieFiles(_ context.Context, _ uint, _ []string) error {
+	return nil
+}
+func (*TestSQLiteDatabase) UpdateMovieFileSize(_ context.Context, _ uint, _ int64) error {
+	return nil
+}
+func (*TestSQLiteDatabase) UpdateMovieTotalEpisodes(_ context.Context, _ uint, _ int) error {
 	return nil
 }
 func (*TestSQLiteDatabase) RemoveTempFilesByMovieID(_ context.Context, _ uint) error {

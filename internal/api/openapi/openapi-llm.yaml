@@ -52,7 +52,7 @@ paths:
       tags: [downloads]
       summary: Create a download
       description: |
-        Call to add a download. Body: JSON with "url" (required) and optional "title" (display name, e.g. from search). URL can be: video URL (yt-dlp), magnet link (magnet:...), .torrent file URL, or Prowlarr proxy download URL when Prowlarr is configured. Prefer magnet from search results. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
+        Call to add a download. Body: JSON with exactly one of "url" or "torrent_base64", plus optional "title". "url": video URL (yt-dlp), magnet (magnet:...), HTTPS URL to a .torrent file, or Prowlarr proxy download URL. "torrent_base64": standard Base64 of a .torrent file (no separate HTTP fetch). Prefer magnet from search results when applicable. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
       operationId: addDownload
       requestBody:
         required: true
@@ -185,9 +185,10 @@ components:
 
     AddDownloadRequest:
       type: object
-      required: [url]
+      description: Exactly one of url or torrent_base64 must be present.
       properties:
         url: { type: string }
+        torrent_base64: { type: string, description: Standard Base64-encoded .torrent file }
         title: { type: string, description: Optional display name e.g. from search result }
 
     AddDownloadResponse:

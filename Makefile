@@ -18,6 +18,11 @@ VERSION=$(shell git describe --tags --always --dirty)
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
 
+# Last log lines: make logs LOG_LINES=50
+LOG_LINES ?= 100
+SYSTEMD_UNIT ?= telegram-media-server
+COMPOSE_SERVICE ?= telegram-media-server
+
 # Dependency checks
 .PHONY: check-deps
 check-deps:
@@ -114,7 +119,17 @@ format:
 	go run golang.org/x/tools/cmd/goimports@latest -w .
 	go mod tidy
 
-GOLANGCI_LINT_VERSION ?= v2.10.1
+GOLANGCI_LINT_VERSION_FILE := .golangci-lint-version
+GOLANGCI_LINT_SEMVER := $(shell tr -d '\n\r ' < $(GOLANGCI_LINT_VERSION_FILE) 2>/dev/null | sed 's/^v//')
+GOLANGCI_LINT_VERSION ?= v$(GOLANGCI_LINT_SEMVER)
+
+.PHONY: update-golangci-lint-version
+update-golangci-lint-version:
+	@python3 -c 'import json, urllib.request; \
+r = json.load(urllib.request.urlopen("https://api.github.com/repos/golangci/golangci-lint/releases/latest")); \
+tag = r["tag_name"]; \
+open(".golangci-lint-version", "w").write(tag[1:] + "\n" if tag.startswith("v") else tag + "\n")'
+	@echo "Wrote golangci-lint $$(tr -d '\n\r ' < $(GOLANGCI_LINT_VERSION_FILE)) to $(GOLANGCI_LINT_VERSION_FILE)"
 
 .PHONY: lint
 lint:
@@ -156,6 +171,7 @@ test-integration:
 	go test -v -run Integration ./internal/handlers/session
 	go test -v -run Integration ./internal/filemanager
 	go test -v -run "TestValidateContentIntegration" ./internal/downloader/torrent
+	go test -tags=integration -v ./internal/api/ -run TestAPI_AddDownload_201TorrentBase64
 
 .PHONY: test-docker
 test-docker: docker-test-build
@@ -210,6 +226,21 @@ status:
 restart:
 	@echo "Restarting telegram-media-server..."
 	systemctl restart telegram-media-server
+
+# Recent service logs: systemd journal if available, otherwise Docker Compose (see LOG_LINES).
+.PHONY: logs
+logs:
+	@if command -v journalctl >/dev/null 2>&1; then \
+		journalctl -u $(SYSTEMD_UNIT) -n $(LOG_LINES) --no-pager; \
+	elif docker compose version >/dev/null 2>&1; then \
+		docker compose logs --tail=$(LOG_LINES) $(COMPOSE_SERVICE); \
+	elif command -v docker-compose >/dev/null 2>&1; then \
+		docker-compose logs --tail=$(LOG_LINES) $(COMPOSE_SERVICE); \
+	else \
+		echo "Neither journalctl nor docker compose found. On a host install: use journalctl after system install,"; \
+		echo "or Docker Compose from the project directory. For 'make run-local', logs go to that terminal."; \
+		exit 1; \
+	fi
 
 # Docker test commands
 .PHONY: docker-test-build
@@ -315,6 +346,7 @@ help:
 	@echo "Service Management:"
 	@echo "  status         - Check service status"
 	@echo "  restart        - Restart service"
+	@echo "  logs           - Last LOG_LINES log lines (journalctl or docker compose; default LOG_LINES=100)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  run            - Run with Docker Compose"

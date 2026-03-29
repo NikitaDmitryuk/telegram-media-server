@@ -26,13 +26,19 @@ type MovieWriter interface {
 	UpdateMovieName(ctx context.Context, movieID uint, name string) error
 	UpdateEpisodesProgress(ctx context.Context, movieID uint, completedEpisodes int) error
 	UpdateDownloadedPercentage(ctx context.Context, movieID uint, percentage int) error
-	SetLoaded(ctx context.Context, movieID uint) error
+	SetLoaded(ctx context.Context, movieID uint, movieRoot string) error
+	// RefreshMovieFileSizeFromDisk sums sizes of main (non-temp) files on disk and updates movie.file_size when sum > 0.
+	RefreshMovieFileSizeFromDisk(ctx context.Context, movieID uint, movieRoot string) (int64, error)
 	RemoveMovie(ctx context.Context, movieID uint) error
 	UpdateConversionStatus(ctx context.Context, movieID uint, status string) error
 	UpdateConversionPercentage(ctx context.Context, movieID uint, percentage int) error
 	SetTvCompatibility(ctx context.Context, movieID uint, compat string) error
 	SetQBittorrentHash(ctx context.Context, movieID uint, hash string) error
 	RemoveFilesByMovieID(ctx context.Context, movieID uint) error
+	// ReplaceMainMovieFiles removes non-temp file rows and inserts new paths (e.g. after magnet metadata from qBittorrent).
+	ReplaceMainMovieFiles(ctx context.Context, movieID uint, paths []string) error
+	UpdateMovieFileSize(ctx context.Context, movieID uint, size int64) error
+	UpdateMovieTotalEpisodes(ctx context.Context, movieID uint, total int) error
 	RemoveTempFilesByMovieID(ctx context.Context, movieID uint) error
 }
 

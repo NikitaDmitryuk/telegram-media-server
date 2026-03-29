@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 func (s *SQLiteDatabase) AddMovie(
@@ -43,6 +45,22 @@ func (s *SQLiteDatabase) UpdateMovieName(ctx context.Context, movieID uint, name
 	return nil
 }
 
+func (s *SQLiteDatabase) UpdateMovieFileSize(ctx context.Context, movieID uint, size int64) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("file_size", size)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (s *SQLiteDatabase) UpdateMovieTotalEpisodes(ctx context.Context, movieID uint, total int) error {
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("total_episodes", total)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func (s *SQLiteDatabase) RemoveMovie(ctx context.Context, movieID uint) error {
 	result := s.db.WithContext(ctx).Delete(&Movie{}, movieID)
 	if result.Error != nil {
@@ -76,13 +94,50 @@ func (s *SQLiteDatabase) UpdateEpisodesProgress(ctx context.Context, movieID uin
 	return nil
 }
 
-func (s *SQLiteDatabase) SetLoaded(ctx context.Context, movieID uint) error {
+func (s *SQLiteDatabase) SetLoaded(ctx context.Context, movieID uint, movieRoot string) error {
 	const completePercentage = 100
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("downloaded_percentage", completePercentage)
+	updates := map[string]any{"downloaded_percentage": completePercentage}
+	if sum, err := s.sumMainFilesSizeOnDisk(ctx, movieID, movieRoot); err == nil && sum > 0 {
+		updates["file_size"] = sum
+	}
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}
 	return nil
+}
+
+// RefreshMovieFileSizeFromDisk updates file_size from actual main files on disk (e.g. magnet had unknown size at add time).
+func (s *SQLiteDatabase) RefreshMovieFileSizeFromDisk(ctx context.Context, movieID uint, movieRoot string) (int64, error) {
+	sum, err := s.sumMainFilesSizeOnDisk(ctx, movieID, movieRoot)
+	if err != nil || sum <= 0 {
+		return sum, err
+	}
+	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("file_size", sum)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return sum, nil
+}
+
+func (s *SQLiteDatabase) sumMainFilesSizeOnDisk(ctx context.Context, movieID uint, movieRoot string) (int64, error) {
+	if movieRoot == "" {
+		return 0, nil
+	}
+	files, err := s.GetFilesByMovieID(ctx, movieID)
+	if err != nil {
+		return 0, err
+	}
+	var sum int64
+	for i := range files {
+		p := filepath.Join(movieRoot, files[i].FilePath)
+		fi, statErr := os.Stat(p)
+		if statErr != nil {
+			continue
+		}
+		sum += fi.Size()
+	}
+	return sum, nil
 }
 
 func (s *SQLiteDatabase) UpdateConversionStatus(ctx context.Context, movieID uint, status string) error {

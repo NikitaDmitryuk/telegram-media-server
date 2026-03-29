@@ -168,6 +168,8 @@ func (dm *DownloadManager) startDownloadImmediately(
 		logutils.Log.WithField("movie_id", movieID).Warn("Downloader does not implement OnHashKnownSetter")
 	}
 
+	dm.attachMagnetMetadataSync(dl, movieID)
+
 	progressChan, errChan, episodesChan, err := dl.StartDownload(ctx)
 	if err != nil {
 		cancel()
@@ -268,6 +270,45 @@ func (dm *DownloadManager) stopDownloadNotFound(movieID uint) error {
 	return nil
 }
 
+// ResumePendingTVConversions picks up movies that finished downloading but never completed TV conversion
+// (e.g. process restart while conversion_status was pending/in_progress).
+func (dm *DownloadManager) ResumePendingTVConversions(ctx context.Context) {
+	if !dm.cfg.VideoSettings.CompatibilityMode {
+		return
+	}
+	movies, err := dm.db.GetMovieList(ctx)
+	if err != nil {
+		logutils.Log.WithError(err).Warn("ResumePendingTVConversions: GetMovieList failed")
+		return
+	}
+	for i := range movies {
+		m := &movies[i]
+		if m.DownloadedPercentage < 100 || m.ConversionPercentage >= 100 {
+			continue
+		}
+		switch m.ConversionStatus {
+		case "pending", "in_progress":
+			// ok
+		case "":
+			if m.TvCompatibility == "" || m.TvCompatibility == tvcompat.TvCompatRed {
+				continue
+			}
+		default:
+			continue
+		}
+		if m.TvCompatibility == tvcompat.TvCompatRed {
+			if err := dm.db.UpdateConversionStatus(ctx, m.ID, "skipped"); err != nil {
+				logutils.Log.WithError(err).WithField("movie_id", m.ID).Warn("ResumePendingTVConversions: set skipped failed")
+			}
+			continue
+		}
+		enqueued, _ := dm.EnqueueConversion(m.ID, m.Name)
+		if enqueued {
+			logutils.Log.WithField("movie_id", m.ID).Info("Re-enqueued TV compatibility conversion after startup")
+		}
+	}
+}
+
 func (dm *DownloadManager) RemoveQBittorrentTorrent(ctx context.Context, movieID uint) error {
 	if dm.cfg.QBittorrentURL == "" {
 		return nil
@@ -328,6 +369,54 @@ func (*DownloadManager) getCurrentTime() time.Time {
 	return time.Now()
 }
 
+// attachMagnetMetadataSync registers a qBittorrent callback: after magnet metadata, real file paths
+// differ from the placeholder (display name) stored at AddMovie — sync them so disk probes and size work.
+func (dm *DownloadManager) attachMagnetMetadataSync(dl downloader.Downloader, movieID uint) {
+	syncer, ok := dl.(downloader.MagnetMetadataSyncSetter)
+	if !ok {
+		return
+	}
+	syncer.SetOnMagnetMetadataReady(func(paths []string, totalBytes int64, videoFileCount int) {
+		defer func() {
+			if r := recover(); r != nil {
+				logutils.Log.WithFields(map[string]any{
+					"movie_id": movieID,
+					"panic":    r,
+				}).Error("Magnet metadata: panic in DB sync callback (download goroutine)")
+			}
+		}()
+		ctx := context.Background()
+		if len(paths) == 0 {
+			return
+		}
+		if err := dm.db.ReplaceMainMovieFiles(ctx, movieID, paths); err != nil {
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Magnet metadata: failed to replace main movie files in DB")
+			return
+		}
+		if totalBytes > 0 {
+			if err := dm.db.UpdateMovieFileSize(ctx, movieID, totalBytes); err != nil {
+				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Magnet metadata: failed to update file_size")
+			}
+		}
+		if videoFileCount > 0 {
+			if err := dm.db.UpdateMovieTotalEpisodes(ctx, movieID, videoFileCount); err != nil {
+				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Magnet metadata: failed to update total_episodes")
+			}
+		}
+		if dm.cfg.VideoSettings.CompatibilityMode {
+			if compat := tvcompat.CompatFromTorrentFileNames(paths); compat != "" {
+				_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
+			}
+		}
+		logutils.Log.WithFields(map[string]any{
+			"movie_id": movieID,
+			"files":    len(paths),
+			"bytes":    totalBytes,
+			"videos":   videoFileCount,
+		}).Info("Magnet metadata: synced torrent file list from qBittorrent to database")
+	})
+}
+
 // removeMovieRollback removes the movie and its file records from DB and deletes associated files from disk.
 // Used when StartDownload fails so the movie does not stay in the list.
 func (dm *DownloadManager) removeMovieRollback(ctx context.Context, movieID uint) {
@@ -378,7 +467,9 @@ func (dm *DownloadManager) enqueueConversionIfNeeded(
 	if targetLevel <= 0 {
 		targetLevel = 41
 	}
-	compat := tvcompat.ProbeTvCompatibility(ctx, movieID, dm.cfg.MoviePath, dm.db, targetLevel)
+	probeCtx, cancelProbe := context.WithTimeout(ctx, compatibilityProbeTimeout)
+	defer cancelProbe()
+	compat := tvcompat.ProbeTvCompatibility(probeCtx, movieID, dm.cfg.MoviePath, dm.db, targetLevel)
 	if compat == "" {
 		// Probe could not determine compatibility (ffprobe missing, etc.)
 		// Keep the early estimate and skip conversion (we can't convert without ffprobe anyway).
@@ -415,25 +506,46 @@ func (dm *DownloadManager) EnqueueConversion(movieID uint, title string) (enqueu
 }
 
 func (dm *DownloadManager) runConversionWorker() {
-	ctx := context.Background()
 	vs := &dm.cfg.VideoSettings
 	for job := range dm.conversionQueue {
-		movieID := job.MovieID
-		if err := dm.db.UpdateConversionStatus(ctx, movieID, "in_progress"); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status")
-		}
-		movie, _ := dm.db.GetMovieByID(ctx, movieID)
-		if movie.TvCompatibility != tvcompat.TvCompatGreen {
-			tvcompat.RunTvCompatibility(ctx, movieID, dm.cfg.MoviePath, dm.db, vs)
-		}
-		const completeConversionPct = 100
-		if err := dm.db.UpdateConversionPercentage(ctx, movieID, completeConversionPct); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion percentage")
-		}
-		if err := dm.db.UpdateConversionStatus(ctx, movieID, "done"); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status done")
-		}
-		logutils.Log.WithField("movie_id", movieID).Info("TV compatibility conversion completed")
-		close(job.Done)
+		j := job
+		func() {
+			defer close(j.Done)
+			defer func() {
+				if r := recover(); r != nil {
+					logutils.Log.WithFields(map[string]any{
+						"movie_id": j.MovieID,
+						"panic":    r,
+					}).Error("TV compatibility conversion worker panic")
+				}
+			}()
+
+			jobCtx, cancelJob := context.WithTimeout(context.Background(), conversionJobTimeout)
+			defer cancelJob()
+
+			movieID := j.MovieID
+			if err := dm.db.UpdateConversionStatus(jobCtx, movieID, "in_progress"); err != nil {
+				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status")
+			}
+			movie, _ := dm.db.GetMovieByID(jobCtx, movieID)
+			if movie.TvCompatibility != tvcompat.TvCompatGreen {
+				tvcompat.RunTvCompatibility(jobCtx, movieID, dm.cfg.MoviePath, dm.db, vs)
+			}
+			const completeConversionPct = 100
+			if jobCtx.Err() != nil {
+				if err := dm.db.UpdateConversionStatus(context.Background(), movieID, "failed"); err != nil {
+					logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status failed after timeout")
+				}
+				logutils.Log.WithField("movie_id", movieID).Warn("TV compatibility conversion timed out or canceled")
+				return
+			}
+			if err := dm.db.UpdateConversionPercentage(jobCtx, movieID, completeConversionPct); err != nil {
+				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion percentage")
+			}
+			if err := dm.db.UpdateConversionStatus(jobCtx, movieID, "done"); err != nil {
+				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status done")
+			}
+			logutils.Log.WithField("movie_id", movieID).Info("TV compatibility conversion completed")
+		}()
 	}
 }

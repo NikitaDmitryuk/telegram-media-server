@@ -33,6 +33,12 @@ type OnHashKnownSetter interface {
 	SetOnHashKnown(cb func(hash string))
 }
 
+// MagnetMetadataSyncSetter: optional; qBittorrent magnet downloads register placeholder paths until
+// the swarm provides metadata — then real relative paths and sizes are synced to the DB via this callback.
+type MagnetMetadataSyncSetter interface {
+	SetOnMagnetMetadataReady(cb func(relativePaths []string, totalBytes int64, videoFileCount int))
+}
+
 type Updater interface {
 	RunUpdate(ctx context.Context)
 }

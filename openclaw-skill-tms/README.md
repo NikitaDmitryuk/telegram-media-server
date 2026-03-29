@@ -1,6 +1,6 @@
 # OpenClaw skill: TMS (Telegram Media Server)
 
-This skill teaches OpenClaw to use the **Telegram Media Server (TMS)** REST API: add downloads by URL (video, magnet, .torrent), list downloads, delete a download, and search torrents. You need a running TMS instance; this skill only sends HTTP requests to it.
+This skill teaches OpenClaw to use the **Telegram Media Server (TMS)** REST API: add downloads by URL (video, magnet, .torrent URL) or by embedding a `.torrent` as Base64 (`torrent_base64`), list downloads, delete a download, and search torrents. You need a running TMS instance; this skill only sends HTTP requests to it.
 
 ## What is Telegram Media Server?
 
@@ -17,7 +17,7 @@ This **OpenClaw skill** talks to the same TMS backend over its REST API. Instead
 
 The skill lets your OpenClaw agent talk to a running TMS instance over its REST API. The agent can:
 
-- **Add downloads** — by video URL (yt-dlp), magnet link, or .torrent URL.
+- **Add downloads** — by video URL (yt-dlp), magnet link, .torrent URL, or `torrent_base64` (raw `.torrent` file encoded in standard Base64 when no fetchable URL exists).
 - **List downloads** — see status (queued, downloading, converting, completed, failed, stopped), progress, and errors.
 - **Delete a download** — stop and remove by ID.
 - **Search torrents** — when TMS has Prowlarr configured, search indexers and add results as downloads.
@@ -78,7 +78,7 @@ The agent will use the TMS API (health, list, add, delete, search) as described 
 | *"Add this link: https://youtube.com/watch?v=..."* | `POST /api/v1/downloads` with `{"url": "..."}`; reports back id and title. |
 | *"What's downloading?"* | `GET /api/v1/downloads`; summarizes list with status and progress. |
 | *"Remove download 2"* | `DELETE /api/v1/downloads/2`; confirms removal. |
-| *"Find torrents for Matrix 1080p"* | `GET /api/v1/search?q=Matrix%201080p`; can then add one via `POST /downloads` with magnet or torrent URL. |
+| *"Find torrents for Matrix 1080p"* | `GET /api/v1/search?q=Matrix%201080p`; can then add one via `POST /downloads` with magnet, torrent URL, or `torrent_base64` if the user provides a `.torrent` file. |
 
 ## ClawHub
 

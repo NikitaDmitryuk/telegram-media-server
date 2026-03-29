@@ -32,6 +32,7 @@ src/
 pkg/
 .vscode/
 build/
+.idea/
 
 .DS_Store
 
@@ -50,6 +51,10 @@ gosec-report.json
 # Binary files
 telegram-media-server
 *.torrent
+# Integration fixture (keep in git despite *.torrent above)
+!integration/fixtures/big-buck-bunny.torrent
 
 .mypy_cache/
 logs.txt
+
+.cursor/

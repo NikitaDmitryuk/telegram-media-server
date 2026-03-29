@@ -60,7 +60,11 @@ func (*DatabaseStub) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int
 	return nil
 }
 
-func (*DatabaseStub) SetLoaded(_ context.Context, _ uint) error { return nil }
+func (*DatabaseStub) SetLoaded(_ context.Context, _ uint, _ string) error { return nil }
+
+func (*DatabaseStub) RefreshMovieFileSizeFromDisk(_ context.Context, _ uint, _ string) (int64, error) {
+	return 0, nil
+}
 
 func (*DatabaseStub) RemoveMovie(_ context.Context, _ uint) error { return nil }
 
@@ -77,6 +81,12 @@ func (*DatabaseStub) SetTvCompatibility(_ context.Context, _ uint, _ string) err
 func (*DatabaseStub) SetQBittorrentHash(_ context.Context, _ uint, _ string) error { return nil }
 
 func (*DatabaseStub) RemoveFilesByMovieID(_ context.Context, _ uint) error { return nil }
+
+func (*DatabaseStub) ReplaceMainMovieFiles(_ context.Context, _ uint, _ []string) error { return nil }
+
+func (*DatabaseStub) UpdateMovieFileSize(_ context.Context, _ uint, _ int64) error { return nil }
+
+func (*DatabaseStub) UpdateMovieTotalEpisodes(_ context.Context, _ uint, _ int) error { return nil }
 
 func (*DatabaseStub) RemoveTempFilesByMovieID(_ context.Context, _ uint) error { return nil }
 

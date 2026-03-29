@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"errors"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
@@ -40,11 +39,12 @@ func RunCompletionLoop(
 		return
 	}
 	logutils.Log.Info("Download completed successfully")
+	// Notify first: cleanup (temp files) can block or fail on some setups; webhooks must not depend on it.
+	// Magnet dn/titles with odd bytes used to break JSON marshal in SendCompletionWebhook — fixed there too.
+	compl.OnCompleted(movieID, title)
 	if err := filemanager.DeleteTemporaryFilesByMovieID(movieID, a.Config.MoviePath, a.DB, a.DownloadManager); err != nil {
 		logutils.Log.WithError(err).Error("Failed to delete temporary files after download")
 	}
-	if err := a.DownloadManager.RemoveQBittorrentTorrent(context.Background(), movieID); err != nil {
-		logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to remove torrent from qBittorrent after completion")
-	}
-	compl.OnCompleted(movieID, title)
+	// qBittorrent: torrent is already removed in QBittorrentDownloader.removeTorrentOnCompletion on success.
+	// RemoveQBittorrentTorrent remains for DeleteMovie (user/library cleanup) and failed-download paths.
 }

@@ -75,6 +75,7 @@ func (m *mockDM) GetQueueItems() []map[string]any {
 	return nil
 }
 func (*mockDM) RemoveQBittorrentTorrent(_ context.Context, _ uint) error { return nil }
+func (*mockDM) ResumePendingTVConversions(_ context.Context)             {}
 
 // mockDMCompletion is like mockDM but returns channels that are closed/sent after a short delay,
 // so that app.RunCompletionLoop can drain them and exit (tests API download completion flow).
@@ -120,6 +121,7 @@ func (*mockDMCompletion) StopAllDownloads()                                     
 func (*mockDMCompletion) GetActiveDownloads() []uint                               { return nil }
 func (*mockDMCompletion) GetQueueItems() []map[string]any                          { return nil }
 func (*mockDMCompletion) RemoveQBittorrentTorrent(_ context.Context, _ uint) error { return nil }
+func (*mockDMCompletion) ResumePendingTVConversions(_ context.Context)             {}
 
 // dbWithMovie returns a movie for GetMovieByID(1); other methods from stub.
 type dbWithMovie struct {
@@ -144,7 +146,7 @@ func TestAPI_NoKey_LocalhostAllowed(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
 	req.RemoteAddr = "127.0.0.1:12345"
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -159,7 +161,7 @@ func TestAPI_NoKey_NonLocalhostRejected(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
 	req.RemoteAddr = "8.8.8.8:12345" // public IP, never allowed without API key
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -177,7 +179,7 @@ func TestAPI_NoKey_DockerPrivateIPAllowed(t *testing.T) {
 	os.Setenv("RUNNING_IN_DOCKER", "true")
 	defer os.Unsetenv("RUNNING_IN_DOCKER")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
 	req.RemoteAddr = "172.17.0.1:12345" // Docker host via port mapping
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -192,7 +194,7 @@ func TestAPI_Health_401WithoutKey(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
 
@@ -206,7 +208,7 @@ func TestAPI_Health_200WithKey(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -228,7 +230,7 @@ func TestAPI_Health_200WithXAPIKey(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
 	req.Header.Set("X-API-Key", "secret")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -243,7 +245,7 @@ func TestAPI_Health_401WrongKey(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
 	req.Header.Set("Authorization", "Bearer wrong")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -260,7 +262,7 @@ func TestAPI_ListDownloads_200(t *testing.T) {
 	a := &app.App{Config: cfg, DB: db, DownloadManager: dm}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/downloads", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/downloads", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -290,7 +292,7 @@ func TestAPI_ListDownloads_QueueItem(t *testing.T) {
 	a := &app.App{Config: cfg, DB: &dbWithMovie{}, DownloadManager: dm}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/downloads", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/downloads", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -316,7 +318,7 @@ func TestAPI_DeleteDownload_204(t *testing.T) {
 	a := &app.App{Config: cfg, DownloadManager: dm}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/downloads/1", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/downloads/1", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -337,7 +339,7 @@ func TestAPI_AddDownload_413BodyTooLarge(t *testing.T) {
 		append([]byte(`{"url":"`), bytes.Repeat([]byte("x"), maxAddDownloadBodyBytes)...),
 		[]byte(`"}`)...,
 	)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -353,15 +355,35 @@ func TestAPI_AddDownload_400EmptyURL(t *testing.T) {
 	a := &app.App{Config: cfg, DownloadManager: &mockDM{}}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	body, _ := json.Marshal(AddDownloadRequest{URL: ""})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
+	body, _ := json.Marshal(AddDownloadRequest{})
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("AddDownload empty URL: got status %d, want 400", rec.Code)
+		t.Errorf("AddDownload empty body: got status %d, want 400", rec.Code)
+	}
+}
+
+func TestAPI_AddDownload_400URLAndTorrentBoth(t *testing.T) {
+	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret", MoviePath: t.TempDir()}
+	a := &app.App{Config: cfg, DownloadManager: &mockDM{}}
+	srv := NewServer(a, "127.0.0.1:0", "secret")
+
+	body, _ := json.Marshal(AddDownloadRequest{
+		URL:           "https://example.com/x.torrent",
+		TorrentBase64: "ZDE=", // invalid torrent but parsed before factory if we used both - actually rejected first
+	})
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer secret")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("AddDownload url+torrent: got status %d, want 400", rec.Code)
 	}
 }
 
@@ -373,7 +395,7 @@ func TestAPI_AddDownload_201(t *testing.T) {
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
 	body, _ := json.Marshal(AddDownloadRequest{URL: "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test+Movie"})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -402,7 +424,7 @@ func TestAPI_AddDownload_CompletionDrainsChannels(t *testing.T) {
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
 	body, _ := json.Marshal(AddDownloadRequest{URL: "magnet:?xt=urn:btih:ABCDEFGHIJKLMNOPQRSTUVWXYZ234567&dn=API+Movie"})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/downloads", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -420,7 +442,7 @@ func TestAPI_Search_503WhenNotConfigured(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/search?q=test", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -435,7 +457,7 @@ func TestAPI_Search_400NoQuery(t *testing.T) {
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/search", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/search", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
@@ -449,7 +471,7 @@ func TestAPI_OpenAPIYAML_200(t *testing.T) {
 	a := &app.App{Config: &config.Config{}}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/openapi.yaml", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/openapi.yaml", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
 
@@ -469,7 +491,7 @@ func TestAPI_OpenAPILLMYAML_200(t *testing.T) {
 	a := &app.App{Config: &config.Config{}}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/openapi-llm.yaml", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/openapi-llm.yaml", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
 
@@ -489,7 +511,7 @@ func TestAPI_Docs_200(t *testing.T) {
 	a := &app.App{Config: &config.Config{}}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/docs", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/docs", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
 

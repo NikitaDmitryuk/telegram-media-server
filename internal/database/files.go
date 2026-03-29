@@ -32,6 +32,14 @@ func (s *SQLiteDatabase) RemoveFilesByMovieID(ctx context.Context, movieID uint)
 	return nil
 }
 
+// ReplaceMainMovieFiles replaces all main (non-temp) file records for the movie.
+func (s *SQLiteDatabase) ReplaceMainMovieFiles(ctx context.Context, movieID uint, paths []string) error {
+	if err := s.RemoveFilesByMovieID(ctx, movieID); err != nil {
+		return err
+	}
+	return s.addFiles(ctx, movieID, paths, false)
+}
+
 func (s *SQLiteDatabase) RemoveTempFilesByMovieID(ctx context.Context, movieID uint) error {
 	result := s.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, true).Delete(&MovieFile{})
 	if result.Error != nil {
