@@ -47,6 +47,7 @@ func TestYTDLPStopDownload(t *testing.T) {
 
 		// Create a context and cancel function
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		downloader.cancel = cancel
 
 		// Test stopping with only cancel function

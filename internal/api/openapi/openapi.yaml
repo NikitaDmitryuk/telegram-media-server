@@ -210,9 +210,12 @@ components:
 
     AddDownloadRequest:
       type: object
-      required: [url]
+      description: Ровно одно из полей url или torrent_base64.
       properties:
-        url: { type: string, format: uri, description: URL видео, magnet или .torrent }
+        url: { type: string, format: uri, description: URL видео, magnet или .torrent (HTTPS) }
+        torrent_base64:
+          type: string
+          description: Содержимое .torrent в standard Base64 (для загрузки файла без HTTP)
         title: { type: string, description: Опциональное отображаемое имя (например из результата поиска) }
 
     AddDownloadResponse:

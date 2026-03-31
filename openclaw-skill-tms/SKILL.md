@@ -1,7 +1,7 @@
 ---
 name: tms
-version: "1.0.6"
-description: Manage downloads via Telegram Media Server (TMS) REST API — add by URL (video/magnet/torrent), list, delete, search torrents.
+version: "1.0.7"
+description: Manage downloads via Telegram Media Server (TMS) REST API — add by URL (video/magnet/torrent URL) or torrent_base64 (.torrent bytes), list, delete, search torrents.
 metadata:
   {"openclaw":{"requires":{"env":[]},"primaryEnv":"TMS_API_URL"}}
 ---
@@ -21,7 +21,10 @@ Use this skill when the user wants to add downloads, check download status, stop
 
 1. **Health check** — `GET {BaseURL}/api/v1/health` — returns `{"status":"ok"}` if the API is up.
 2. **List downloads** — `GET {BaseURL}/api/v1/downloads` — returns a JSON array of downloads with `id`, `title`, `status` (queued, downloading, converting, completed, failed, stopped), `progress`, `conversion_progress`, `error` (if failed), `position_in_queue` (if queued). Snapshot is best-effort.
-3. **Add download** — `POST {BaseURL}/api/v1/downloads` with JSON body `{"url": "<url>", "title": "<optional>"}`. URL can be: video URL (yt-dlp), magnet link (`magnet:...`), .torrent file URL, or (when Prowlarr is configured on TMS) Prowlarr proxy download URL. Prefer **magnet** from search results when adding a torrent. Optional `title` overrides the display name. Response: `201` with `{"id": <number>, "title": "<string>"}`. Use `id` for delete or status.
+3. **Add download** — `POST {BaseURL}/api/v1/downloads` with JSON body that includes **exactly one** of `url` or `torrent_base64`, plus optional `title`.
+   - **`url`:** video URL (yt-dlp), magnet (`magnet:...`), HTTPS URL to a `.torrent` file, or (when Prowlarr is on TMS) Prowlarr proxy download URL. Prefer **magnet** from search results when adding a torrent.
+   - **`torrent_base64`:** standard Base64 encoding of a `.torrent` file’s raw bytes (no extra HTTP fetch by TMS). Use when the agent has the torrent file content (e.g. user upload, read from disk in workspace) but no public HTTPS URL. Body size limit applies (~1 MiB JSON).
+   Optional `title` overrides the display name. Response: `201` with `{"id": <number>, "title": "<string>"}`. Use `id` for delete or status.
 4. **Delete download** — `DELETE {BaseURL}/api/v1/downloads/{id}` — stops and removes the download. Response: `204` no body. `id` is the numeric id from the add response or list.
 5. **Search torrents** — `GET {BaseURL}/api/v1/search?q=<query>&limit=20&quality=1080` — requires Prowlarr configured on TMS. `q` is required; `limit` (1–100, default 20) and `quality` (optional filter) may be used. Returns array of `{title, size, magnet, torrent_url, indexer_name, peers}`. When adding from search, use the **magnet** field in POST /downloads (or torrent_url); you may pass `title` from the result.
 
@@ -36,7 +39,7 @@ openapi: 3.1.0
 info:
   title: TMS REST API
   description: |
-    Telegram Media Server API. Use to add downloads by URL (video/magnet/torrent), list downloads with status,
+    Telegram Media Server API. Use to add downloads by URL (video/magnet/torrent URL) or torrent_base64 (.torrent file), list downloads with status,
     delete a download, or search torrents. All endpoints require Authorization Bearer or X-API-Key.
   version: 1.0.0
 
@@ -86,7 +89,7 @@ paths:
       tags: [downloads]
       summary: Create a download
       description: |
-        Call to add a download. Body: JSON with "url" (required) and optional "title" (display name, e.g. from search). URL can be: video URL (yt-dlp), magnet link (magnet:...), .torrent file URL, or Prowlarr proxy download URL when Prowlarr is configured. Prefer magnet from search results. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
+        Call to add a download. Body: JSON with exactly one of "url" or "torrent_base64", plus optional "title". "url": video URL (yt-dlp), magnet (magnet:...), HTTPS URL to a .torrent file, or Prowlarr proxy download URL. "torrent_base64": standard Base64 of a .torrent file (no separate HTTP fetch). Prefer magnet from search results when applicable. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
       operationId: addDownload
       requestBody:
         required: true
@@ -219,9 +222,10 @@ components:
 
     AddDownloadRequest:
       type: object
-      required: [url]
+      description: Exactly one of url or torrent_base64 must be present.
       properties:
         url: { type: string }
+        torrent_base64: { type: string, description: Standard Base64-encoded .torrent file }
         title: { type: string, description: Optional display name e.g. from search result }
 
     AddDownloadResponse:

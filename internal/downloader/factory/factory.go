@@ -81,6 +81,20 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 	return ytdlp.NewYTDLPDownloader(rawURL, cfg), nil
 }
 
+// CreateDownloaderFromTorrentData writes bencoded .torrent bytes into moviePath and returns a torrent downloader (qBittorrent or aria2).
+func CreateDownloaderFromTorrentData(data []byte, moviePath string, cfg *config.Config) (downloader.Downloader, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty torrent data")
+	}
+	if int64(len(data)) > torrentMaxSizeBytes {
+		return nil, fmt.Errorf("torrent file too large")
+	}
+	if !isTorrentResponse(data, "application/x-bittorrent") {
+		return nil, fmt.Errorf("invalid torrent file")
+	}
+	return writeTorrentAndReturnDownloader(moviePath, data, cfg)
+}
+
 // resolveProwlarrDownload fetches a Prowlarr proxy download URL and returns a downloader for the
 // resulting magnet or .torrent. Returns an error if the URL is not a Prowlarr download or the
 // response is not torrent/magnet (caller may then treat as video URL).

@@ -19,6 +19,10 @@ const (
 const (
 	ConversionQueueSize     = 100
 	ProgressChannelBuffSize = 100
+	// conversionJobTimeout bounds ffprobe/ffmpeg work so the download monitor cannot block on <-done forever.
+	conversionJobTimeout = 2 * time.Hour
+	// compatibilityProbeTimeout limits ffprobe in enqueueConversionIfNeeded (runs inside the download monitor).
+	compatibilityProbeTimeout = 5 * time.Minute
 )
 
 // Service defines the external interface for the download manager.
@@ -43,6 +47,8 @@ type Service interface {
 	// RemoveQBittorrentTorrent removes the torrent from qBittorrent Web UI by movie ID (looks up hash in DB).
 	// No-op if not qBittorrent or hash missing.
 	RemoveQBittorrentTorrent(ctx context.Context, movieID uint) error
+	// ResumePendingTVConversions re-enqueues TV compatibility jobs left pending after a crash or stuck pipeline.
+	ResumePendingTVConversions(ctx context.Context)
 }
 
 // conversionJob is sent to the conversion worker; Done is closed when conversion (or skip) is finished.

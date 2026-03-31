@@ -132,7 +132,7 @@ func (dm *DownloadManager) monitorDownload(
 				if needWait && done != nil {
 					<-done
 				}
-				if err := dm.db.SetLoaded(context.Background(), movieID); err != nil {
+				if err := dm.db.SetLoaded(context.Background(), movieID, dm.cfg.MoviePath); err != nil {
 					logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
 					outerErrChan <- utils.WrapError(err, "Failed to mark movie as loaded", map[string]any{
 						"movie_id": movieID,
@@ -172,8 +172,14 @@ func (dm *DownloadManager) monitorDownload(
 
 		case err, ok := <-job.errChan:
 			if !ok {
-				logutils.Log.WithField("movie_id", movieID).Info("Download completed (error channel closed without error)")
-				outerErrChan <- nil
+				// errChan must deliver nil or a concrete error before close; an empty close means the
+				// downloader goroutine exited abnormally (e.g. panic) and would otherwise skip SetLoaded
+				// and completion notification while the UI could already show 100% download.
+				abnormal := fmt.Errorf("download ended without result (downloader channel closed unexpectedly)")
+				logutils.Log.WithField("movie_id", movieID).Error(abnormal.Error())
+				outerErrChan <- utils.WrapError(abnormal, "Download failed", map[string]any{
+					"movie_id": movieID,
+				})
 				return
 			}
 
@@ -203,7 +209,7 @@ func (dm *DownloadManager) monitorDownload(
 				if needWait && done != nil {
 					<-done
 				}
-				if err := dm.db.SetLoaded(context.Background(), movieID); err != nil {
+				if err := dm.db.SetLoaded(context.Background(), movieID, dm.cfg.MoviePath); err != nil {
 					logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
 					outerErrChan <- utils.WrapError(err, "Failed to mark movie as loaded", map[string]any{
 						"movie_id": movieID,

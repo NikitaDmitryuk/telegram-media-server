@@ -17,9 +17,11 @@ type DownloadItem struct {
 }
 
 // AddDownloadRequest is the body for POST /api/v1/downloads.
+// Exactly one of URL or TorrentBase64 must be set (not both, not neither).
 type AddDownloadRequest struct {
-	URL   string `json:"url"`
-	Title string `json:"title,omitempty"` // optional display name (e.g. from search result)
+	URL           string `json:"url,omitempty"`
+	TorrentBase64 string `json:"torrent_base64,omitempty"` // standard Base64 of a .torrent file
+	Title         string `json:"title,omitempty"`          // optional display name (e.g. from search result)
 }
 
 // AddDownloadResponse is returned on success by POST /api/v1/downloads.

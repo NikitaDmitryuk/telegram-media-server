@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,7 +11,9 @@ import (
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/app"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
@@ -76,11 +79,11 @@ func downloadStatusFromMovie(m *database.Movie) string {
 	case "pending", "in_progress":
 		return "converting"
 	case "done", "skipped", "":
-		return "completed"
+		return statusCompleted
 	case "failed":
-		return "failed"
+		return statusFailed
 	default:
-		return "completed"
+		return statusCompleted
 	}
 }
 
@@ -123,46 +126,99 @@ func DeleteDownload(w http.ResponseWriter, r *http.Request, a *app.App, id uint)
 // maxAddDownloadBodyBytes limits POST /api/v1/downloads body size to avoid DoS.
 const maxAddDownloadBodyBytes = 1024 * 1024 // 1 MiB
 
-// AddDownload handles POST /api/v1/downloads. Body: {"url":"..."}.
-func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
-	ctx := r.Context()
+var errInvalidTorrentBase64 = errors.New("invalid torrent_base64")
+
+func readAddDownloadJSON(w http.ResponseWriter, r *http.Request) (AddDownloadRequest, bool) {
 	body := http.MaxBytesReader(w, r.Body, maxAddDownloadBodyBytes)
 	var req AddDownloadRequest
 	if err := json.NewDecoder(body).Decode(&req); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid JSON")
+		}
+		return AddDownloadRequest{}, false
+	}
+	return req, true
+}
+
+func validateAddDownloadSource(req AddDownloadRequest, w http.ResponseWriter) (hasURL, hasTorrent, ok bool) {
+	hasURL = strings.TrimSpace(req.URL) != ""
+	hasTorrent = strings.TrimSpace(req.TorrentBase64) != ""
+	switch {
+	case !hasURL && !hasTorrent:
+		writeError(w, http.StatusBadRequest, "url or torrent_base64 is required")
+		return false, false, false
+	case hasURL && hasTorrent:
+		writeError(w, http.StatusBadRequest, "specify only one of url or torrent_base64")
+		return false, false, false
+	default:
+		return hasURL, hasTorrent, true
+	}
+}
+
+func newDownloaderForAdd(
+	ctx context.Context,
+	req AddDownloadRequest,
+	hasTorrent bool,
+	moviePath string,
+	cfg *config.Config,
+) (downloader.Downloader, error) {
+	if hasTorrent {
+		raw, decErr := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.ReplaceAll(req.TorrentBase64, "\n", "")))
+		if decErr != nil {
+			return nil, errInvalidTorrentBase64
+		}
+		return factory.CreateDownloaderFromTorrentData(raw, moviePath, cfg)
+	}
+	return factory.CreateDownloaderFromURL(ctx, req.URL, moviePath, cfg)
+}
+
+func writeValidateDownloadStartError(w http.ResponseWriter, ctx context.Context, validateErr error) {
+	logutils.Log.WithError(validateErr).
+		WithField("request_id", RequestIDFromContext(ctx)).
+		Debug("AddDownload: ValidateDownloadStart failed")
+	switch {
+	case errors.Is(validateErr, app.ErrAlreadyExists):
+		writeError(w, http.StatusConflict, "media already exists")
+	case errors.Is(validateErr, app.ErrNotEnoughSpace):
+		writeError(w, http.StatusInsufficientStorage, "not enough disk space")
+	default:
+		writeError(w, http.StatusBadRequest, utils.DownloadErrorMessage(validateErr))
+	}
+}
+
+// AddDownload handles POST /api/v1/downloads. Body: {"url":"..."} or {"torrent_base64":"..."} (mutually exclusive), optional "title".
+func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
+	ctx := r.Context()
+	req, ok := readAddDownloadJSON(w, r)
+	if !ok {
+		return
+	}
+	_, hasTorrent, ok := validateAddDownloadSource(req, w)
+	if !ok {
+		return
+	}
+	dl, err := newDownloaderForAdd(ctx, req, hasTorrent, a.Config.MoviePath, a.Config)
+	if err != nil {
+		if errors.Is(err, errInvalidTorrentBase64) {
+			writeError(w, http.StatusBadRequest, "invalid torrent_base64")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	if req.URL == "" {
-		writeError(w, http.StatusBadRequest, "url is required")
-		return
-	}
-	dl, err := factory.CreateDownloaderFromURL(ctx, req.URL, a.Config.MoviePath, a.Config)
-	if err != nil {
 		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Debug("AddDownload: CreateDownloaderFromURL failed")
 		writeError(w, http.StatusBadRequest, utils.DownloadErrorMessage(err))
 		return
 	}
-	title, _ := dl.GetTitle()
+	title, err := dl.GetTitle()
+	if err != nil {
+		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Debug("AddDownload: GetTitle failed")
+		writeError(w, http.StatusBadRequest, utils.DownloadErrorMessage(err))
+		return
+	}
 	if validateErr := app.ValidateDownloadStart(ctx, a, dl); validateErr != nil {
-		logutils.Log.WithError(validateErr).
-			WithField("request_id", RequestIDFromContext(ctx)).
-			Debug("AddDownload: ValidateDownloadStart failed")
-		switch {
-		case errors.Is(validateErr, app.ErrAlreadyExists):
-			writeError(w, http.StatusConflict, "media already exists")
-			return
-		case errors.Is(validateErr, app.ErrNotEnoughSpace):
-			writeError(w, http.StatusInsufficientStorage, "not enough disk space")
-			return
-		default:
-			writeError(w, http.StatusBadRequest, utils.DownloadErrorMessage(validateErr))
-			return
-		}
+		writeValidateDownloadStartError(w, ctx, validateErr)
+		return
 	}
 	movieID, _, completionChan, err := a.DownloadManager.StartDownload(dl, notifier.Noop)
 	if err != nil {
@@ -180,28 +236,30 @@ func AddDownload(w http.ResponseWriter, r *http.Request, a *app.App) {
 		}
 	}
 	go app.RunCompletionLoop(a, completionChan, dl, movieID, title, webhookNotifier{
-		webhookURL:   a.Config.TMSWebhookURL,
-		webhookToken: a.Config.TMSWebhookToken,
+		webhookURL:    a.Config.TMSWebhookURL,
+		webhookToken:  a.Config.TMSWebhookToken,
+		webhookFormat: a.Config.TMSWebhookFormat,
 	})
 	writeJSON(w, http.StatusCreated, AddDownloadResponse{ID: movieID, Title: title})
 }
 
 // webhookNotifier implements notifier.CompletionNotifier for API-originated downloads.
 type webhookNotifier struct {
-	webhookURL   string
-	webhookToken string
+	webhookURL    string
+	webhookToken  string
+	webhookFormat string
 }
 
 func (n webhookNotifier) OnStopped(movieID uint, title string) {
-	SendCompletionWebhook(n.webhookURL, n.webhookToken, movieID, title, "stopped", "")
+	SendCompletionWebhook(n.webhookURL, n.webhookToken, n.webhookFormat, movieID, title, statusStopped, "")
 }
 
 func (n webhookNotifier) OnFailed(movieID uint, title string, err error) {
-	SendCompletionWebhook(n.webhookURL, n.webhookToken, movieID, title, "failed", utils.DownloadErrorMessage(err))
+	SendCompletionWebhook(n.webhookURL, n.webhookToken, n.webhookFormat, movieID, title, statusFailed, utils.DownloadErrorMessage(err))
 }
 
 func (n webhookNotifier) OnCompleted(movieID uint, title string) {
-	SendCompletionWebhook(n.webhookURL, n.webhookToken, movieID, title, "completed", "")
+	SendCompletionWebhook(n.webhookURL, n.webhookToken, n.webhookFormat, movieID, title, statusCompleted, "")
 }
 
 const prowlarrSearchTimeout = 15 * time.Second

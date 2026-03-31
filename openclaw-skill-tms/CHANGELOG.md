@@ -2,6 +2,10 @@
 
 All notable changes to this skill are documented here.
 
+## [1.0.7] - Add download via torrent_base64
+
+- **POST /downloads:** Documented `torrent_base64` (standard Base64 of a `.torrent` file) as an alternative to `url`. Exactly one of `url` or `torrent_base64` must be sent; optional `title` unchanged. Inline OpenAPI in SKILL.md updated to match `openapi-llm.yaml`.
+
 ## [1.0.6] - Inline API spec (no fetch required)
 
 - **Full API contract in SKILL.md:** The complete OpenAPI spec (paths, schemas, examples) is now embedded in the skill document. The agent no longer needs to request `{base_url}/api/v1/openapi-llm.yaml` to use the TMS API — all information for building and invoking API calls is available immediately. Base URL and authentication rules are stated explicitly; full URL for each endpoint is `{BaseURL}/api/v1/...`.

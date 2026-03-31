@@ -15,7 +15,9 @@ type Movie struct {
 	// TvCompatibility: "", "green", "yellow", "red" (only in compatibility mode)
 	TvCompatibility string `json:"tv_compatibility"      gorm:"not null;default:''"`
 	// QBittorrentHash: set when downloaded via qBittorrent; used to remove from Web UI on delete.
-	QBittorrentHash string      `json:"qbittorrent_hash"      gorm:"not null;default:''"`
+	// Explicit column matches migrations and SetQBittorrentHash(..., "qbittorrent_hash", ...).
+	// Without it, GORM may use q_bittorrent_hash and reads would miss the stored value.
+	QBittorrentHash string      `json:"qbittorrent_hash"      gorm:"not null;default:'';column:qbittorrent_hash"`
 	Files           []MovieFile `json:"files"                 gorm:"foreignKey:MovieID"`
 	CreatedAt       time.Time   `json:"created_at"            gorm:"autoCreateTime"`
 	UpdatedAt       time.Time   `json:"updated_at"            gorm:"autoUpdateTime"`

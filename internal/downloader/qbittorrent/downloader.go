@@ -26,6 +26,16 @@ const (
 	deleteTimeout      = 10 * time.Second
 )
 
+// episodesChanCapacity returns the buffer size for incremental episode notifications.
+// It must be at least the number of video episodes so run() never blocks on send while
+// the download manager is busy (e.g. TV compatibility ffprobe on first episode).
+func episodesChanCapacity(totalVideo int) int {
+	if totalVideo < 2 {
+		return 1
+	}
+	return totalVideo
+}
+
 // QBittorrentDownloader implements downloader.Downloader using qBittorrent Web API.
 type QBittorrentDownloader struct {
 	torrentFileName string
@@ -42,6 +52,8 @@ type QBittorrentDownloader struct {
 	resumeHash               string // when set, skip add and poll by this hash (resume after restart)
 	initialCompletedEpisodes int    // for resume: episodes already completed before restart (from DB)
 	totalEpisodesStored      int    // for resume: total episode count when no torrent file (from DB)
+	onMagnetMetadata         func(paths []string, totalBytes int64, videoFileCount int)
+	magnetDBSynced           bool // true after first successful torrents/files sync to DB (magnet only)
 }
 
 // NewQBittorrentDownloader creates a downloader that uses qBittorrent.
@@ -215,7 +227,7 @@ func (d *QBittorrentDownloader) StartDownload(
 	if d.resumeHash != "" {
 		totalVideo = d.totalEpisodesStored
 		if totalVideo > 1 {
-			epCh = make(chan int, 1)
+			epCh = make(chan int, episodesChanCapacity(totalVideo))
 			episodesChan = epCh
 		}
 		go d.run(ctx, nil, totalVideo, progressChan, errChan, epCh)
@@ -228,7 +240,7 @@ func (d *QBittorrentDownloader) StartDownload(
 	d.hashChan = make(chan string, 1)
 	totalVideo = d.TotalEpisodes()
 	if totalVideo > 1 {
-		epCh = make(chan int, 1)
+		epCh = make(chan int, episodesChanCapacity(totalVideo))
 		episodesChan = epCh
 	}
 	go d.run(ctx, meta, totalVideo, progressChan, errChan, epCh)
@@ -243,6 +255,11 @@ func (d *QBittorrentDownloader) QBittorrentHashChan() <-chan string {
 // SetOnHashKnown implements downloader.OnHashKnownSetter.
 func (d *QBittorrentDownloader) SetOnHashKnown(cb func(hash string)) {
 	d.onHashKnown = cb
+}
+
+// SetOnMagnetMetadataReady implements downloader.MagnetMetadataSyncSetter.
+func (d *QBittorrentDownloader) SetOnMagnetMetadataReady(cb func(paths []string, totalBytes int64, videoFileCount int)) {
+	d.onMagnetMetadata = cb
 }
 
 //nolint:gocyclo // run orchestrates login, add, find hash, poll loop; splitting would obscure flow.
@@ -348,6 +365,8 @@ func (d *QBittorrentDownloader) run(
 		}
 	}
 
+	effectiveVideoCount := totalVideo
+
 	// Send initial 0% so the UI shows progress from the start
 	select {
 	case progressChan <- 0:
@@ -415,8 +434,32 @@ func (d *QBittorrentDownloader) run(
 					return
 				}
 			}
+			// Magnet: replace placeholder DB paths (display name as "file") with real paths from qBittorrent.
+			if d.magnetURI != "" && !d.magnetDBSynced {
+				qfiles, qerr := d.client.TorrentFiles(ctx, our.Hash)
+				if qerr == nil && len(qfiles) > 0 {
+					d.magnetDBSynced = true
+					relPaths := make([]string, 0, len(qfiles))
+					var totalBytes int64
+					for i := range qfiles {
+						relPaths = append(relPaths, filepath.FromSlash(qfiles[i].Name))
+						totalBytes += qfiles[i].Size
+					}
+					vCount := countVideoPathsInTorrentFiles(qfiles)
+					if vCount > effectiveVideoCount {
+						effectiveVideoCount = vCount
+					}
+					if d.onMagnetMetadata != nil {
+						d.onMagnetMetadata(relPaths, totalBytes, vCount)
+					}
+					if effectiveVideoCount > 1 {
+						d.applyLexicographicPriorities(ctx, our.Hash)
+					}
+				}
+			}
+
 			// Track completed video files so OnFirstEpisodeReady and episode progress fire incrementally
-			if episodesChan != nil && totalVideo > 1 {
+			if episodesChan != nil && effectiveVideoCount > 1 {
 				files, fileErr := d.client.TorrentFiles(ctx, our.Hash)
 				if fileErr == nil {
 					completed := countCompletedVideoFiles(files)
@@ -435,15 +478,36 @@ func (d *QBittorrentDownloader) run(
 					}
 				}
 			}
-			// Complete when API progress >= 1 or amount_left is 0 (e.g. state=stalledUP)
-			if t.Progress >= 1.0 || (t.Size > 0 && t.AmountLeft == 0) {
-				if episodesChan != nil && totalVideo > 0 && lastCompletedEpisodes != totalVideo {
-					episodesChan <- totalVideo
-				}
-				d.removeTorrentOnCompletion(our.Hash)
-				errChan <- nil
-				return
+			// Do not trust progress/amount_left alone: qBittorrent can report 100% or 0 left while
+			// still in metaDL, allocating, downloading, etc. That used to mark the movie complete in
+			// the API, enqueue TV conversion on missing/partial files, and block forever on <-done.
+			if !qbittorrentTorrentReadyToFinalize(&t) {
+				continue
 			}
+			if effectiveVideoCount > 1 {
+				files, fileErr := d.client.TorrentFiles(ctx, our.Hash)
+				if fileErr != nil {
+					continue
+				}
+				if countCompletedVideoFiles(files) < effectiveVideoCount {
+					continue
+				}
+			}
+			if episodesChan != nil && effectiveVideoCount > 0 && lastCompletedEpisodes != effectiveVideoCount {
+				select {
+				case episodesChan <- effectiveVideoCount:
+				case <-ctx.Done():
+					if d.StoppedManually() {
+						errChan <- downloader.ErrStoppedByUser
+					} else {
+						errChan <- ctx.Err()
+					}
+					return
+				}
+			}
+			d.removeTorrentOnCompletion(our.Hash)
+			errChan <- nil
+			return
 		}
 	}
 }
@@ -460,6 +524,39 @@ func (d *QBittorrentDownloader) removeTorrentOnCompletion(hash string) {
 		return
 	}
 	logutils.Log.WithField("hash", hash).Info("Removed completed torrent from qBittorrent")
+}
+
+// qbittorrentTorrentReadyToFinalize is true when torrent state and byte/progress fields agree
+// that the payload is actually done (typically seeding), not still fetching metadata or pieces.
+func qbittorrentTorrentReadyToFinalize(t *TorrentInfo) bool {
+	if t == nil {
+		return false
+	}
+	st := strings.ToLower(strings.TrimSpace(t.State))
+	switch st {
+	case "error", "missingfiles":
+		return false
+	case "metadl", "allocating", "downloading", "stalleddl", "queueddl", "forceddl", "checkingdl", "moving", "checkingresumedata":
+		return false
+	case "pauseddl":
+		return t.Progress >= 1.0 && t.Size > 0 && t.AmountLeft == 0
+	default:
+		// e.g. uploading, stalledUP, pausedUP, queuedUP, forcedUP, checkingUP
+	}
+	if t.Progress >= 1.0 {
+		return true
+	}
+	return t.Size > 0 && t.AmountLeft == 0
+}
+
+func countVideoPathsInTorrentFiles(files []TorrentFileInfo) int {
+	n := 0
+	for i := range files {
+		if tvcompat.IsVideoFilePath(files[i].Name) {
+			n++
+		}
+	}
+	return n
 }
 
 func countCompletedVideoFiles(files []TorrentFileInfo) int {
@@ -565,4 +662,5 @@ var (
 	_ downloader.EarlyCompatDownloader     = (*QBittorrentDownloader)(nil)
 	_ downloader.QBittorrentHashDownloader = (*QBittorrentDownloader)(nil)
 	_ downloader.OnHashKnownSetter         = (*QBittorrentDownloader)(nil)
+	_ downloader.MagnetMetadataSyncSetter  = (*QBittorrentDownloader)(nil)
 )

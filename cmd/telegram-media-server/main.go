@@ -72,6 +72,7 @@ func main() {
 	}
 
 	app.ResumeIncompleteDownloads(a)
+	downloadManager.ResumePendingTVConversions(context.Background())
 
 	var apiServer *api.Server
 	if config.TMSAPIEnabled {
