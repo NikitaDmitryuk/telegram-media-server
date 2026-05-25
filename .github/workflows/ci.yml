@@ -37,7 +37,7 @@ jobs:
       run: go mod verify
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v9.2.0
+      uses: golangci/golangci-lint-action@v9.2.1
       with:
         version-file: .golangci-lint-version
         args: --timeout 5m
