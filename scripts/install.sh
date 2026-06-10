@@ -9,6 +9,7 @@
 # With existing .env: by default only offers to update binary and service (config untouched).
 # Answer "n" → then "Force reinstall?" [y/N]: "y" = re-enter all settings (backup .env to .env.bak.force), "n" = prompt only missing.
 # Run: sudo ./scripts/install.sh  or  sudo make install
+# Unattended: BOT_TOKEN=... sudo ./scripts/install.sh --yes
 #
 set -euo pipefail
 
@@ -28,6 +29,15 @@ MINIDLNA_CONF=/etc/minidlna.conf
 TMS_USER=tms
 TMS_HOME=/var/lib/telegram-media-server
 
+# --- installer mode flags (set by parse_args) ---
+ASSUME_YES=0
+FORCE_REINSTALL=0
+UPDATE_ONLY=0
+CREATE_TMS_USER=1
+WITH_QBITTORRENT=""
+WITH_PROWLARR=""
+WITH_MINIDLNA=0
+
 # --- colors and messages ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,6 +49,152 @@ info()  { echo -e "${CYAN}[INFO]${NC} $*"; }
 ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()   { echo -e "${RED}[ERROR]${NC} $*"; }
+
+usage() {
+  cat << USAGE
+Usage: sudo scripts/install.sh [options]
+
+Options:
+  --yes, --non-interactive   Run unattended with safe defaults
+  --with-qbittorrent         Install/configure qBittorrent (default with --yes)
+  --no-qbittorrent           Do not install/configure qBittorrent
+  --with-prowlarr            Install/configure Prowlarr (default with --yes)
+  --no-prowlarr              Do not install/configure Prowlarr
+  --with-minidlna            Install/configure minidlna
+  --force-reinstall          Recreate .env from supplied env/defaults
+  --update-only              Only update binary/service and merge .env.example
+  --no-create-user           Run service as invoking user instead of dedicated tms user
+  -h, --help                 Show this help
+
+Unattended example:
+  BOT_TOKEN=123:abc sudo scripts/install.sh --yes
+  BOT_TOKEN=123:abc sudo scripts/install.sh --yes --with-minidlna
+USAGE
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes|--non-interactive)
+        ASSUME_YES=1
+        ;;
+      --with-qbittorrent)
+        WITH_QBITTORRENT=1
+        ;;
+      --no-qbittorrent)
+        WITH_QBITTORRENT=0
+        ;;
+      --with-prowlarr)
+        WITH_PROWLARR=1
+        ;;
+      --no-prowlarr)
+        WITH_PROWLARR=0
+        ;;
+      --with-minidlna)
+        WITH_MINIDLNA=1
+        ;;
+      --force-reinstall)
+        FORCE_REINSTALL=1
+        ;;
+      --update-only)
+        UPDATE_ONLY=1
+        ;;
+      --no-create-user)
+        CREATE_TMS_USER=0
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        err "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+    esac
+    shift
+  done
+  if [[ "$ASSUME_YES" -eq 1 && -z "$WITH_QBITTORRENT" ]]; then
+    WITH_QBITTORRENT=1
+  fi
+  if [[ "$ASSUME_YES" -eq 1 && -z "$WITH_PROWLARR" ]]; then
+    WITH_PROWLARR=1
+  fi
+  if [[ -z "$WITH_QBITTORRENT" ]]; then
+    WITH_QBITTORRENT=0
+  fi
+}
+
+confirm_or_default() {
+  local prompt="$1"
+  local default="${2:-n}"
+  local ans=""
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    [[ "${default,,}" == "y" || "${default,,}" == "yes" ]]
+    return $?
+  fi
+  read -r -p "$prompt" ans
+  if [[ -z "$ans" ]]; then
+    ans="$default"
+  fi
+  [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]
+}
+
+env_or_default() {
+  local key="$1"
+  local default="${2:-}"
+  local value="${!key:-}"
+  if [[ -n "$value" ]]; then
+    echo "$value"
+  else
+    echo "$default"
+  fi
+}
+
+generate_secret_if_missing() {
+  local key="$1"
+  local value="${!key:-}"
+  if [[ -n "$value" ]] && ! is_placeholder "$value" "$key"; then
+    echo "$value"
+    return 0
+  fi
+  generate_password
+}
+
+require_or_prompt() {
+  local key="$1"
+  local prompt="$2"
+  local value="${!key:-}"
+  if ! is_placeholder "$value" "$key"; then
+    echo "$value"
+    return 0
+  fi
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    err "$key is required in non-interactive mode. Example: $key=... sudo scripts/install.sh --yes"
+    exit 1
+  fi
+  value=$(read_value "$prompt")
+  while [[ -z "$value" ]]; do
+    err "$key cannot be empty."
+    value=$(read_value "$prompt")
+  done
+  echo "$value"
+}
+
+upsert_env() {
+  local env_file="$1"
+  local key="$2"
+  local value="$3"
+  mkdir -p "$(dirname "$env_file")"
+  touch "$env_file"
+  if grep -q "^${key}=" "$env_file"; then
+    grep -v "^${key}=" "$env_file" > "${env_file}.tmp"
+    printf '%s=%s\n' "$key" "$value" >> "${env_file}.tmp"
+    mv "${env_file}.tmp" "$env_file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$env_file"
+  fi
+}
 
 # --- ensure MOVIE_PATH exists and is writable by TMS and qBittorrent (same user) ---
 ensure_movie_path_writable() {
@@ -105,6 +261,7 @@ set_arch_packages() {
   PKG_INSTALL_LABEL="pacman"
   PKG_QBIT=qbittorrent-nox
   PKG_GO=go
+  PKG_CURL=curl
   PKG_ARIA2=aria2
   PKG_FFMPEG=ffmpeg
   PKG_YTDLP=yt-dlp
@@ -118,6 +275,7 @@ set_ubuntu_packages() {
   PKG_INSTALL_LABEL="apt"
   PKG_QBIT=qbittorrent-nox
   PKG_GO=golang-go
+  PKG_CURL=curl
   PKG_ARIA2=aria2
   PKG_FFMPEG=ffmpeg
   PKG_YTDLP=yt-dlp
@@ -126,28 +284,35 @@ set_ubuntu_packages() {
 
 # --- check dependencies; optionally install missing ---
 check_and_install_deps() {
-  local need_go=0 need_aria2=0 need_ffmpeg=0 need_ytdlp=0 need_qbit=0
+  local need_go=0 need_curl=0 need_aria2=0 need_ffmpeg=0 need_ytdlp=0
   command -v go      &>/dev/null || need_go=1
+  command -v curl    &>/dev/null || need_curl=1
   command -v aria2c  &>/dev/null || need_aria2=1
   command -v ffmpeg  &>/dev/null || need_ffmpeg=1
   command -v yt-dlp  &>/dev/null || need_ytdlp=1
 
-  if [[ $need_go -eq 1 ]] || [[ $need_aria2 -eq 1 ]] || [[ $need_ffmpeg -eq 1 ]] || [[ $need_ytdlp -eq 1 ]]; then
+  if [[ $need_go -eq 1 ]] || [[ $need_curl -eq 1 ]] || [[ $need_aria2 -eq 1 ]] || [[ $need_ffmpeg -eq 1 ]] || [[ $need_ytdlp -eq 1 ]]; then
     warn "Some dependencies are missing:"
     [[ $need_go -eq 1 ]]    && echo "  - go (for build)"
+    [[ $need_curl -eq 1 ]]  && echo "  - curl (service readiness checks)"
     [[ $need_aria2 -eq 1 ]] && echo "  - aria2 (torrents, unless using qBittorrent)"
     [[ $need_ffmpeg -eq 1 ]] && echo "  - ffmpeg"
     [[ $need_ytdlp -eq 1 ]] && echo "  - yt-dlp"
     echo
-    read -r -p "Install missing packages via ${PKG_INSTALL_LABEL:-package manager}? [y/N] " ans
+    if [[ "$ASSUME_YES" -eq 1 ]]; then
+      ans="y"
+    else
+      read -r -p "Install missing packages via ${PKG_INSTALL_LABEL:-package manager}? [y/N] " ans
+    fi
     if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
       $PKG_UPDATE
       [[ $need_go -eq 1 ]]    && $PKG_INSTALL $PKG_GO
+      [[ $need_curl -eq 1 ]]  && $PKG_INSTALL $PKG_CURL
       [[ $need_aria2 -eq 1 ]] && $PKG_INSTALL $PKG_ARIA2
       [[ $need_ffmpeg -eq 1 ]] && $PKG_INSTALL $PKG_FFMPEG
       [[ $need_ytdlp -eq 1 ]] && $PKG_INSTALL $PKG_YTDLP
     else
-      err "Install packages manually (go, aria2, ffmpeg, yt-dlp) and run the script again."
+      err "Install packages manually (go, curl, aria2, ffmpeg, yt-dlp) and run the script again."
       exit 1
     fi
   fi
@@ -156,7 +321,7 @@ check_and_install_deps() {
     err "yt-dlp not found. Install: https://github.com/yt-dlp/yt-dlp#installation"
     exit 1
   fi
-  ok "Dependencies: go, aria2, ffmpeg, yt-dlp — OK."
+  ok "Dependencies: go, curl, aria2, ffmpeg, yt-dlp — OK."
 }
 
 # --- check Go version meets go.mod requirement (warn if too old) ---
@@ -509,6 +674,173 @@ fill_missing_env() {
   ok "Only missing parameters were added to .env."
 }
 
+existing_or_env_or_default() {
+  local env_file="$1"
+  local key="$2"
+  local default="${3:-}"
+  local env_value="${!key:-}"
+  local existing_value=""
+  if [[ -n "$env_value" ]]; then
+    echo "$env_value"
+    return 0
+  fi
+  existing_value=$(get_env_value "$env_file" "$key")
+  if ! is_placeholder "$existing_value" "$key"; then
+    echo "$existing_value"
+    return 0
+  fi
+  echo "$default"
+}
+
+required_existing_or_env() {
+  local env_file="$1"
+  local key="$2"
+  local env_value="${!key:-}"
+  local existing_value=""
+  if [[ -n "$env_value" ]]; then
+    echo "$env_value"
+    return 0
+  fi
+  existing_value=$(get_env_value "$env_file" "$key")
+  if ! is_placeholder "$existing_value" "$key"; then
+    echo "$existing_value"
+    return 0
+  fi
+  err "$key is required in non-interactive mode. Example: $key=... sudo scripts/install.sh --yes"
+  exit 1
+}
+
+write_unattended_env() {
+  local env_file="$1"
+  local reset="${2:-0}"
+  local bot_token movie_path admin_pass regular_pass lang
+
+  bot_token=$(required_existing_or_env "$env_file" "BOT_TOKEN")
+  movie_path=$(existing_or_env_or_default "$env_file" "MOVIE_PATH" "/var/lib/telegram-media-server/media")
+  admin_pass=$(existing_or_env_or_default "$env_file" "ADMIN_PASSWORD" "")
+  regular_pass=$(existing_or_env_or_default "$env_file" "REGULAR_PASSWORD" "")
+  lang=$(existing_or_env_or_default "$env_file" "LANG" "en")
+
+  if is_placeholder "$admin_pass" "ADMIN_PASSWORD"; then
+    admin_pass=$(generate_password)
+  fi
+  if is_placeholder "$regular_pass" "REGULAR_PASSWORD"; then
+    regular_pass=$(generate_password)
+  fi
+
+  mkdir -p "$(dirname "$env_file")"
+  if [[ "$reset" -eq 1 || ! -f "$env_file" ]]; then
+    cat > "$env_file" << ENVEOF
+# Generated by install.sh — Telegram Media Server
+ENVEOF
+  fi
+
+  upsert_env "$env_file" "BOT_TOKEN" "$bot_token"
+  upsert_env "$env_file" "MOVIE_PATH" "$movie_path"
+  upsert_env "$env_file" "ADMIN_PASSWORD" "$admin_pass"
+  upsert_env "$env_file" "REGULAR_PASSWORD" "$regular_pass"
+  upsert_env "$env_file" "LANG" "$lang"
+
+  if [[ -n "${VIDEO_COMPATIBILITY_MODE:-}" ]]; then
+    upsert_env "$env_file" "VIDEO_COMPATIBILITY_MODE" "$VIDEO_COMPATIBILITY_MODE"
+  fi
+  if [[ -n "${TELEGRAM_PROXY:-}" ]]; then
+    upsert_env "$env_file" "TELEGRAM_PROXY" "$TELEGRAM_PROXY"
+  fi
+  if [[ -n "${CONTENT_PROXY:-}" ]]; then
+    upsert_env "$env_file" "CONTENT_PROXY" "$CONTENT_PROXY"
+  fi
+  if [[ -n "${CONTENT_PROXY_DOMAINS:-}" ]]; then
+    upsert_env "$env_file" "CONTENT_PROXY_DOMAINS" "$CONTENT_PROXY_DOMAINS"
+  fi
+
+  upsert_env "$env_file" "TMS_API_ENABLED" "${TMS_API_ENABLED:-true}"
+  upsert_env "$env_file" "TMS_API_KEY" "$(existing_or_env_or_default "$env_file" "TMS_API_KEY" "$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)")"
+  if [[ -n "${TMS_WEBHOOK_URL:-}" ]]; then
+    upsert_env "$env_file" "TMS_WEBHOOK_URL" "$TMS_WEBHOOK_URL"
+    upsert_env "$env_file" "TMS_WEBHOOK_TOKEN" "$(existing_or_env_or_default "$env_file" "TMS_WEBHOOK_TOKEN" "$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)")"
+  fi
+
+  if [[ "$WITH_QBITTORRENT" -eq 1 ]]; then
+    upsert_env "$env_file" "QBITTORRENT_URL" "$(existing_or_env_or_default "$env_file" "QBITTORRENT_URL" "http://127.0.0.1:$QBIT_WEBUI_PORT")"
+    upsert_env "$env_file" "QBITTORRENT_USERNAME" "$(existing_or_env_or_default "$env_file" "QBITTORRENT_USERNAME" "admin")"
+    upsert_env "$env_file" "QBITTORRENT_PASSWORD" "$(existing_or_env_or_default "$env_file" "QBITTORRENT_PASSWORD" "adminadmin")"
+  fi
+
+  if [[ "$WITH_PROWLARR" -eq 1 ]]; then
+    if [[ -n "${PROWLARR_API_KEY:-}" ]]; then
+      upsert_env "$env_file" "PROWLARR_URL" "$(existing_or_env_or_default "$env_file" "PROWLARR_URL" "http://127.0.0.1:$PROWLARR_PORT")"
+      upsert_env "$env_file" "PROWLARR_API_KEY" "$PROWLARR_API_KEY"
+    fi
+  fi
+
+  chmod 600 "$env_file"
+  ok "Unattended config written: $env_file"
+}
+
+ensure_qbittorrent_package() {
+  if command -v qbittorrent-nox &>/dev/null; then
+    return 0
+  fi
+  info "Installing qbittorrent-nox..."
+  $PKG_UPDATE
+  $PKG_INSTALL $PKG_QBIT
+  ok "Installed qbittorrent-nox"
+}
+
+run_unattended_install() {
+  local repo_root="$1"
+  local env_file="$2"
+
+  if [[ "$CREATE_TMS_USER" -eq 1 ]]; then
+    ensure_user_tms
+    TMS_RUN_USER="$TMS_USER"
+  else
+    TMS_RUN_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-root}")
+    info "Services will run as: $TMS_RUN_USER"
+  fi
+
+  if [[ -f "$env_file" && "$FORCE_REINSTALL" -eq 0 ]]; then
+    UPDATE_ONLY=1
+  fi
+  if [[ "$FORCE_REINSTALL" -eq 1 && -f "$env_file" ]]; then
+    cp "$env_file" "${env_file}.bak.force"
+    ok "Backed up config to ${env_file}.bak.force"
+  fi
+
+  write_unattended_env "$env_file" "$FORCE_REINSTALL"
+  bash "$repo_root/scripts/merge-env.sh" "$env_file" "$repo_root/.env.example"
+
+  local movie_path_owner
+  movie_path_owner=$(get_env_value "$env_file" "MOVIE_PATH")
+  if [[ -n "$movie_path_owner" ]]; then
+    mkdir -p "$movie_path_owner"
+    mkdir -p "${movie_path_owner%/}/incomplete"
+    chown -R "$TMS_RUN_USER:$TMS_RUN_USER" "$movie_path_owner"
+    chmod 775 "$movie_path_owner"
+    chmod 775 "${movie_path_owner%/}/incomplete"
+    ok "MOVIE_PATH $movie_path_owner owned by $TMS_RUN_USER"
+  fi
+
+  if [[ "$WITH_QBITTORRENT" -eq 1 ]]; then
+    repair_qbittorrent_connection "$TMS_RUN_USER" "$env_file" "$movie_path_owner"
+  fi
+
+  if [[ "$WITH_PROWLARR" -eq 1 ]]; then
+    PROWLARR_API_KEY_AUTO=$(install_prowlarr) || PROWLARR_API_KEY_AUTO=""
+    if [[ -n "$PROWLARR_API_KEY_AUTO" ]]; then
+      upsert_env "$env_file" "PROWLARR_URL" "$(existing_or_env_or_default "$env_file" "PROWLARR_URL" "http://127.0.0.1:$PROWLARR_PORT")"
+      upsert_env "$env_file" "PROWLARR_API_KEY" "$PROWLARR_API_KEY_AUTO"
+    fi
+  fi
+
+  if [[ "$WITH_MINIDLNA" -eq 1 ]]; then
+    install_minidlna "$movie_path_owner" "$TMS_RUN_USER"
+  fi
+
+  install_tms_binary_and_service "$repo_root" "$TMS_RUN_USER"
+}
+
 # --- create and enable qBittorrent systemd unit ---
 install_qbittorrent_systemd() {
   local run_user="${1:-}"
@@ -519,7 +851,21 @@ install_qbittorrent_systemd() {
   qbit_bin=$(command -v qbittorrent-nox 2>/dev/null || echo "/usr/bin/qbittorrent-nox")
   local unit_path="/etc/systemd/system/${QBIT_SERVICE_NAME}.service"
   if [[ -f "$unit_path" ]]; then
-    warn "File $unit_path already exists. Skipping creation."
+    warn "File $unit_path already exists. Ensuring service user, port, enable and start state."
+    cp "$unit_path" "${unit_path}.bak.installer" 2>/dev/null || true
+    if grep -q '^User=' "$unit_path" 2>/dev/null; then
+      sed -i "s|^User=.*|User=$run_user|" "$unit_path"
+    else
+      sed -i "/^\[Service\]/a User=$run_user" "$unit_path"
+    fi
+    if grep -q '^Environment=QBT_WEBUI_PORT=' "$unit_path" 2>/dev/null; then
+      sed -i "s|^Environment=QBT_WEBUI_PORT=.*|Environment=QBT_WEBUI_PORT=$QBIT_WEBUI_PORT|" "$unit_path"
+    else
+      sed -i "/^\[Service\]/a Environment=QBT_WEBUI_PORT=$QBIT_WEBUI_PORT" "$unit_path"
+    fi
+    systemctl daemon-reload
+    systemctl enable "$QBIT_SERVICE_NAME"
+    systemctl restart "$QBIT_SERVICE_NAME" 2>/dev/null || systemctl start "$QBIT_SERVICE_NAME" 2>/dev/null || true
     return 0
   fi
   cat > "$unit_path" << UNITEOF
@@ -547,10 +893,41 @@ UNITEOF
 # PBKDF2 hash for password "adminadmin" (qBittorrent Web UI). Do not use on internet-exposed servers.
 QBIT_ADMIN_HASH='@ByteArray(ARQ77eY1NUZaQsuDHbIMCA==:0WMRkYTUWVT9wVvdDtHAjU9b3b7uB8NR1Gur2hmQCvCDpm39Q+PsJRJPaCU51dEiz+dTzh8qbPsL8WkFljQYFQ==)'
 
-# --- set qBittorrent save path and Web UI credentials (if not already set) so Web UI and TMS work after install ---
+generate_qbittorrent_password_hash() {
+  local password="${1:?}"
+  if [[ "$password" == "adminadmin" ]]; then
+    echo "$QBIT_ADMIN_HASH"
+    return 0
+  fi
+  if ! command -v python3 &>/dev/null; then
+    warn "python3 not found; cannot generate qBittorrent PBKDF2 hash for a custom password."
+    return 1
+  fi
+  python3 -c 'import base64, hashlib, os, sys; password=sys.argv[1].encode(); salt=os.urandom(16); digest=hashlib.pbkdf2_hmac("sha512", password, salt, 100000, 64); print("@ByteArray(%s:%s)" % (base64.b64encode(salt).decode(), base64.b64encode(digest).decode()))' "$password"
+}
+
+upsert_qbittorrent_pref() {
+  local config_file="${1:?}"
+  local key="${2:?}"
+  local value="${3:?}"
+  if grep -F -q "${key}=" "$config_file" 2>/dev/null; then
+    awk -v key="$key" -v value="$value" 'index($0, key "=") == 1 { $0 = key "=" value } { print }' "$config_file" > "${config_file}.tmp"
+    mv "${config_file}.tmp" "$config_file"
+  elif grep -q '^\[Preferences\]' "$config_file" 2>/dev/null; then
+    awk -v key="$key" -v value="$value" '{ print } /^\[Preferences\]$/ && !done { print key "=" value; done = 1 }' "$config_file" > "${config_file}.tmp"
+    mv "${config_file}.tmp" "$config_file"
+  else
+    printf '[Preferences]\n%s=%s\n' "$key" "$value" >> "$config_file"
+  fi
+}
+
+# --- set qBittorrent save path and Web UI credentials so Web UI and TMS work after install ---
 set_qbittorrent_save_path() {
   local run_user="${1:?}"
   local movie_path="${2:?}"
+  local qbit_user="${3:-admin}"
+  local qbit_pass="${4:-adminadmin}"
+  local force_credentials="${5:-0}"
   local home_dir
   home_dir=$(getent passwd "$run_user" 2>/dev/null | cut -d: -f6)
   [[ -z "$home_dir" ]] && home_dir="/home/$run_user"
@@ -569,42 +946,103 @@ set_qbittorrent_save_path() {
   fi
   local save_path="${movie_path%/}/"
   local temp_path="${movie_path%/}/incomplete/"
-  if grep -q '^Downloads\\SavePath=' "$config_file" 2>/dev/null; then
-    sed -i "s|^Downloads\\\\SavePath=.*|Downloads\\\\SavePath=$save_path|" "$config_file"
-  else
-    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a Downloads\\\\SavePath=$save_path" "$config_file") || echo "Downloads\\SavePath=$save_path" >> "$config_file"
+  upsert_qbittorrent_pref "$config_file" 'Downloads\SavePath' "$save_path"
+  upsert_qbittorrent_pref "$config_file" 'Downloads\TempPath' "$temp_path"
+  upsert_qbittorrent_pref "$config_file" 'WebUI\Address' "127.0.0.1"
+  upsert_qbittorrent_pref "$config_file" 'WebUI\Port' "$QBIT_WEBUI_PORT"
+
+  if [[ "$force_credentials" -eq 1 ]] || ! grep -q '^WebUI\\Username=' "$config_file" 2>/dev/null; then
+    upsert_qbittorrent_pref "$config_file" 'WebUI\Username' "$qbit_user"
   fi
-  if grep -q '^Downloads\\TempPath=' "$config_file" 2>/dev/null; then
-    sed -i "s|^Downloads\\\\TempPath=.*|Downloads\\\\TempPath=$temp_path|" "$config_file"
-  else
-    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a Downloads\\\\TempPath=$temp_path" "$config_file") || echo "Downloads\\TempPath=$temp_path" >> "$config_file"
+  if [[ "$force_credentials" -eq 1 ]] || ! grep -q '^WebUI\\Password_PBKDF2=' "$config_file" 2>/dev/null; then
+    local qbit_hash
+    qbit_hash=$(generate_qbittorrent_password_hash "$qbit_pass") || return 1
+    upsert_qbittorrent_pref "$config_file" 'WebUI\Password_PBKDF2' "$qbit_hash"
   fi
-  if grep -q '^WebUI\\Address=' "$config_file" 2>/dev/null; then
-    sed -i 's|^WebUI\\Address=.*|WebUI\\Address=127.0.0.1|' "$config_file"
-  else
-    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\Address=127.0.0.1" "$config_file") || echo "WebUI\\Address=127.0.0.1" >> "$config_file"
-  fi
-  if grep -q '^WebUI\\Port=' "$config_file" 2>/dev/null; then
-    sed -i "s|^WebUI\\\\Port=.*|WebUI\\\\Port=$QBIT_WEBUI_PORT|" "$config_file"
-  else
-    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\Port=$QBIT_WEBUI_PORT" "$config_file") || echo "WebUI\\Port=$QBIT_WEBUI_PORT" >> "$config_file"
-  fi
-  # Set Web UI credentials only if not already present (do not overwrite user-changed password)
-  if ! grep -q '^WebUI\\Username=' "$config_file" 2>/dev/null; then
-    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\Username=admin" "$config_file") || echo "WebUI\\Username=admin" >> "$config_file"
-  fi
-  if ! grep -q '^WebUI\\Password_PBKDF2=' "$config_file" 2>/dev/null; then
-    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\Password_PBKDF2=$QBIT_ADMIN_HASH" "$config_file") || echo "WebUI\\Password_PBKDF2=$QBIT_ADMIN_HASH" >> "$config_file"
-  fi
-  # Skip authentication for clients on localhost (so TMS connecting via 127.0.0.1 does not get 403)
-  if grep -q '^WebUI\\LocalHostAuth=' "$config_file" 2>/dev/null; then
-    sed -i 's|^WebUI\\LocalHostAuth=.*|WebUI\\LocalHostAuth=true|' "$config_file"
-  else
-    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\LocalHostAuth=true" "$config_file") || echo "WebUI\\LocalHostAuth=true" >> "$config_file"
-  fi
+  # Keep localhost API calls authenticated so installer and TMS validate the real Web UI credentials.
+  upsert_qbittorrent_pref "$config_file" 'WebUI\LocalHostAuth' "true"
   chown "$run_user" "$config_file" 2>/dev/null || true
   systemctl restart "$QBIT_SERVICE_NAME" 2>/dev/null || true
-  ok "qBittorrent Web UI configured on 127.0.0.1:$QBIT_WEBUI_PORT; credentials left unchanged if already set. If you change the Web UI password later, update QBITTORRENT_USERNAME and QBITTORRENT_PASSWORD in /etc/telegram-media-server/.env"
+  ok "qBittorrent Web UI configured on 127.0.0.1:$QBIT_WEBUI_PORT; credentials synchronized with $CONFIG_DIR/.env when repair is requested."
+}
+
+validate_qbittorrent_api() {
+  local qbit_url="${1:?}"
+  local qbit_user="${2:-admin}"
+  local qbit_pass="${3:-adminadmin}"
+  local cookie_file login_body version_body status
+  cookie_file=$(mktemp)
+  login_body=$(curl -sS --connect-timeout 3 --max-time 8 -c "$cookie_file" \
+    -H "Referer: ${qbit_url%/}/" \
+    --data-urlencode "username=$qbit_user" \
+    --data-urlencode "password=$qbit_pass" \
+    -w '\n%{http_code}' \
+    "${qbit_url%/}/api/v2/auth/login" 2>&1) || {
+      rm -f "$cookie_file"
+      warn "qBittorrent login request failed for $qbit_url as $qbit_user: $login_body"
+      return 1
+    }
+  status=$(printf '%s' "$login_body" | tail -n 1)
+  login_body=$(printf '%s' "$login_body" | sed '$d')
+  if [[ "$status" == "403" ]]; then
+    rm -f "$cookie_file"
+    warn "qBittorrent login forbidden for $qbit_url as $qbit_user (403; IP may be banned or credentials are rejected)."
+    return 1
+  fi
+  if [[ "$status" != "200" || "$(printf '%s' "$login_body" | tr -d '\r\n')" == "Fails." ]]; then
+    rm -f "$cookie_file"
+    warn "qBittorrent login failed for $qbit_url as $qbit_user (status=$status, body=$login_body)."
+    return 1
+  fi
+  version_body=$(curl -sS --connect-timeout 3 --max-time 8 -b "$cookie_file" \
+    -H "Referer: ${qbit_url%/}/" \
+    -w '\n%{http_code}' \
+    "${qbit_url%/}/api/v2/app/version" 2>&1) || {
+      rm -f "$cookie_file"
+      warn "qBittorrent app/version request failed for $qbit_url: $version_body"
+      return 1
+    }
+  rm -f "$cookie_file"
+  status=$(printf '%s' "$version_body" | tail -n 1)
+  version_body=$(printf '%s' "$version_body" | sed '$d')
+  if [[ "$status" != "200" ]]; then
+    warn "qBittorrent app/version failed for $qbit_url (status=$status, body=$version_body)."
+    return 1
+  fi
+  ok "qBittorrent Web API check OK: $qbit_url, user=$qbit_user, version=$version_body"
+  return 0
+}
+
+is_local_qbittorrent_url() {
+  local qbit_url="${1:?}"
+  [[ "$qbit_url" == "http://127.0.0.1:${QBIT_WEBUI_PORT}"* || "$qbit_url" == "http://localhost:${QBIT_WEBUI_PORT}"* || "$qbit_url" == "http://[::1]:${QBIT_WEBUI_PORT}"* ]]
+}
+
+repair_qbittorrent_connection() {
+  local run_user="${1:?}"
+  local env_file="${2:?}"
+  local movie_path="${3:?}"
+  local qbit_url qbit_user qbit_pass
+  qbit_url=$(get_env_value "$env_file" "QBITTORRENT_URL")
+  [[ -z "$qbit_url" ]] && return 0
+  qbit_user=$(existing_or_env_or_default "$env_file" "QBITTORRENT_USERNAME" "admin")
+  qbit_pass=$(existing_or_env_or_default "$env_file" "QBITTORRENT_PASSWORD" "adminadmin")
+
+  info "Checking qBittorrent Web API connectivity: url=$qbit_url user=$qbit_user"
+  if validate_qbittorrent_api "$qbit_url" "$qbit_user" "$qbit_pass"; then
+    return 0
+  fi
+  if ! is_local_qbittorrent_url "$qbit_url"; then
+    err "qBittorrent check failed and $qbit_url is not the local installer-managed URL; fix QBITTORRENT_* in $env_file or the remote qBittorrent Web UI."
+    return 1
+  fi
+
+  warn "Repairing local qBittorrent configuration and retrying..."
+  ensure_qbittorrent_package
+  install_qbittorrent_systemd "$run_user"
+  set_qbittorrent_save_path "$run_user" "$movie_path" "$qbit_user" "$qbit_pass" 1
+  sleep 2
+  validate_qbittorrent_api "$qbit_url" "$qbit_user" "$qbit_pass"
 }
 
 # --- install and configure minidlna for DLNA (media_dir = MOVIE_PATH, runs as user minidlna) ---
@@ -660,7 +1098,7 @@ wait_prowlarr_and_get_key() {
   systemctl daemon-reload
   systemctl enable "$PROWLARR_SERVICE_NAME"
   systemctl start "$PROWLARR_SERVICE_NAME" 2>/dev/null || true
-  info "Waiting for Prowlarr first start (up to 60s)..."
+  info "Waiting for Prowlarr first start (up to 60s)..." >&2
   local config_path=""
   local i
   for i in {1..30}; do
@@ -674,11 +1112,16 @@ wait_prowlarr_and_get_key() {
     curl -s -o /dev/null "http://127.0.0.1:${PROWLARR_PORT}" 2>/dev/null || true
   done
   if [[ -z "$config_path" || ! -f "$config_path" ]]; then
-    warn "Prowlarr config.xml not found. Prowlarr is running at http://127.0.0.1:${PROWLARR_PORT}"
+    warn "Prowlarr config.xml not found. Prowlarr is running at http://127.0.0.1:${PROWLARR_PORT}" >&2
+    if [[ "$ASSUME_YES" -eq 1 ]]; then
+      warn "Skipping Prowlarr API key prompt in non-interactive mode. Set PROWLARR_API_KEY in $CONFIG_DIR/.env when available." >&2
+      echo ""
+      return 0
+    fi
     read -r -p "Get API Key from Settings → General → Security and enter it here (or Enter to skip): " api_key_manual
     if [[ -n "$api_key_manual" ]]; then
       echo "$api_key_manual"
-      ok "Using entered Prowlarr API Key"
+      ok "Using entered Prowlarr API Key" >&2
     else
       echo ""
     fi
@@ -688,13 +1131,18 @@ wait_prowlarr_and_get_key() {
   api_key=$(sed -n 's/.*<ApiKey>\([^<]*\)<\/ApiKey>.*/\1/p' "$config_path" 2>/dev/null | head -1)
   if [[ -n "$api_key" ]]; then
     echo "$api_key"
-    ok "Prowlarr API Key read from $config_path"
+    ok "Prowlarr API Key read from $config_path" >&2
   else
-    info "Prowlarr is running at http://127.0.0.1:${PROWLARR_PORT}"
+    info "Prowlarr is running at http://127.0.0.1:${PROWLARR_PORT}" >&2
+    if [[ "$ASSUME_YES" -eq 1 ]]; then
+      warn "Prowlarr API key was not found automatically. Set PROWLARR_API_KEY in $CONFIG_DIR/.env when available." >&2
+      echo ""
+      return 0
+    fi
     read -r -p "Get API Key from Settings → General → Security and enter it here (or Enter to skip): " api_key_manual
     if [[ -n "$api_key_manual" ]]; then
       echo "$api_key_manual"
-      ok "Using entered Prowlarr API Key"
+      ok "Using entered Prowlarr API Key" >&2
     else
       echo ""
     fi
@@ -708,7 +1156,7 @@ install_prowlarr_arch() {
   local run_user
   run_user=$(logname 2>/dev/null || echo "${SUDO_USER:-}")
   if [[ -z "$run_user" || "$run_user" == root ]]; then
-    err "AUR install requires a non-root user (run: sudo -u your_user or set SUDO_USER)."
+    err "AUR install requires a non-root user (run: sudo -u your_user or set SUDO_USER)." >&2
     return 1
   fi
 
@@ -720,16 +1168,16 @@ install_prowlarr_arch() {
     fi
   done
   if [[ -z "$aur_helper" ]]; then
-    warn "AUR helper (yay or paru) not found. Install one and run the installer again."
+    warn "AUR helper (yay or paru) not found. Install one and run the installer again." >&2
     return 1
   fi
 
-  info "Installing Prowlarr from AUR (${aur_helper})..."
-  if ! sudo -u "$run_user" "$aur_helper" -S prowlarr-bin --noconfirm --needed 2>/dev/null; then
-    warn "Failed to install prowlarr-bin. Try manually: $aur_helper -S prowlarr-bin"
+  info "Installing Prowlarr from AUR (${aur_helper})..." >&2
+  if ! sudo -u "$run_user" "$aur_helper" -S prowlarr-bin --noconfirm --needed >&2; then
+    warn "Failed to install prowlarr-bin. Try manually: $aur_helper -S prowlarr-bin" >&2
     return 1
   fi
-  ok "Prowlarr installed."
+  ok "Prowlarr installed." >&2
   wait_prowlarr_and_get_key
   return 0
 }
@@ -737,7 +1185,7 @@ install_prowlarr_arch() {
 # --- install Prowlarr from Servarr apt repo (Ubuntu/Debian), start service, extract API key ---
 # Returns API key via echo (empty string on error).
 install_prowlarr_ubuntu() {
-  info "Installing Prowlarr from Servarr apt repo..."
+  info "Installing Prowlarr from Servarr apt repo..." >&2
   mkdir -p /usr/share/keyrings
   local key_file="/usr/share/keyrings/prowlarr-repo.key"
   if [[ ! -s "$key_file" ]]; then
@@ -751,12 +1199,12 @@ install_prowlarr_ubuntu() {
     apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 2009837CBFFD68F45BC180471F4F90DE2A9B4BF8 2>/dev/null || true
     echo "deb https://apt.prowlarr.com/debian prowlarr-main main" > /etc/apt/sources.list.d/prowlarr.list
   fi
-  apt-get update -qq
-  if ! apt-get install -y -qq prowlarr 2>/dev/null; then
-    warn "Failed to install prowlarr. Try: apt-get install -y prowlarr"
+  apt-get update -qq >&2
+  if ! apt-get install -y -qq prowlarr >&2; then
+    warn "Failed to install prowlarr. Try: apt-get install -y prowlarr" >&2
     return 1
   fi
-  ok "Prowlarr installed."
+  ok "Prowlarr installed." >&2
   wait_prowlarr_and_get_key
   return 0
 }
@@ -825,6 +1273,8 @@ install_tms_binary_and_service() {
 
 # --- main ---
 main() {
+  parse_args "$@"
+
   echo "=============================================="
   echo "  Telegram Media Server — installer"
   echo "=============================================="
@@ -848,16 +1298,17 @@ main() {
     SERVICE_DIR=/etc/systemd/system
   fi
 
-  echo
-  echo -e "${YELLOW}Warning: default passwords are used (e.g. qBittorrent Web UI: admin/adminadmin).${NC}"
-  echo "Do not use this installer on an internet-exposed server without changing passwords."
-  echo
-  read -r -p "Continue with installation? [y/N] " ans
-  if [[ "${ans,,}" != "y" && "${ans,,}" != "yes" ]]; then
-    echo "Exiting."
-    exit 0
+  if [[ "$ASSUME_YES" -eq 0 ]]; then
+    echo
+    echo -e "${YELLOW}Warning: default passwords are used (e.g. qBittorrent Web UI: admin/adminadmin).${NC}"
+    echo "Do not use this installer on an internet-exposed server without changing passwords."
+    echo
+    if ! confirm_or_default "Continue with installation? [y/N] " "n"; then
+      echo "Exiting."
+      exit 0
+    fi
+    echo
   fi
-  echo
 
   check_and_install_deps
 
@@ -871,9 +1322,30 @@ main() {
   mkdir -p "$CONFIG_DIR"
   ENV_FILE="${CONFIG_DIR}/.env"
 
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    run_unattended_install "$REPO_ROOT" "$ENV_FILE"
+    echo
+    echo "=============================================="
+    ok "Unattended installation complete."
+    echo "=============================================="
+    echo "Config:     $ENV_FILE"
+    echo "Service:    systemctl status telegram-media-server"
+    echo "Logs:       journalctl -u telegram-media-server -f"
+    if [[ "$WITH_QBITTORRENT" -eq 1 ]]; then
+      echo "qBittorrent: systemctl status $QBIT_SERVICE_NAME  |  Web UI: http://127.0.0.1:$QBIT_WEBUI_PORT"
+    fi
+    if [[ "$WITH_PROWLARR" -eq 1 ]]; then
+      echo "Prowlarr:    systemctl status $PROWLARR_SERVICE_NAME  |  Web UI: http://127.0.0.1:$PROWLARR_PORT"
+    fi
+    if [[ "$WITH_MINIDLNA" -eq 1 ]]; then
+      echo "minidlna:    systemctl status $MINIDLNA_SERVICE_NAME"
+    fi
+    echo
+    return 0
+  fi
+
   echo
-  read -r -p "Create dedicated user '$TMS_USER' for TMS and qBittorrent (recommended; grants write access to download dir)? [Y/n] " ans
-  if [[ "${ans,,}" != "n" && "${ans,,}" != "no" ]]; then
+  if [[ "$CREATE_TMS_USER" -eq 1 ]] && confirm_or_default "Create dedicated user '$TMS_USER' for TMS and qBittorrent (recommended; grants write access to download dir)? [Y/n] " "y"; then
     ensure_user_tms
     TMS_RUN_USER="$TMS_USER"
   else
@@ -893,7 +1365,13 @@ main() {
   if [[ -f "$ENV_FILE" ]]; then
     echo
     info "Existing installation detected ($ENV_FILE present)."
-    read -r -p "Update only binary and service (leave config unchanged)? [Y/n] " ans
+    if [[ "$UPDATE_ONLY" -eq 1 ]]; then
+      ans="y"
+    elif [[ "$FORCE_REINSTALL" -eq 1 ]]; then
+      ans="n"
+    else
+      read -r -p "Update only binary and service (leave config unchanged)? [Y/n] " ans
+    fi
     if [[ "${ans,,}" != "n" && "${ans,,}" != "no" ]]; then
       bash "$REPO_ROOT/scripts/merge-env.sh" "$ENV_FILE" "$REPO_ROOT/.env.example"
       if [[ "$TMS_RUN_USER" == "$TMS_USER" ]]; then
@@ -905,18 +1383,34 @@ main() {
           ok "MOVIE_PATH $movie_path_owner owned by $TMS_RUN_USER"
         fi
       fi
+      if [[ -n "$(get_env_value "$ENV_FILE" "QBITTORRENT_URL")" ]]; then
+        movie_path_owner=$(get_env_value "$ENV_FILE" "MOVIE_PATH")
+        if [[ -n "$movie_path_owner" ]]; then
+          repair_qbittorrent_connection "$TMS_RUN_USER" "$ENV_FILE" "$movie_path_owner"
+        else
+          warn "QBITTORRENT_URL is set but MOVIE_PATH is empty; qBittorrent repair skipped."
+        fi
+      fi
       install_tms_binary_and_service "$REPO_ROOT" "$TMS_RUN_USER"
       echo
       ok "Done. Config was not changed."
       systemctl status telegram-media-server --no-pager 2>/dev/null || true
       exit 0
     fi
-    read -r -p "Force reinstall (re-enter all settings from scratch)? [y/N] " ans
+    if [[ "$FORCE_REINSTALL" -eq 1 ]]; then
+      ans="y"
+    else
+      read -r -p "Force reinstall (re-enter all settings from scratch)? [y/N] " ans
+    fi
     if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
       cp "$ENV_FILE" "${ENV_FILE}.bak.force"
       ok "Backed up config to ${ENV_FILE}.bak.force"
       echo
-      read -r -p "Configure qBittorrent for torrents? (Web UI port $QBIT_WEBUI_PORT, systemd) [y/N] " ans
+      if [[ "$WITH_QBITTORRENT" -eq 1 ]]; then
+        ans="y"
+      else
+        read -r -p "Configure qBittorrent for torrents? (Web UI port $QBIT_WEBUI_PORT, systemd) [y/N] " ans
+      fi
       if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
         USE_QBITTORRENT=1
         if ! command -v qbittorrent-nox &>/dev/null; then
@@ -932,13 +1426,23 @@ main() {
         fi
       fi
       echo
-      read -r -p "Install and configure Prowlarr? (port $PROWLARR_PORT) [y/N] " ans
-      if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
+      if [[ "$WITH_PROWLARR" -eq 1 ]]; then
+        ans="y"
+      elif [[ "$WITH_PROWLARR" == "0" ]]; then
+        ans="n"
+      else
+        read -r -p "Install and configure Prowlarr? (port $PROWLARR_PORT) [Y/n] " ans
+      fi
+      if [[ "${ans,,}" != "n" && "${ans,,}" != "no" ]]; then
         USE_PROWLARR=1
         PROWLARR_API_KEY_AUTO=$(install_prowlarr) || PROWLARR_API_KEY_AUTO=""
       fi
       echo
-      read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
+      if [[ "$WITH_MINIDLNA" -eq 1 ]]; then
+        ans="y"
+      else
+        read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
+      fi
       if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
         USE_MINIDLNA=1
       fi
@@ -951,7 +1455,11 @@ main() {
       EXISTING_PROWLARR_URL=$(get_env_value "$ENV_FILE" "PROWLARR_URL")
       EXISTING_PROWLARR_KEY=$(get_env_value "$ENV_FILE" "PROWLARR_API_KEY")
       if [[ -z "$EXISTING_QBIT" ]]; then
-        read -r -p "Configure qBittorrent? (port $QBIT_WEBUI_PORT, systemd) [y/N] " ans
+        if [[ "$WITH_QBITTORRENT" -eq 1 ]]; then
+          ans="y"
+        else
+          read -r -p "Configure qBittorrent? (port $QBIT_WEBUI_PORT, systemd) [y/N] " ans
+        fi
         if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
           USE_QBITTORRENT=1
           if ! command -v qbittorrent-nox &>/dev/null; then
@@ -971,8 +1479,14 @@ main() {
       fi
 
     if [[ -z "$EXISTING_PROWLARR_URL" && -z "$EXISTING_PROWLARR_KEY" ]]; then
-        read -r -p "Install and configure Prowlarr? (port $PROWLARR_PORT) [y/N] " ans
-        if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
+        if [[ "$WITH_PROWLARR" -eq 1 ]]; then
+          ans="y"
+        elif [[ "$WITH_PROWLARR" == "0" ]]; then
+          ans="n"
+        else
+          read -r -p "Install and configure Prowlarr? (port $PROWLARR_PORT) [Y/n] " ans
+        fi
+        if [[ "${ans,,}" != "n" && "${ans,,}" != "no" ]]; then
           USE_PROWLARR=1
           PROWLARR_API_KEY_AUTO=$(install_prowlarr) || PROWLARR_API_KEY_AUTO=""
         fi
@@ -980,7 +1494,11 @@ main() {
         ok "Prowlarr already configured (PROWLARR_* set)."
       fi
       echo
-      read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
+      if [[ "$WITH_MINIDLNA" -eq 1 ]]; then
+        ans="y"
+      else
+        read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
+      fi
       if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
         USE_MINIDLNA=1
       fi
@@ -991,7 +1509,11 @@ main() {
   else
     # New install: full dialog
     echo
-    read -r -p "Configure qBittorrent for torrents? (Web UI port $QBIT_WEBUI_PORT, systemd) [y/N] " ans
+    if [[ "$WITH_QBITTORRENT" -eq 1 ]]; then
+      ans="y"
+    else
+      read -r -p "Configure qBittorrent for torrents? (Web UI port $QBIT_WEBUI_PORT, systemd) [y/N] " ans
+    fi
     if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
       USE_QBITTORRENT=1
       if ! command -v qbittorrent-nox &>/dev/null && [[ -n "${PKG_INSTALL:-}" ]]; then
@@ -1008,13 +1530,23 @@ main() {
     fi
 
     echo
-    read -r -p "Install and configure Prowlarr (torrent search, AUR, port $PROWLARR_PORT)? [y/N] " ans
-    if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
+    if [[ "$WITH_PROWLARR" -eq 1 ]]; then
+      ans="y"
+    elif [[ "$WITH_PROWLARR" == "0" ]]; then
+      ans="n"
+    else
+      read -r -p "Install and configure Prowlarr (torrent search, AUR, port $PROWLARR_PORT)? [Y/n] " ans
+    fi
+    if [[ "${ans,,}" != "n" && "${ans,,}" != "no" ]]; then
       USE_PROWLARR=1
       PROWLARR_API_KEY_AUTO=$(install_prowlarr) || PROWLARR_API_KEY_AUTO=""
     fi
     echo
-    read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
+    if [[ "$WITH_MINIDLNA" -eq 1 ]]; then
+      ans="y"
+    else
+      read -r -p "Install and configure minidlna for DLNA distribution? (port 8200) [y/N] " ans
+    fi
     if [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]; then
       USE_MINIDLNA=1
     fi
@@ -1030,17 +1562,16 @@ main() {
     ok "MOVIE_PATH $movie_path_owner owned by $TMS_RUN_USER"
   fi
 
-  install_tms_binary_and_service "$REPO_ROOT" "$TMS_RUN_USER"
-
-  if [[ $USE_QBITTORRENT -eq 1 ]]; then
-    install_qbittorrent_systemd "$TMS_RUN_USER"
+  if [[ $USE_QBITTORRENT -eq 1 || -n "$(get_env_value "$ENV_FILE" "QBITTORRENT_URL")" ]]; then
     QBIT_MOVIE_PATH=$(get_env_value "$ENV_FILE" "MOVIE_PATH")
     if [[ -n "$QBIT_MOVIE_PATH" ]]; then
-      set_qbittorrent_save_path "$TMS_RUN_USER" "$QBIT_MOVIE_PATH"
+      repair_qbittorrent_connection "$TMS_RUN_USER" "$ENV_FILE" "$QBIT_MOVIE_PATH"
     else
       warn "MOVIE_PATH not set in .env; set qBittorrent default save path manually in Web UI (Settings → Downloads)."
     fi
   fi
+
+  install_tms_binary_and_service "$REPO_ROOT" "$TMS_RUN_USER"
 
   if [[ ${USE_MINIDLNA:-0} -eq 1 ]]; then
     if [[ -n "$movie_path_owner" ]]; then

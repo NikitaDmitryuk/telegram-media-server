@@ -80,6 +80,16 @@ cd telegram-media-server
 sudo make install
 ```
 
+Автоматическая установка без вопросов: задайте `BOT_TOKEN`, остальные безопасные значения будут взяты из `.env` или сгенерированы. По умолчанию в unattended-режиме настраиваются qBittorrent и Prowlarr; minidlna включается только флагом.  
+Unattended install: provide `BOT_TOKEN`; other safe values are read from `.env` or generated. qBittorrent and Prowlarr are configured by default in unattended mode; minidlna is opt-in.
+
+```bash
+BOT_TOKEN=123:abc sudo scripts/install.sh --yes
+BOT_TOKEN=123:abc sudo scripts/install.sh --yes --with-minidlna
+BOT_TOKEN=123:abc sudo scripts/install.sh --yes --no-prowlarr
+sudo scripts/install.sh --update-only
+```
+
 ---
 
 ### Установка и настройка minidlna / Installing and configuring minidlna
