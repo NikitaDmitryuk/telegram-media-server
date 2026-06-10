@@ -31,6 +31,8 @@ func (dm *DownloadManager) monitorDownload(
 
 	var (
 		lastProgress         float64
+		lastPersistedPercent = -1
+		lastProgressFlush    time.Time
 		progressStagnantTime time.Time
 		downloadStartTime    = time.Now()
 		maxStagnantDuration  = 30 * time.Minute
@@ -159,8 +161,14 @@ func (dm *DownloadManager) monitorDownload(
 				progress = maxProgress
 			}
 
-			if updateErr := dm.db.UpdateDownloadedPercentage(context.Background(), movieID, int(progress)); updateErr != nil {
-				logutils.Log.WithError(updateErr).WithField("movie_id", movieID).Error("Failed to update progress in database")
+			percent := normalizedProgressPercent(progress)
+			if shouldPersistProgress(percent, lastPersistedPercent, lastProgressFlush, currentTime) {
+				if updateErr := dm.db.UpdateDownloadedPercentage(context.Background(), movieID, percent); updateErr != nil {
+					logutils.Log.WithError(updateErr).WithField("movie_id", movieID).Error("Failed to update progress in database")
+				} else {
+					lastPersistedPercent = percent
+					lastProgressFlush = currentTime
+				}
 			}
 
 			if !progressStagnantTime.IsZero() && currentTime.Sub(progressStagnantTime) > maxStagnantDuration {
@@ -252,6 +260,29 @@ func (dm *DownloadManager) monitorDownload(
 			return
 		}
 	}
+}
+
+const progressFlushInterval = 30 * time.Second
+
+func normalizedProgressPercent(progress float64) int {
+	if progress < 0 {
+		return 0
+	}
+	const maxProgress = 100
+	if progress > maxProgress {
+		return maxProgress
+	}
+	return int(math.Round(progress))
+}
+
+func shouldPersistProgress(percent, lastPersisted int, lastFlush, now time.Time) bool {
+	if percent == 0 {
+		return false
+	}
+	if percent != lastPersisted {
+		return true
+	}
+	return !lastFlush.IsZero() && now.Sub(lastFlush) >= progressFlushInterval
 }
 
 func (dm *DownloadManager) GetDownloadStatus(movieID uint) (isActive bool, progress float64, err error) {

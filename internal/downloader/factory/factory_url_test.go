@@ -12,6 +12,8 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
+const testMagnetURI = "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test+Movie"
+
 func TestMain(m *testing.M) {
 	logutils.InitLogger("error")
 	os.Exit(m.Run())
@@ -30,7 +32,7 @@ func TestCreateDownloaderFromURL_Magnet(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{}
 	ctx := context.Background()
-	magnet := "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test+Movie"
+	magnet := testMagnetURI
 	dl, err := CreateDownloaderFromURL(ctx, magnet, dir, cfg)
 	if err != nil {
 		t.Fatalf("CreateDownloaderFromURL(magnet): %v", err)
@@ -102,5 +104,35 @@ func TestCreateDownloaderFromURL_MagnetCreatesFile(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("expected one .magnet file, got %d", len(entries))
+	}
+}
+
+func TestCreateDownloaderFromURL_QBittorrentConfiguredDoesNotFallbackByDefault(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{QBittorrentURL: "http://%zz"}
+	ctx := context.Background()
+	magnet := testMagnetURI
+
+	_, err := CreateDownloaderFromURL(ctx, magnet, dir, cfg)
+	if err == nil {
+		t.Fatal("CreateDownloaderFromURL succeeded, want qBittorrent configuration error")
+	}
+}
+
+func TestCreateDownloaderFromURL_QBittorrentFallbackToAria2WhenEnabled(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{
+		QBittorrentURL:         "http://%zz",
+		TorrentFallbackToAria2: true,
+	}
+	ctx := context.Background()
+	magnet := testMagnetURI
+
+	dl, err := CreateDownloaderFromURL(ctx, magnet, dir, cfg)
+	if err != nil {
+		t.Fatalf("CreateDownloaderFromURL: %v", err)
+	}
+	if _, ok := dl.(*aria2.Aria2Downloader); !ok {
+		t.Fatalf("downloader type = %T, want *aria2.Aria2Downloader", dl)
 	}
 }

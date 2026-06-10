@@ -133,6 +133,9 @@ Create a `.env` file based on `.env.example` and configure the required paramete
 **qBittorrent:** при использовании qbittorrent-nox задайте в `.env` `QBITTORRENT_URL` (например `http://localhost:8081`). Чтобы не конфликтовать с API (порт 8080), запускайте qBittorrent с `QBT_WEBUI_PORT=8081`. Установщик настраивает systemd и порт за вас.  
 **qBittorrent:** when using qbittorrent-nox set `QBITTORRENT_URL` in `.env` (e.g. `http://localhost:8081`). Run with `QBT_WEBUI_PORT=8081` to avoid conflict with the API (port 8080). The installer configures systemd and port for you.
 
+Если `QBITTORRENT_URL` задан, ошибки подключения/логина qBittorrent считаются ошибками конфигурации и не скрываются автоматическим переходом на aria2. Для намеренного fallback задайте `TORRENT_FALLBACK_TO_ARIA2=true`. После перезагрузки TMS повторно логинится в qBittorrent Web API и восстанавливает мониторинг незавершённых загрузок по сохранённому hash.  
+When `QBITTORRENT_URL` is set, qBittorrent connection/login failures are treated as configuration errors and are not hidden by automatic aria2 fallback. Set `TORRENT_FALLBACK_TO_ARIA2=true` only if you intentionally want that fallback. After reboot, TMS logs in to the qBittorrent Web API again and resumes monitoring incomplete downloads by the stored hash.
+
 Совместимость с ТВ: если видео не воспроизводится — `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости пройдут remux. Опции: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — отклонять несовместимое видео.  
 TV compatibility: if video won't play on your TV, set `VIDEO_COMPATIBILITY_MODE=true`. Files may be remuxed. Options: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — reject incompatible video.
 

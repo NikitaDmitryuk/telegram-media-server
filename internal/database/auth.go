@@ -36,9 +36,10 @@ func (s *SQLiteDatabase) Login(
 
 func (s *SQLiteDatabase) handleTemporaryPassword(ctx context.Context, password string, chatID int64, userName string) (bool, error) {
 	var passwords []TemporaryPassword
-	result := s.db.WithContext(ctx).Where("password = ?", password).Find(&passwords)
-	if result.Error != nil {
-		return false, result.Error
+	if err := s.withRetry(ctx, "handleTemporaryPassword.Find", func() error {
+		return s.db.WithContext(ctx).Where("password = ?", password).Find(&passwords).Error
+	}); err != nil {
+		return false, err
 	}
 
 	if !isTemporaryPasswordValid(passwords) {
@@ -58,38 +59,45 @@ func (s *SQLiteDatabase) createOrUpdateUser(
 	expiresAt *time.Time,
 ) (bool, error) {
 	var user User
-	result := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user)
-
-	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return false, result.Error
+	var resultErr error
+	if err := s.withRetry(ctx, "createOrUpdateUser.First", func() error {
+		resultErr = s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error
+		return resultErr
+	}); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
 	}
 
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+	if errors.Is(resultErr, gorm.ErrRecordNotFound) {
 		user = User{
 			Name:      userName,
 			ChatID:    chatID,
 			Role:      role,
 			ExpiresAt: expiresAt,
 		}
-		result = s.db.WithContext(ctx).Create(&user)
-	} else {
-		user.Name = userName
-		user.Role = role
-		user.ExpiresAt = expiresAt
-		result = s.db.WithContext(ctx).Save(&user)
+		err := s.withRetry(ctx, "createOrUpdateUser.Create", func() error {
+			return s.db.WithContext(ctx).Create(&user).Error
+		})
+		return err == nil, err
 	}
-
-	return result.Error == nil, result.Error
+	user.Name = userName
+	user.Role = role
+	user.ExpiresAt = expiresAt
+	err := s.withRetry(ctx, "createOrUpdateUser.Save", func() error {
+		return s.db.WithContext(ctx).Save(&user).Error
+	})
+	return err == nil, err
 }
 
 func (s *SQLiteDatabase) GetUserRole(ctx context.Context, chatID int64) (UserRole, error) {
 	var user User
-	result := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+	err := s.withRetry(ctx, "GetUserRole", func() error {
+		return s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return guestRole, nil
 		}
-		return guestRole, result.Error
+		return guestRole, err
 	}
 
 	if user.IsExpired() {
@@ -101,12 +109,14 @@ func (s *SQLiteDatabase) GetUserRole(ctx context.Context, chatID int64) (UserRol
 
 func (s *SQLiteDatabase) IsUserAccessAllowed(ctx context.Context, chatID int64) (isAllowed bool, userRole UserRole, err error) {
 	var user User
-	result := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+	err = s.withRetry(ctx, "IsUserAccessAllowed", func() error {
+		return s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return false, guestRole, nil
 		}
-		return false, guestRole, result.Error
+		return false, guestRole, err
 	}
 
 	if user.IsExpired() {

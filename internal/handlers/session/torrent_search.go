@@ -349,7 +349,14 @@ func HandleTorrentSearchCallback(
 				_ = a.Bot.DeleteMessage(chatID, msgID)
 			}
 		}
-		downloaderInstance := tmsfactory.NewTorrentDownloader(fileName, a.Config.MoviePath, a.Config)
+		downloaderInstance, err := tmsfactory.NewTorrentDownloader(fileName, a.Config.MoviePath, a.Config)
+		if err != nil {
+			a.Bot.SendMessage(chatID, err.Error(), ui.GetEmptyKeyboard())
+			if update.CallbackQuery != nil {
+				a.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+			}
+			return true
+		}
 		DeleteSearchSession(chatID)
 		downloads.HandleDownload(a, chatID, downloaderInstance)
 		ui.SendMainMenuNoText(a.Bot, chatID)

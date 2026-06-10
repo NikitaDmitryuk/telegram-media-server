@@ -27,6 +27,16 @@ type Client struct {
 // NewClient builds a client. baseURL is the Web UI root, e.g. "http://localhost:8080".
 func NewClient(baseURL, username, password string) (*Client, error) {
 	baseURL = strings.TrimSuffix(baseURL, "/")
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("qBittorrent: invalid base URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("qBittorrent: invalid base URL scheme %q", parsed.Scheme)
+	}
+	if parsed.Host == "" {
+		return nil, fmt.Errorf("qBittorrent: base URL must include host")
+	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
@@ -72,6 +82,39 @@ func (c *Client) Login(ctx context.Context) error {
 		return fmt.Errorf("qBittorrent: login failed (invalid credentials)")
 	}
 	return nil
+}
+
+// AppVersion verifies that the authenticated Web API session can call qBittorrent.
+func (c *Client) AppVersion(ctx context.Context) (string, error) {
+	u := c.baseURL + apiPrefix + "/app/version"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Referer", c.baseURL+"/")
+	// #nosec G704 -- baseURL is from config
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("qBittorrent: app/version failed status=%d body=%s", resp.StatusCode, string(body))
+	}
+	return strings.TrimSpace(string(body)), nil
+}
+
+// CheckLogin logs in and confirms the session by reading /api/v2/app/version.
+func (c *Client) CheckLogin(ctx context.Context) (string, error) {
+	if err := c.Login(ctx); err != nil {
+		return "", err
+	}
+	version, err := c.AppVersion(ctx)
+	if err != nil {
+		return "", err
+	}
+	return version, nil
 }
 
 // AddTorrentOptions controls optional parameters for torrent add API.

@@ -242,6 +242,50 @@ func TestQueuedDownloadReceivesProgressAndCompletion(t *testing.T) {
 	_ = dm.StopDownload(movie2ID)
 }
 
+func TestResumeDownloadQueuesWhenSlotsAreBusy(t *testing.T) {
+	cfg := testutils.TestConfig("/tmp")
+	cfg.DownloadSettings.MaxConcurrentDownloads = 1
+	cfg.VideoSettings.CompatibilityMode = false
+	db := testutils.TestDatabase(t)
+	dm := NewDownloadManager(cfg, db)
+
+	blocking := &testutils.MockDownloader{
+		ShouldBlock: true,
+		Title:       "Blocking Movie",
+		Files:       []string{"/tmp/resume_blocking.mp4"},
+	}
+	blockingID, _, _, err := dm.StartDownload(blocking, notifier.Noop)
+	if err != nil {
+		t.Fatalf("StartDownload blocking: %v", err)
+	}
+
+	resumed := &testutils.MockDownloader{
+		Title: "Resumed Movie",
+		Files: []string{"/tmp/resume_queued.mp4"},
+	}
+	resumeErrChan, err := dm.ResumeDownload(777, resumed, "Resumed Movie", 1, notifier.Noop)
+	if err != nil {
+		t.Fatalf("ResumeDownload returned error: %v", err)
+	}
+	if resumeErrChan == nil {
+		t.Fatal("ResumeDownload returned nil channel")
+	}
+	if dm.GetQueueCount() != 1 {
+		t.Fatalf("queue count = %d, want 1", dm.GetQueueCount())
+	}
+
+	_ = dm.StopDownload(blockingID)
+
+	select {
+	case err := <-resumeErrChan:
+		if err != nil {
+			t.Fatalf("queued resume completed with error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("queued resume did not complete")
+	}
+}
+
 // TestQueuedDownloadDoesNotCompleteImmediately verifies that adding a download
 // to the queue does NOT immediately signal completion (the bug we fixed).
 func TestQueuedDownloadDoesNotCompleteImmediately(t *testing.T) {

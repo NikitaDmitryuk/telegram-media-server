@@ -579,6 +579,16 @@ set_qbittorrent_save_path() {
   else
     (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a Downloads\\\\TempPath=$temp_path" "$config_file") || echo "Downloads\\TempPath=$temp_path" >> "$config_file"
   fi
+  if grep -q '^WebUI\\Address=' "$config_file" 2>/dev/null; then
+    sed -i 's|^WebUI\\Address=.*|WebUI\\Address=127.0.0.1|' "$config_file"
+  else
+    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\Address=127.0.0.1" "$config_file") || echo "WebUI\\Address=127.0.0.1" >> "$config_file"
+  fi
+  if grep -q '^WebUI\\Port=' "$config_file" 2>/dev/null; then
+    sed -i "s|^WebUI\\\\Port=.*|WebUI\\\\Port=$QBIT_WEBUI_PORT|" "$config_file"
+  else
+    (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\Port=$QBIT_WEBUI_PORT" "$config_file") || echo "WebUI\\Port=$QBIT_WEBUI_PORT" >> "$config_file"
+  fi
   # Set Web UI credentials only if not already present (do not overwrite user-changed password)
   if ! grep -q '^WebUI\\Username=' "$config_file" 2>/dev/null; then
     (grep -q '^\[Preferences\]' "$config_file" && sed -i "/^\[Preferences\]/a WebUI\\\\Username=admin" "$config_file") || echo "WebUI\\Username=admin" >> "$config_file"
@@ -594,7 +604,7 @@ set_qbittorrent_save_path() {
   fi
   chown "$run_user" "$config_file" 2>/dev/null || true
   systemctl restart "$QBIT_SERVICE_NAME" 2>/dev/null || true
-  ok "Save path set; Web UI credentials left unchanged if already set. If you change the Web UI password later, update QBITTORRENT_USERNAME and QBITTORRENT_PASSWORD in /etc/telegram-media-server/.env"
+  ok "qBittorrent Web UI configured on 127.0.0.1:$QBIT_WEBUI_PORT; credentials left unchanged if already set. If you change the Web UI password later, update QBITTORRENT_USERNAME and QBITTORRENT_PASSWORD in /etc/telegram-media-server/.env"
 }
 
 # --- install and configure minidlna for DLNA (media_dir = MOVIE_PATH, runs as user minidlna) ---

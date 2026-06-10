@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -47,9 +46,12 @@ func (dm *DownloadManager) ResumeDownload(
 	case dm.semaphore <- struct{}{}:
 		return dm.resumeDownloadImmediately(movieID, dl, title, totalEpisodes, queueNotifier)
 	default:
-		return nil, utils.WrapError(fmt.Errorf("no slot for resumed download"), "resume failed", map[string]any{
+		_, _, outerErrChan := dm.addToQueue(movieID, dl, title, queueNotifier)
+		logutils.Log.WithFields(map[string]any{
 			"movie_id": movieID,
-		})
+			"title":    title,
+		}).Info("Queued resumed qBittorrent download because all download slots are busy")
+		return outerErrChan, nil
 	}
 }
 

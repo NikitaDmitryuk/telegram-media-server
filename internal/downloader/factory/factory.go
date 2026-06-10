@@ -25,15 +25,17 @@ const (
 	ownerOnlyFileMode         = 0o600
 )
 
-func NewTorrentDownloader(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
+func NewTorrentDownloader(torrentFileName, moviePath string, cfg *config.Config) (downloader.Downloader, error) {
 	if cfg.QBittorrentURL != "" {
 		dl, err := qbittorrent.NewQBittorrentDownloader(torrentFileName, moviePath, cfg)
 		if err == nil {
-			return dl
+			return dl, nil
 		}
-		// Fallback to aria2 on misconfiguration (e.g. invalid QBittorrentURL)
+		if !cfg.TorrentFallbackToAria2 {
+			return nil, fmt.Errorf("qBittorrent is configured but unavailable: %w", err)
+		}
 	}
-	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg)
+	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg), nil
 }
 
 func NewVideoDownloader(videoURL string, cfg *config.Config) downloader.Downloader {
@@ -57,7 +59,7 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 		if err := os.WriteFile(path, []byte(rawURL), ownerOnlyFileMode); err != nil {
 			return nil, fmt.Errorf("write magnet file: %w", err)
 		}
-		return newTorrentDownloaderOrAria2(name, moviePath, cfg), nil
+		return newTorrentDownloaderOrAria2(name, moviePath, cfg)
 	}
 
 	// HTTP(S) URL ending with .torrent or with torrent content: download to temp file
@@ -68,7 +70,7 @@ func CreateDownloaderFromURL(ctx context.Context, rawURL, moviePath string, cfg 
 				return nil, err
 			}
 			base := filepath.Base(localPath)
-			return newTorrentDownloaderOrAria2(base, moviePath, cfg), nil
+			return newTorrentDownloaderOrAria2(base, moviePath, cfg)
 		}
 		// Prowlarr download proxy URL: GET and resolve to magnet or .torrent
 		if dl, err := resolveProwlarrDownload(ctx, rawURL, moviePath, cfg); err == nil {
@@ -215,17 +217,20 @@ func writeMagnetAndReturnDownloader(moviePath, magnetURI string, cfg *config.Con
 	if err := os.WriteFile(path, []byte(magnetURI), ownerOnlyFileMode); err != nil {
 		return nil, err
 	}
-	return newTorrentDownloaderOrAria2(name, moviePath, cfg), nil
+	return newTorrentDownloaderOrAria2(name, moviePath, cfg)
 }
 
-func newTorrentDownloaderOrAria2(torrentFileName, moviePath string, cfg *config.Config) downloader.Downloader {
+func newTorrentDownloaderOrAria2(torrentFileName, moviePath string, cfg *config.Config) (downloader.Downloader, error) {
 	if cfg.QBittorrentURL != "" {
 		dl, err := qbittorrent.NewQBittorrentDownloader(torrentFileName, moviePath, cfg)
 		if err == nil {
-			return dl
+			return dl, nil
+		}
+		if !cfg.TorrentFallbackToAria2 {
+			return nil, fmt.Errorf("qBittorrent is configured but unavailable: %w", err)
 		}
 	}
-	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg)
+	return aria2.NewAria2Downloader(torrentFileName, moviePath, cfg), nil
 }
 
 func isTorrentResponse(data []byte, contentType string) bool {
@@ -245,7 +250,7 @@ func writeTorrentAndReturnDownloader(moviePath string, data []byte, cfg *config.
 	if err := os.WriteFile(fpath, data, ownerOnlyFileMode); err != nil {
 		return nil, err
 	}
-	return newTorrentDownloaderOrAria2(fname, moviePath, cfg), nil
+	return newTorrentDownloaderOrAria2(fname, moviePath, cfg)
 }
 
 func downloadTorrentFile(ctx context.Context, fileURL, moviePath string) (string, error) {

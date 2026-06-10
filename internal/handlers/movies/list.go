@@ -35,7 +35,7 @@ func ListMoviesHandler(a *app.App, update *tgbotapi.Update) {
 	compatMode := a.Config.VideoSettings.CompatibilityMode
 	var messages []string
 	for i := range movies {
-		messages = append(messages, buildMovieListLine(ctx, a, &movies[i], compatMode))
+		messages = append(messages, buildMovieListLine(&movies[i], compatMode))
 	}
 
 	availableSpaceGB, err := filemanager.GetAvailableSpaceGB(a.Config.MoviePath)
@@ -54,8 +54,7 @@ func ListMoviesHandler(a *app.App, update *tgbotapi.Update) {
 	a.Bot.SendMessage(chatID, message, ui.GetMainMenuKeyboard())
 }
 
-func buildMovieListLine(ctx context.Context, a *app.App, movie *database.Movie, compatMode bool) string {
-	refreshMovieFileSizeFromDiskIfComplete(ctx, a, movie)
+func buildMovieListLine(movie *database.Movie, compatMode bool) string {
 	formattedSize := formatListMovieSizeGB(movie)
 	episodes := formatListEpisodesPrefix(movie)
 	progressStr, sticker := formatListProgressAndSticker(movie, compatMode)
@@ -69,19 +68,9 @@ func buildMovieListLine(ctx context.Context, a *app.App, movie *database.Movie, 
 	})
 }
 
-func refreshMovieFileSizeFromDiskIfComplete(ctx context.Context, a *app.App, movie *database.Movie) {
-	if movie.FileSize != 0 || movie.DownloadedPercentage < 100 {
-		return
-	}
-	sum, err := a.DB.RefreshMovieFileSizeFromDisk(ctx, movie.ID, a.Config.MoviePath)
-	if err == nil && sum > 0 {
-		movie.FileSize = sum
-	}
-}
-
 func formatListMovieSizeGB(movie *database.Movie) string {
 	if movie.FileSize == 0 {
-		return "—" // unknown size (e.g. magnet before metadata)
+		return "—" // unknown size (for example, magnet before qBittorrent metadata)
 	}
 	sizeGB := float64(movie.FileSize) / (1024 * 1024 * 1024) // #nosec G115
 	unit := lang.Translate("general.unit_gb", nil)
@@ -97,14 +86,22 @@ func formatListEpisodesPrefix(movie *database.Movie) string {
 
 func formatListProgressAndSticker(movie *database.Movie, compatMode bool) (progressStr, sticker string) {
 	if !compatMode {
-		return fmt.Sprintf("%d%%", movie.DownloadedPercentage), ""
+		return fmt.Sprintf("DL %d%%", movie.DownloadedPercentage), ""
 	}
 	convPct := movie.ConversionPercentage
 	if movie.DownloadedPercentage >= 100 && (movie.ConversionStatus == "done" || movie.ConversionStatus == "skipped") &&
 		convPct < 100 {
 		convPct = 100
 	}
-	progressStr = fmt.Sprintf("%d/%d", movie.DownloadedPercentage, convPct)
+	convStatus := movie.ConversionStatus
+	if convStatus == "" {
+		convStatus = "waiting"
+	}
+	tvStatus := movie.TvCompatibility
+	if tvStatus == "" {
+		tvStatus = "unknown"
+	}
+	progressStr = fmt.Sprintf("DL %d%% | CV %s %d%% | TV %s", movie.DownloadedPercentage, convStatus, convPct, tvStatus)
 	switch movie.TvCompatibility {
 	case "green":
 		sticker = "🟢 "
@@ -112,6 +109,8 @@ func formatListProgressAndSticker(movie *database.Movie, compatMode bool) (progr
 		sticker = "🟡 "
 	case "red":
 		sticker = "🔴 "
+	default:
+		sticker = "⚪ "
 	}
 	return progressStr, sticker
 }

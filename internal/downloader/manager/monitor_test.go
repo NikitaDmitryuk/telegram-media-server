@@ -452,6 +452,45 @@ func TestProgressOver100_IsClamped(t *testing.T) {
 	}
 }
 
+func TestNormalizedProgressPercent(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		progress float64
+		want     int
+	}{
+		{name: "negative", progress: -1, want: 0},
+		{name: "fraction_rounds", progress: 42.6, want: 43},
+		{name: "near_complete", progress: 99.999, want: 100},
+		{name: "over_max", progress: 120, want: 100},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := normalizedProgressPercent(tc.progress); got != tc.want {
+				t.Fatalf("normalizedProgressPercent(%v) = %d, want %d", tc.progress, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShouldPersistProgress(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	if shouldPersistProgress(0, -1, time.Time{}, now) {
+		t.Fatal("should not persist zero progress")
+	}
+	if !shouldPersistProgress(10, -1, time.Time{}, now) {
+		t.Fatal("should persist first non-zero progress")
+	}
+	if shouldPersistProgress(10, 10, now, now.Add(time.Second)) {
+		t.Fatal("should not persist unchanged progress before flush interval")
+	}
+	if !shouldPersistProgress(10, 10, now, now.Add(progressFlushInterval)) {
+		t.Fatal("should persist unchanged progress after flush interval")
+	}
+}
+
 // TestMultipleEpisodes_SequentialCompletion simulates a multi-file torrent download
 // where several episodes complete sequentially, ensuring the monitor handles them
 // correctly and completes successfully.

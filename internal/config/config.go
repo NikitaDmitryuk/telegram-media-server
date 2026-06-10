@@ -27,30 +27,31 @@ const (
 
 func NewConfig() (*Config, error) {
 	config := &Config{
-		BotToken:            getEnv("BOT_TOKEN", ""),
-		MoviePath:           getEnv("MOVIE_PATH", ""),
-		AdminPassword:       getEnv("ADMIN_PASSWORD", ""),
-		RegularPassword:     getEnv("REGULAR_PASSWORD", ""),
-		Lang:                getEnv("LANG", "en"),
-		TelegramProxy:       getEnv("TELEGRAM_PROXY", ""),
-		Proxy:               getEnv("CONTENT_PROXY", getEnv("PROXY", "")),
-		ProxyDomains:        getEnv("CONTENT_PROXY_DOMAINS", getEnv("PROXY_DOMAINS", "")),
-		LogLevel:            getEnv("LOG_LEVEL", "info"),
-		LangPath:            getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
-		ProwlarrURL:         getEnv("PROWLARR_URL", ""),
-		ProwlarrAPIKey:      getEnv("PROWLARR_API_KEY", ""),
-		TMSAPIEnabled:       getEnvBool("TMS_API_ENABLED", true),
-		TMSAPIListen:        getEnv("TMS_API_LISTEN", DefaultTMSAPIListen),
-		TMSAPIKey:           getEnv("TMS_API_KEY", ""),
-		TMSWebhookURL:       getEnv("TMS_WEBHOOK_URL", ""),
-		TMSWebhookToken:     getEnv("TMS_WEBHOOK_TOKEN", ""),
-		TMSWebhookFormat:    getEnv("TMS_WEBHOOK_FORMAT", ""),
-		YtdlpPath:           getEnv("YTDLP_PATH", "/usr/bin/yt-dlp"),
-		YtdlpUpdateOnStart:  getEnvBool("YTDLP_UPDATE_ON_START", true),
-		YtdlpUpdateInterval: getEnvDuration("YTDLP_UPDATE_INTERVAL", DefaultYtdlpUpdateInterval),
-		QBittorrentURL:      getEnv("QBITTORRENT_URL", ""),
-		QBittorrentUsername: getEnv("QBITTORRENT_USERNAME", "admin"),
-		QBittorrentPassword: getEnv("QBITTORRENT_PASSWORD", "adminadmin"),
+		BotToken:               getEnv("BOT_TOKEN", ""),
+		MoviePath:              getEnv("MOVIE_PATH", ""),
+		AdminPassword:          getEnv("ADMIN_PASSWORD", ""),
+		RegularPassword:        getEnv("REGULAR_PASSWORD", ""),
+		Lang:                   getEnv("LANG", "en"),
+		TelegramProxy:          getEnv("TELEGRAM_PROXY", ""),
+		Proxy:                  getEnv("CONTENT_PROXY", getEnv("PROXY", "")),
+		ProxyDomains:           getEnv("CONTENT_PROXY_DOMAINS", getEnv("PROXY_DOMAINS", "")),
+		LogLevel:               getEnv("LOG_LEVEL", "info"),
+		LangPath:               getEnv("LANG_PATH", "/usr/local/share/telegram-media-server/locales"),
+		ProwlarrURL:            getEnv("PROWLARR_URL", ""),
+		ProwlarrAPIKey:         getEnv("PROWLARR_API_KEY", ""),
+		TMSAPIEnabled:          getEnvBool("TMS_API_ENABLED", true),
+		TMSAPIListen:           getEnv("TMS_API_LISTEN", DefaultTMSAPIListen),
+		TMSAPIKey:              getEnv("TMS_API_KEY", ""),
+		TMSWebhookURL:          getEnv("TMS_WEBHOOK_URL", ""),
+		TMSWebhookToken:        getEnv("TMS_WEBHOOK_TOKEN", ""),
+		TMSWebhookFormat:       getEnv("TMS_WEBHOOK_FORMAT", ""),
+		YtdlpPath:              getEnv("YTDLP_PATH", "/usr/bin/yt-dlp"),
+		YtdlpUpdateOnStart:     getEnvBool("YTDLP_UPDATE_ON_START", true),
+		YtdlpUpdateInterval:    getEnvDuration("YTDLP_UPDATE_INTERVAL", DefaultYtdlpUpdateInterval),
+		QBittorrentURL:         getEnv("QBITTORRENT_URL", ""),
+		QBittorrentUsername:    getEnv("QBITTORRENT_USERNAME", "admin"),
+		QBittorrentPassword:    getEnv("QBITTORRENT_PASSWORD", "adminadmin"),
+		TorrentFallbackToAria2: getEnvBool("TORRENT_FALLBACK_TO_ARIA2", false),
 
 		DownloadSettings: DownloadConfig{
 			MaxConcurrentDownloads: getEnvInt("MAX_CONCURRENT_DOWNLOADS", DefaultMaxConcurrentDownloads),
@@ -158,13 +159,14 @@ type Config struct {
 	TMSWebhookURL   string // optional; POST on download completion/failure
 	TMSWebhookToken string // optional; sent as Authorization: Bearer <token> when calling TMS_WEBHOOK_URL (e.g. for OpenClaw hooks)
 	// TMSWebhookFormat: json|tms (default), openclaw_wake, openclaw_agent. Empty = auto from URL (/hooks/wake, /hooks/agent).
-	TMSWebhookFormat    string
-	YtdlpPath           string // Path to yt-dlp binary; use standalone from GitHub for auto-update via -U (pacman/pip builds refuse -U)
-	YtdlpUpdateOnStart  bool
-	YtdlpUpdateInterval time.Duration
-	QBittorrentURL      string // When set, torrents are handled by qBittorrent Web API instead of aria2 (e.g. http://localhost:8080)
-	QBittorrentUsername string
-	QBittorrentPassword string
+	TMSWebhookFormat       string
+	YtdlpPath              string // Path to yt-dlp binary; use standalone from GitHub for auto-update via -U (pacman/pip builds refuse -U)
+	YtdlpUpdateOnStart     bool
+	YtdlpUpdateInterval    time.Duration
+	QBittorrentURL         string // When set, torrents are handled by qBittorrent Web API instead of aria2 (e.g. http://localhost:8080)
+	QBittorrentUsername    string
+	QBittorrentPassword    string
+	TorrentFallbackToAria2 bool // If true, qBittorrent setup/start errors can fall back to aria2.
 
 	DownloadSettings DownloadConfig
 	SecuritySettings SecurityConfig

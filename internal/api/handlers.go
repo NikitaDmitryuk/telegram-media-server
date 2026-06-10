@@ -63,10 +63,22 @@ func ListDownloads(w http.ResponseWriter, r *http.Request, a *app.App) {
 			Status:             status,
 			Progress:           movie.DownloadedPercentage,
 			ConversionProgress: movie.ConversionPercentage,
+			ConversionStatus:   movie.ConversionStatus,
+			TvCompatibility:    movie.TvCompatibility,
+			SizeBytes:          movie.FileSize,
+			SizeGB:             formatDownloadSizeGB(movie.FileSize),
 		})
 	}
 
 	writeJSON(w, http.StatusOK, items)
+}
+
+func formatDownloadSizeGB(size int64) string {
+	if size <= 0 {
+		return ""
+	}
+	const bytesPerGiB = 1024 * 1024 * 1024
+	return strconv.FormatFloat(float64(size)/bytesPerGiB, 'f', 2, 64)
 }
 
 const downloadPercentComplete = 100
