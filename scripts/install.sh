@@ -266,6 +266,8 @@ set_arch_packages() {
   PKG_FFMPEG=ffmpeg
   PKG_YTDLP=yt-dlp
   PKG_MINIDLNA=minidlna
+  PKG_BASE_DEVEL=base-devel
+  PKG_GIT=git
 }
 
 # --- Ubuntu/Debian packages (apt) ---
@@ -911,14 +913,22 @@ upsert_qbittorrent_pref() {
   local key="${2:?}"
   local value="${3:?}"
   if grep -F -q "${key}=" "$config_file" 2>/dev/null; then
-    awk -v key="$key" -v value="$value" 'index($0, key "=") == 1 { $0 = key "=" value } { print }' "$config_file" > "${config_file}.tmp"
+    KEY="$key" VALUE="$value" awk 'BEGIN { key = ENVIRON["KEY"]; value = ENVIRON["VALUE"] } index($0, key "=") == 1 { $0 = key "=" value } { print }' "$config_file" > "${config_file}.tmp"
     mv "${config_file}.tmp" "$config_file"
   elif grep -q '^\[Preferences\]' "$config_file" 2>/dev/null; then
-    awk -v key="$key" -v value="$value" '{ print } /^\[Preferences\]$/ && !done { print key "=" value; done = 1 }' "$config_file" > "${config_file}.tmp"
+    KEY="$key" VALUE="$value" awk 'BEGIN { key = ENVIRON["KEY"]; value = ENVIRON["VALUE"] } { print } /^\[Preferences\]$/ && !done { print key "=" value; done = 1 }' "$config_file" > "${config_file}.tmp"
     mv "${config_file}.tmp" "$config_file"
   else
     printf '[Preferences]\n%s=%s\n' "$key" "$value" >> "$config_file"
   fi
+}
+
+cleanup_qbittorrent_pref_typos() {
+  local config_file="${1:?}"
+  awk '
+    !/^(DownloadsSavePath|DownloadsTempPath|WebUIAddress|WebUIPort|WebUIUsername|WebUIPassword_PBKDF2|WebUILocalHostAuth)=/
+  ' "$config_file" > "${config_file}.tmp"
+  mv "${config_file}.tmp" "$config_file"
 }
 
 # --- set qBittorrent save path and Web UI credentials so Web UI and TMS work after install ---
@@ -944,6 +954,7 @@ set_qbittorrent_save_path() {
     warn "qBittorrent config not found at $config_file. Set save path and login manually in Web UI."
     return 0
   fi
+  cleanup_qbittorrent_pref_typos "$config_file"
   local save_path="${movie_path%/}/"
   local temp_path="${movie_path%/}/incomplete/"
   upsert_qbittorrent_pref "$config_file" 'Downloads\SavePath' "$save_path"
@@ -989,9 +1000,14 @@ validate_qbittorrent_api() {
     warn "qBittorrent login forbidden for $qbit_url as $qbit_user (403; IP may be banned or credentials are rejected)."
     return 1
   fi
-  if [[ "$status" != "200" || "$(printf '%s' "$login_body" | tr -d '\r\n')" == "Fails." ]]; then
+  if [[ "$status" != "200" && "$status" != "204" ]]; then
     rm -f "$cookie_file"
     warn "qBittorrent login failed for $qbit_url as $qbit_user (status=$status, body=$login_body)."
+    return 1
+  fi
+  if [[ "$(printf '%s' "$login_body" | tr -d '\r\n')" == "Fails." ]]; then
+    rm -f "$cookie_file"
+    warn "qBittorrent login failed for $qbit_url as $qbit_user (invalid credentials)."
     return 1
   fi
   version_body=$(curl -sS --connect-timeout 3 --max-time 8 -b "$cookie_file" \
@@ -1152,6 +1168,39 @@ wait_prowlarr_and_get_key() {
 
 # --- install Prowlarr from AUR (Arch), start service, extract API key ---
 # Returns API key via echo (empty string on error).
+ensure_arch_aur_helper() {
+  local run_user="${1:?}"
+  local helper=""
+  for h in yay paru; do
+    if sudo -u "$run_user" command -v "$h" &>/dev/null; then
+      echo "$h"
+      return 0
+    fi
+  done
+
+  info "AUR helper not found. Installing yay automatically for Prowlarr..." >&2
+  $PKG_INSTALL --needed "$PKG_BASE_DEVEL" "$PKG_GIT" >&2
+  local build_dir="/tmp/tms-yay-build"
+  rm -rf "$build_dir"
+  sudo -u "$run_user" git clone https://aur.archlinux.org/yay-bin.git "$build_dir" >&2
+  sudo -u "$run_user" bash -lc "cd '$build_dir' && makepkg --noconfirm" >&2
+  local yay_pkg
+  yay_pkg=$(find "$build_dir" -maxdepth 1 -name 'yay-bin-*.pkg.tar.*' | head -1)
+  if [[ -z "$yay_pkg" ]]; then
+    warn "yay package was not produced by makepkg." >&2
+    rm -rf "$build_dir"
+    return 1
+  fi
+  pacman -U --noconfirm "$yay_pkg" >&2
+  rm -rf "$build_dir"
+  if sudo -u "$run_user" command -v yay &>/dev/null; then
+    echo "yay"
+    return 0
+  fi
+  warn "Failed to install yay automatically." >&2
+  return 1
+}
+
 install_prowlarr_arch() {
   local run_user
   run_user=$(logname 2>/dev/null || echo "${SUDO_USER:-}")
@@ -1161,14 +1210,9 @@ install_prowlarr_arch() {
   fi
 
   local aur_helper=""
-  for h in yay paru; do
-    if sudo -u "$run_user" command -v "$h" &>/dev/null; then
-      aur_helper="$h"
-      break
-    fi
-  done
+  aur_helper=$(ensure_arch_aur_helper "$run_user") || aur_helper=""
   if [[ -z "$aur_helper" ]]; then
-    warn "AUR helper (yay or paru) not found. Install one and run the installer again." >&2
+    warn "AUR helper (yay or paru) not available. Install prowlarr-bin manually or rerun after installing yay." >&2
     return 1
   fi
 
