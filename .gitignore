@@ -25,6 +25,9 @@ go.work.sum
 
 # env file
 .env
+ops/ansible/inventory.ini
+ops/ansible/group_vars/telegram_server.yml
+ops/ansible/group_vars/telegram_server.vault.yml
 
 artifacts/
 *.pkg.tar.zst

@@ -24,10 +24,10 @@
 
 An [OpenClaw](https://openclaw.ai/) skill for managing TMS downloads via the REST API (add by URL/magnet/torrent, list, delete, search) lives in **[openclaw-skill-tms/](openclaw-skill-tms/)**. Install from [ClawHub](https://clawhub.ai/): `clawhub install tms`, or copy the `openclaw-skill-tms` folder into your agent's `skills` directory. See [openclaw-skill-tms/README.md](openclaw-skill-tms/README.md) for setup (`TMS_API_URL`, `TMS_API_KEY`) and usage.
 
-**Integration requirements:** the skill uses the TMS REST API (enabled by default; see [`.env.example`](.env.example) — `TMS_API_ENABLED`, `TMS_API_KEY`). To have OpenClaw notified when a download completes, fails, or is stopped, configure the webhook in TMS:
+**Integration requirements:** the skill uses the TMS REST API. With Ansible installs the API key is generated in `/etc/telegram-media-server/.env`. If `OPENCLAW_ENABLED=true` is set in the local Ansible input `.env`, Ansible installs OpenClaw on the server, copies the local `openclaw-skill-tms` skill into OpenClaw's managed skills directory, configures model defaults, and enables hooks for TMS completion events.
 
-- **TMS side** (in `.env`): set `TMS_WEBHOOK_URL` to the OpenClaw gateway hooks endpoint (e.g. `http://127.0.0.1:18789/hooks/tms`). Set `TMS_WEBHOOK_TOKEN` to the same value as `hooks.token` in your OpenClaw config — TMS sends it as `Authorization: Bearer <token>`. Generate a token with `openssl rand -hex 32` if needed.
-- **OpenClaw side:** enable gateway hooks and add a hook mapping for `tms` pointing to the path you used in `TMS_WEBHOOK_URL` (e.g. `/hooks/tms`), and set `hooks.token` to the same value as `TMS_WEBHOOK_TOKEN`.
+- **TMS side:** Ansible uses `http://127.0.0.1:18789/hooks/tms` by default and generates/preserves `TMS_WEBHOOK_TOKEN` in the server runtime env.
+- **OpenClaw side:** Ansible writes `hooks.enabled`, `hooks.token`, and a `/hooks/tms` mapping into `/var/lib/openclaw/.openclaw/openclaw.json`.
 
 TMS will POST JSON `{ id, title, status, error?, event_id }` to the webhook on completion/failure/stopped. Full webhook details: [openclaw-skill-tms/README.md](openclaw-skill-tms/README.md#optional--webhook).
 
@@ -50,59 +50,125 @@ Documentation routes without API key are available only from localhost.
 
 ## Зависимости / Dependencies
 
-Для установки с помощью `sudo make install` необходимы следующие зависимости:  
-To build and install Telegram Media Server using `sudo make install`, the following dependencies are required:
+Для удаленной установки через Ansible нужны локальные инструменты и Arch Linux сервер с SSH-доступом.  
+Remote installation uses Ansible from your workstation and targets an Arch Linux server over SSH.
 
-- **Go**: Необходим для сборки бота. Required for building the bot.  
-- **yt-dlp**: Необходим для загрузки потокового видео. Required for downloading streaming videos.  
-- **aria2**: Необходим для загрузки торрент-файлов (если не используется qBittorrent). Required for downloading torrents (unless qBittorrent is used).
-- **qbittorrent-nox** (опционально / optional): альтернатива aria2 для торрентов; при заданном `QBITTORRENT_URL` бот использует Web API. Установщик может настроить systemd и порт 8081. Alternative to aria2 for torrents; when `QBITTORRENT_URL` is set the bot uses Web API. The installer can set up systemd and port 8081.
-- **minidlna** (опционально / optional): Необходим для раздачи через DLNA. Required for DLNA distribution.
-- **prowlarr** (опционально / optional): Необходим для поиска торрентов. Required for searching torrents.
+- **Go**: локальная сборка бинаря для сервера. Local build of the server binary.
+- **Ansible**: настройка сервера, systemd, qBittorrent, Prowlarr и деплой. Configures the server and deploys TMS.
+- **SSH + sudo** на целевом сервере. SSH + sudo on the target host.
+- **yay** или **paru** на целевом Arch Linux сервере: нужен для установки Prowlarr из AUR.
 
-**Примечание**: Если вы не планируете использовать DLNA, `minidlna` не требуется.  
-**Note**: If you don't plan to use DLNA, `minidlna` is not required.  
+Ansible устанавливает runtime-зависимости на сервер: `ffmpeg`, `yt-dlp`, `aria2`, `qbittorrent-nox`, Prowlarr из AUR и, если включено, `minidlna`.  
+Ansible installs runtime dependencies on the server: `ffmpeg`, `yt-dlp`, `aria2`, `qbittorrent-nox`, Prowlarr from AUR, and optionally `minidlna`.
 
-Установите зависимости с помощью пакетного менеджера вашей системы перед началом.  
-Install these dependencies using your system's package manager before proceeding.
+На macOS локальные зависимости обычно ставятся так:
+
+```bash
+brew install go ansible
+```
 
 ---
 
 ## Установка / Installation
 
-
-Поддерживаются **Arch Linux** и **Ubuntu/Debian**. Установщик запросит обязательные параметры (токен бота, каталог загрузок, пароль админа). По выбору в меню: **qBittorrent** (пакетный менеджер, systemd, порт 8081), **Prowlarr** (на Arch — AUR через yay/paru, на Ubuntu — apt-репозиторий; порт 9696, API key подставляется автоматически), **minidlna** (DLNA). Индексеры в Prowlarr добавляются вручную в веб-интерфейсе.  
-Supported distros: **Arch Linux** and **Ubuntu/Debian**. The installer prompts for required settings, and optionally installs **qBittorrent** (package manager, systemd, port 8081), **Prowlarr** (on Arch: AUR via yay/paru; on Ubuntu: apt repo; port 9696, API key written to `.env`), and **minidlna** (DLNA). Add indexers in Prowlarr’s web UI manually.
+Основной путь установки — `make install`, который локально собирает `linux/amd64` бинарь и запускает Ansible. В первой версии Ansible installer поддерживает Arch Linux сервер. По умолчанию настраиваются TMS, qBittorrent и Prowlarr; minidlna включается отдельной переменной.  
+The main installation path is `make install`: it builds a `linux/amd64` binary locally and runs Ansible. The first Ansible installer version targets Arch Linux. TMS, qBittorrent, and Prowlarr are enabled by default; minidlna is opt-in.
 
 ```bash
 git clone https://github.com/NikitaDmitryuk/telegram-media-server.git
 cd telegram-media-server
-sudo make install
+cp ops/ansible/inventory.ini.example ops/ansible/inventory.ini
+cp ops/ansible/group_vars/telegram_server.yml.example ops/ansible/group_vars/telegram_server.yml
+cp .env.example .env
+make install
 ```
 
-Автоматическая установка без вопросов: задайте `BOT_TOKEN`, остальные безопасные значения будут взяты из `.env` или сгенерированы. По умолчанию в unattended-режиме настраиваются qBittorrent и Prowlarr; minidlna включается только флагом.  
-Unattended install: provide `BOT_TOKEN`; other safe values are read from `.env` or generated. qBittorrent and Prowlarr are configured by default in unattended mode; minidlna is opt-in.
+Минимальный локальный `.env`:
+
+```env
+BOT_TOKEN=123456:telegram-bot-token
+ADMIN_PASSWORD=change-me-admin
+REGULAR_PASSWORD=change-me-regular
+```
+
+Локальный `.env` — это input для Ansible, а не runtime-файл сервера. Ansible генерирует `/etc/telegram-media-server/.env` на сервере и добавляет туда paths, qBittorrent credentials, TMS API key, Prowlarr settings и service defaults.
+
+В локальном `.env` стоит держать пользовательские политики, например `VIDEO_COMPATIBILITY_MODE=false|true` для совместимости со старыми телевизорами.  
+
+`TMS_API_KEY`, пароль qBittorrent, Prowlarr-поля, пути и порты задавать локально не нужно. Ansible сохранит их из существующего `/etc/telegram-media-server/.env`, а для новой установки сгенерирует `TMS_API_KEY` и `QBITTORRENT_PASSWORD`. Если нужно переопределить пользовательские секреты через encrypted Ansible Vault вместо локального `.env`, создайте `ops/ansible/group_vars/telegram_server.vault.yml`:
+
+```yaml
+bot_token: "123456:telegram-bot-token"
+admin_password: "change-me-admin"
+regular_password: "change-me-regular"
+```
+
+Каталог для фильмов и DLNA включаются в локальном `.env`:
+
+```env
+MOVIE_PATH=/media/telegram-media-server
+MINIDLNA_ENABLED=true
+```
+
+Ansible создаст `MOVIE_PATH`, настроит TMS и qBittorrent на тот же путь, а при `MINIDLNA_ENABLED=true` установит и запустит minidlna.
+
+Чтобы включить webhook для OpenClaw:
+
+```env
+OPENCLAW_ENABLED=true
+OPENCLAW_PROVIDER_ID=custom
+OPENCLAW_PROVIDER_BASE_URL=https://llm.example.com/v1
+OPENCLAW_MODEL=gpt-5.4
+OPENCLAW_API_KEY=...
+OPENCLAW_TELEGRAM_BOT_TOKEN=123456:openclaw-bot-token
+```
+
+Ansible установит `nodejs`, `npm`, `openclaw@latest`, создаст пользователя `openclaw`, systemd service `openclaw.service`, поставит TMS skill из `openclaw-skill-tms/`, включит Telegram channel в OpenClaw, задаст `TMS_WEBHOOK_URL=http://127.0.0.1:18789/hooks/tms` и сгенерирует `TMS_WEBHOOK_TOKEN`, если его еще нет в серверном `/etc/telegram-media-server/.env`. Локально `TMS_WEBHOOK_URL` и `TMS_WEBHOOK_TOKEN` обычно хранить не нужно.
+
+Use a separate Telegram bot token for OpenClaw. Do not reuse TMS `BOT_TOKEN`, because both services use Telegram long polling and one bot token can only have one active polling consumer.
+
+OpenClaw model settings are local Ansible input:
+
+```env
+OPENCLAW_PROVIDER_ID=custom
+OPENCLAW_PROVIDER_BASE_URL=https://llm.example.com/v1
+OPENCLAW_MODEL=gpt-5.4
+OPENCLAW_FALLBACK_MODELS=gpt-5.3
+OPENCLAW_API_KEY=...
+OPENCLAW_API_KEY_ENV=CUSTOM_API_KEY
+OPENCLAW_GATEWAY_PORT=18789
+OPENCLAW_TELEGRAM_ENABLED=true
+OPENCLAW_TELEGRAM_DM_POLICY=pairing
+OPENCLAW_TELEGRAM_ALLOW_FROM=
+OPENCLAW_TELEGRAM_GROUP_POLICY=allowlist
+OPENCLAW_TELEGRAM_GROUP_ALLOW_FROM=
+OPENCLAW_TELEGRAM_GROUPS=
+OPENCLAW_TELEGRAM_GROUPS_REQUIRE_MENTION=true
+```
+
+`OPENCLAW_PROVIDER_ID` is the OpenClaw provider namespace. `OPENCLAW_MODEL` is the model id inside that provider; Ansible writes the primary model ref as `OPENCLAW_PROVIDER_ID/OPENCLAW_MODEL`. For example, `custom` + `qwen/qwen3` becomes `custom/qwen/qwen3`.
+
+`OPENCLAW_API_KEY` is the actual provider API key copied into `/etc/openclaw/openclaw.env`. `OPENCLAW_API_KEY_ENV` is only the environment variable name referenced from OpenClaw config; it can be omitted because Ansible derives it from the provider id, for example `custom` becomes `CUSTOM_API_KEY`.
+
+Обновление уже настроенного сервера:
 
 ```bash
-BOT_TOKEN=123:abc sudo scripts/install.sh --yes
-BOT_TOKEN=123:abc sudo scripts/install.sh --yes --with-minidlna
-BOT_TOKEN=123:abc sudo scripts/install.sh --yes --no-prowlarr
-sudo scripts/install.sh --update-only
+make deploy
 ```
 
----
+Перед заменой бинаря Ansible создает backup предыдущего файла на сервере. Для проверки Ansible-синтаксиса:
 
-### Установка и настройка minidlna / Installing and configuring minidlna
+```bash
+make ansible-check
+```
 
-Установщик может установить и настроить minidlna (media_dir = MOVIE_PATH, порт 8200). Если вы ставите вручную или через Docker:  
-The installer can install and configure minidlna (media_dir = MOVIE_PATH, port 8200). For manual or Docker setup:
+Для post-install smoke и сценарного теста полного цикла API/qBittorrent/Prowlarr/OpenClaw:
 
-1. **Установите minidlna / Install minidlna** (например: `apt install minidlna` или `pacman -S minidlna`).
+```bash
+make test-remote
+```
 
-2. **Настройте minidlna / Configure minidlna**: отредактируйте **/etc/minidlna.conf** — укажите в `media_dir=V,...` тот же путь, что и `MOVIE_PATH` в `.env`.  
-   Edit **/etc/minidlna.conf**: set `media_dir=V,/path/to/dir` to match `MOVIE_PATH` in `.env`.
-
-3. **Запустите minidlna / Start minidlna**: `systemctl enable --now minidlna`.
+`make test-remote` добавляет fixture torrent Big Buck Bunny через TMS API, удаляет его через `DELETE /api/v1/downloads/{id}` и проверяет, что запись исчезла из списка загрузок.
 
 ---
 
@@ -121,8 +187,8 @@ Prefer installing yt-dlp from [releases](https://github.com/yt-dlp/yt-dlp/releas
 Файл конфигурации — `.env`:  
 The configuration file is `.env`:
 
-- При использовании `sudo make install`: находится в **/etc/telegram-media-server/.env**.
-- When using `sudo make install`: located at **/etc/telegram-media-server/.env**.  
+- При использовании Ansible: локальный `.env` в репозитории — input; серверный **/etc/telegram-media-server/.env** генерируется Ansible и не редактируется вручную.
+- When using Ansible: local repo `.env` is input; server **/etc/telegram-media-server/.env** is generated by Ansible and should not be edited manually.
 - При использовании Docker Compose: находится в корне проекта.  
 - When using Docker Compose: located in the project root.
 
@@ -140,8 +206,8 @@ Create a `.env` file based on `.env.example` and configure the required paramete
 **Docker + qBittorrent (локальная связка):** в `docker-compose.yml` добавлен сервис `qbittorrent` (Web UI на порту 8081). TMS подключается по `QBITTORRENT_URL=http://qbittorrent:8081`. Конфиг с логином **admin** и паролем **adminadmin** подмонтирован из `docker/qbittorrent.conf` — в `.env` укажите `MOVIE_PATH=/app/media` и при необходимости `QBITTORRENT_USERNAME=admin`, `QBITTORRENT_PASSWORD=adminadmin`.  
 **Docker + qBittorrent (local testing):** the compose file includes a `qbittorrent` service (Web UI on port 8081). TMS connects via `QBITTORRENT_URL=http://qbittorrent:8081`. A config with login **admin** and password **adminadmin** is mounted from `docker/qbittorrent.conf`; set `MOVIE_PATH=/app/media` in `.env` and optionally `QBITTORRENT_USERNAME=admin`, `QBITTORRENT_PASSWORD=adminadmin`.
 
-**qBittorrent:** при использовании qbittorrent-nox задайте в `.env` `QBITTORRENT_URL` (например `http://localhost:8081`). Чтобы не конфликтовать с API (порт 8080), запускайте qBittorrent с `QBT_WEBUI_PORT=8081`. Установщик настраивает systemd и порт за вас.  
-**qBittorrent:** when using qbittorrent-nox set `QBITTORRENT_URL` in `.env` (e.g. `http://localhost:8081`). Run with `QBT_WEBUI_PORT=8081` to avoid conflict with the API (port 8080). The installer configures systemd and port for you.
+**qBittorrent:** Ansible настраивает `qbittorrent-nox` на `127.0.0.1:8081`, тот же `MOVIE_PATH`, что и TMS, и синхронизирует учетные данные с `/etc/telegram-media-server/.env`.  
+**qBittorrent:** Ansible configures `qbittorrent-nox` on `127.0.0.1:8081`, uses the same `MOVIE_PATH` as TMS, and syncs credentials into `/etc/telegram-media-server/.env`.
 
 Если `QBITTORRENT_URL` задан, ошибки подключения/логина qBittorrent считаются ошибками конфигурации и не скрываются автоматическим переходом на aria2. Для намеренного fallback задайте `TORRENT_FALLBACK_TO_ARIA2=true`. После перезагрузки TMS повторно логинится в qBittorrent Web API и восстанавливает мониторинг незавершённых загрузок по сохранённому hash.  
 When `QBITTORRENT_URL` is set, qBittorrent connection/login failures are treated as configuration errors and are not hidden by automatic aria2 fallback. Set `TORRENT_FALLBACK_TO_ARIA2=true` only if you intentionally want that fallback. After reboot, TMS logs in to the qBittorrent Web API again and resumes monitoring incomplete downloads by the stored hash.

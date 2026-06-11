@@ -1,0 +1,19 @@
+[AutoRun]
+enabled=false
+program=
+
+[LegalNotice]
+Accepted=true
+
+[Preferences]
+Connection\UPnP=false
+Connection\PortRangeMin={{ qbittorrent_torrenting_port }}
+Downloads\SavePath={{ tms_movie_path_effective }}/
+Downloads\ScanDirsV2=@Variant(\0\0\0\x1c\0\0\0\0)
+Downloads\TempPath={{ tms_movie_path_effective }}/incomplete/
+WebUI\Address=127.0.0.1
+WebUI\LocalHostAuth=true
+WebUI\Password_PBKDF2="{{ qbittorrent_password_hash_cmd.stdout }}"
+WebUI\Port={{ qbittorrent_webui_port }}
+WebUI\ServerDomains=*
+WebUI\Username={{ qbittorrent_username }}

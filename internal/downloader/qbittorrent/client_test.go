@@ -34,6 +34,33 @@ func TestClientCheckLoginSuccess(t *testing.T) {
 	}
 }
 
+func TestClientCheckLoginSuccessNoContent(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/auth/login":
+			w.WriteHeader(http.StatusNoContent)
+		case "/api/v2/app/version":
+			_, _ = w.Write([]byte("v5.2.0"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(srv.URL, "admin", "adminadmin")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	version, err := client.CheckLogin(context.Background())
+	if err != nil {
+		t.Fatalf("CheckLogin: %v", err)
+	}
+	if version != "v5.2.0" {
+		t.Fatalf("version = %q, want v5.2.0", version)
+	}
+}
+
 func TestClientLoginInvalidCredentials(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

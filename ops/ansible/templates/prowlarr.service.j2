@@ -1,0 +1,18 @@
+[Unit]
+Description=Prowlarr
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ prowlarr_user }}
+Group={{ prowlarr_group }}
+WorkingDirectory={{ prowlarr_install_dir }}
+ExecStart={{ prowlarr_install_dir }}/Prowlarr -nobrowser -data={{ prowlarr_data_dir }}
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

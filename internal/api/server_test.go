@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -33,6 +34,8 @@ type mockDM struct {
 	startErr    error
 	stopErr     error
 	startReturn uint
+	stoppedIDs  []uint
+	removedIDs  []uint
 }
 
 func (m *mockDM) StartDownload(
@@ -59,7 +62,26 @@ func (*mockDM) ResumeDownload(
 	return make(chan error), nil
 }
 
-func (m *mockDM) StopDownload(_ uint) error     { return m.stopErr }
+func (m *mockDM) StopDownload(id uint) error {
+	m.stoppedIDs = append(m.stoppedIDs, id)
+	if m.stopErr != nil {
+		return m.stopErr
+	}
+	for i := range m.activeIDs {
+		if m.activeIDs[i] == id {
+			m.activeIDs = append(m.activeIDs[:i], m.activeIDs[i+1:]...)
+			break
+		}
+	}
+	for i := range m.queueItems {
+		movieID := uintFromMap(m.queueItems[i], "movie_id")
+		if movieID == id {
+			m.queueItems = append(m.queueItems[:i], m.queueItems[i+1:]...)
+			break
+		}
+	}
+	return nil
+}
 func (*mockDM) StopDownloadSilent(_ uint) error { return nil }
 func (*mockDM) StopAllDownloads()               {}
 func (m *mockDM) GetActiveDownloads() []uint {
@@ -74,8 +96,11 @@ func (m *mockDM) GetQueueItems() []map[string]any {
 	}
 	return nil
 }
-func (*mockDM) RemoveQBittorrentTorrent(_ context.Context, _ uint) error { return nil }
-func (*mockDM) ResumePendingTVConversions(_ context.Context)             {}
+func (m *mockDM) RemoveQBittorrentTorrent(_ context.Context, id uint) error {
+	m.removedIDs = append(m.removedIDs, id)
+	return nil
+}
+func (*mockDM) ResumePendingTVConversions(_ context.Context) {}
 
 // mockDMCompletion is like mockDM but returns channels that are closed/sent after a short delay,
 // so that app.RunCompletionLoop can drain them and exit (tests API download completion flow).
@@ -312,6 +337,58 @@ func TestAPI_ListDownloads_QueueItem(t *testing.T) {
 	}
 }
 
+func TestAPI_ListDownloads_IncludesCompletedLibraryItems(t *testing.T) {
+	ctx := context.Background()
+	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret"}
+	db := testutils.TestDatabase(t)
+	movieID, err := db.AddMovie(ctx, "Completed Movie", 2048, []string{"completed.mp4"}, nil, 0)
+	if err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	if err := db.SetLoaded(ctx, movieID, ""); err != nil {
+		t.Fatalf("SetLoaded: %v", err)
+	}
+	a := &app.App{Config: cfg, DB: db, DownloadManager: &mockDM{}}
+	srv := NewServer(a, "127.0.0.1:0", "secret")
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/downloads", http.NoBody)
+	req.Header.Set("Authorization", "Bearer secret")
+	rec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("ListDownloads: got status %d, want 200", rec.Code)
+	}
+	var items []DownloadItem
+	if err := json.NewDecoder(rec.Body).Decode(&items); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 completed item, got %d", len(items))
+	}
+	if items[0].ID != movieID || items[0].Title != "Completed Movie" || items[0].Status != statusCompleted {
+		t.Fatalf("unexpected completed item: %+v", items[0])
+	}
+}
+
+func TestAPI_ListDownloads_EmptyArray(t *testing.T) {
+	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret"}
+	a := &app.App{Config: cfg, DB: &testutils.DatabaseStub{}, DownloadManager: &mockDM{}}
+	srv := NewServer(a, "127.0.0.1:0", "secret")
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/downloads", http.NoBody)
+	req.Header.Set("Authorization", "Bearer secret")
+	rec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("ListDownloads empty: got status %d, want 200", rec.Code)
+	}
+	if got := rec.Body.String(); got != "[]\n" {
+		t.Errorf("ListDownloads empty body: got %q, want []", got)
+	}
+}
+
 func TestAPI_DeleteDownload_204(t *testing.T) {
 	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret"}
 	dm := &mockDM{}
@@ -325,6 +402,81 @@ func TestAPI_DeleteDownload_204(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("DeleteDownload: got status %d, want 204", rec.Code)
+	}
+}
+
+func TestAPI_DeleteDownload_RemoveEverywhere(t *testing.T) {
+	ctx := context.Background()
+	moviePath := t.TempDir()
+	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret", MoviePath: moviePath}
+	db := testutils.TestDatabase(t)
+	dm := &mockDM{activeIDs: []uint{1}}
+
+	movieID, err := db.AddMovie(ctx, "Big Buck Bunny", 1024, []string{"big-buck-bunny.mp4"}, []string{"incomplete/bbb.torrent"}, 0)
+	if err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	if movieID != 1 {
+		t.Fatalf("test expected first movie id 1, got %d", movieID)
+	}
+	writeAPItestFiles(t, moviePath, []string{"big-buck-bunny.mp4", filepath.Join("incomplete", "bbb.torrent")})
+
+	a := &app.App{Config: cfg, DB: db, DownloadManager: dm}
+	srv := NewServer(a, "127.0.0.1:0", "secret")
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/downloads/1", http.NoBody)
+	req.Header.Set("Authorization", "Bearer secret")
+	rec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DeleteDownload: got status %d, want 204, body %q", rec.Code, rec.Body.String())
+	}
+	exists, err := db.MovieExistsId(ctx, movieID)
+	if err != nil {
+		t.Fatalf("MovieExistsId: %v", err)
+	}
+	if exists {
+		t.Fatal("movie still exists in DB after API delete")
+	}
+	if _, err := os.Stat(filepath.Join(moviePath, "big-buck-bunny.mp4")); !os.IsNotExist(err) {
+		t.Fatalf("main media file should be removed, stat err: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(moviePath, "incomplete", "bbb.torrent")); !os.IsNotExist(err) {
+		t.Fatalf("temp torrent file should be removed, stat err: %v", err)
+	}
+	if len(dm.stoppedIDs) == 0 || dm.stoppedIDs[0] != movieID {
+		t.Fatalf("download manager StopDownload calls = %v, want movie id %d", dm.stoppedIDs, movieID)
+	}
+	if len(dm.removedIDs) == 0 || dm.removedIDs[0] != movieID {
+		t.Fatalf("qBittorrent remove calls = %v, want movie id %d", dm.removedIDs, movieID)
+	}
+
+	listReq := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/downloads", http.NoBody)
+	listReq.Header.Set("Authorization", "Bearer secret")
+	listRec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("ListDownloads after delete: got status %d, want 200", listRec.Code)
+	}
+	if got := listRec.Body.String(); got != "[]\n" {
+		t.Fatalf("ListDownloads after delete: got %q, want []", got)
+	}
+}
+
+func writeAPItestFiles(t *testing.T, root string, relPaths []string) {
+	t.Helper()
+
+	for _, rel := range relPaths {
+		path := filepath.Join(root, rel)
+		mkdirErr := os.MkdirAll(filepath.Dir(path), 0700)
+		if mkdirErr != nil {
+			t.Fatalf("MkdirAll: %v", mkdirErr)
+		}
+		writeErr := os.WriteFile(path, []byte("test media"), 0600)
+		if writeErr != nil {
+			t.Fatalf("WriteFile: %v", writeErr)
+		}
 	}
 }
 

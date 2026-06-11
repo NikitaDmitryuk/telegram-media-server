@@ -1,0 +1,15 @@
+[Unit]
+Description=qBittorrent (headless, Web UI port {{ qbittorrent_webui_port }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ tms_user }}
+Group={{ tms_group }}
+Environment=HOME={{ tms_home }}
+ExecStart=/usr/bin/qbittorrent-nox --webui-port={{ qbittorrent_webui_port }} --confirm-legal-notice
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

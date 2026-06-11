@@ -74,7 +74,7 @@ func (c *Client) Login(ctx context.Context) error {
 		return fmt.Errorf("qBittorrent: login forbidden (IP banned or too many attempts)")
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("qBittorrent: login failed status=%d body=%s", resp.StatusCode, string(body))
 	}
 	// qBittorrent returns 200 OK with body "Fails." when credentials are wrong (no SID cookie is set).

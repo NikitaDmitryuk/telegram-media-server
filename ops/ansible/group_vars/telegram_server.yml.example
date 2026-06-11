@@ -1,0 +1,77 @@
+# Copy to ops/ansible/group_vars/telegram_server.yml and adjust for your host.
+# Secrets belong in ops/ansible/group_vars/telegram_server.vault.yml.
+
+tms_user: tms
+tms_group: tms
+tms_home: /var/lib/telegram-media-server
+tms_service_name: telegram-media-server
+tms_binary_name: telegram-media-server
+tms_binary_src: "{{ playbook_dir }}/../../build/telegram-media-server-linux-amd64"
+tms_install_dir: /usr/local/bin
+tms_config_dir: /etc/telegram-media-server
+tms_locale_dir: /usr/local/share/telegram-media-server/locales
+tms_movie_path: /media/telegram-media-server
+tms_lang: ru
+tms_log_level: info
+tms_api_enabled: true
+tms_api_listen: 127.0.0.1:8080
+tms_ytdlp_path: /usr/bin/yt-dlp
+tms_ytdlp_update_on_start: true
+tms_ytdlp_update_interval: 3h
+tms_torrent_fallback_to_aria2: false
+tms_enable_prowlarr: true
+tms_enable_minidlna: false
+tms_enable_tv_compatibility: false
+tms_enable_openclaw: false
+tms_enable_openclaw_webhook: false
+tms_openclaw_webhook_url: ""
+tms_openclaw_webhook_format: ""
+tms_extra_env: {}
+
+openclaw_user: openclaw
+openclaw_group: openclaw
+openclaw_home: /var/lib/openclaw
+openclaw_state_dir: "{{ openclaw_home }}/.openclaw"
+openclaw_config_path: "{{ openclaw_state_dir }}/openclaw.json"
+openclaw_workspace_dir: "{{ openclaw_state_dir }}/workspace"
+openclaw_service_name: openclaw
+openclaw_bin: /usr/bin/openclaw
+openclaw_npm_package: openclaw@latest
+openclaw_gateway_host: loopback
+openclaw_gateway_port: 18789
+openclaw_provider_id: custom
+openclaw_provider_base_url: ""
+openclaw_model: gpt-5.4
+openclaw_fallback_models: ""
+openclaw_api_key_env: ""
+openclaw_enable_telegram: true
+openclaw_telegram_dm_policy: pairing
+openclaw_telegram_allow_from: ""
+openclaw_telegram_group_policy: allowlist
+openclaw_telegram_group_allow_from: ""
+openclaw_telegram_groups: ""
+openclaw_telegram_groups_require_mention: true
+openclaw_tms_skill_slug: tms
+openclaw_tms_api_url: "http://127.0.0.1:{{ tms_api_listen.split(':')[-1] }}"
+
+qbittorrent_service_name: qbittorrent-nox
+qbittorrent_url: http://127.0.0.1:8081
+qbittorrent_username: admin
+qbittorrent_webui_port: 8081
+qbittorrent_torrenting_port: 6881
+
+prowlarr_service_name: prowlarr
+prowlarr_url: http://127.0.0.1:9696
+prowlarr_user: prowlarr
+prowlarr_group: prowlarr
+prowlarr_install_dir: /opt/Prowlarr
+prowlarr_data_dir: /var/lib/prowlarr
+prowlarr_release_api_url: https://api.github.com/repos/Prowlarr/Prowlarr/releases/latest
+prowlarr_config_paths:
+  - /var/lib/prowlarr
+
+minidlna_service_name: minidlna
+minidlna_friendly_name: Telegram Media Server
+minidlna_port: 8200
+
+aur_build_user: "{{ ansible_user }}"

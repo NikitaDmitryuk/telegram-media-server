@@ -1,0 +1,656 @@
+---
+- name: Install Telegram Media Server stack
+  hosts: telegram_server
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - group_vars/telegram_server.yml
+
+  pre_tasks:
+    - name: Require Arch Linux
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Archlinux"
+        fail_msg: "This Ansible installer supports Arch Linux only."
+      tags: always
+
+    - name: Load optional vault vars
+      ansible.builtin.include_vars:
+        file: group_vars/telegram_server.vault.yml
+      failed_when: false
+      no_log: true
+      tags: always
+
+    - name: Read local Ansible input env
+      ansible.builtin.set_fact:
+        tms_local_env_text: "{{ lookup('ansible.builtin.file', playbook_dir + '/../../.env', errors='ignore') | default('', true) }}"
+      no_log: true
+      tags: always
+
+    - name: Check existing TMS env
+      ansible.builtin.stat:
+        path: "{{ tms_config_dir }}/.env"
+      register: tms_existing_env_stat
+      tags: always
+
+    - name: Read existing TMS env
+      ansible.builtin.slurp:
+        src: "{{ tms_config_dir }}/.env"
+      register: tms_existing_env_slurp
+      when: tms_existing_env_stat.stat.exists
+      no_log: true
+      tags: always
+
+    - name: Parse existing TMS env
+      ansible.builtin.set_fact:
+        tms_existing_env_text: "{{ (tms_existing_env_slurp.content | default('') | b64decode) if tms_existing_env_stat.stat.exists else '' }}"
+      no_log: true
+      tags: always
+
+    - name: Resolve OpenClaw input values
+      ansible.builtin.set_fact:
+        tms_movie_path_effective: "{{ tms_local_env_text | regex_findall('(?m)^MOVIE_PATH=(.*)$') | first | default(tms_movie_path | default('/media/telegram-media-server'), true) }}"
+        tms_enable_minidlna_effective: "{{ (tms_local_env_text | regex_findall('(?m)^MINIDLNA_ENABLED=(.*)$') | first | default(tms_enable_minidlna | default(false), true)) | bool }}"
+        openclaw_enabled_effective: "{{ (tms_local_env_text | regex_findall('(?m)^OPENCLAW_ENABLED=(.*)$') | first | default(tms_enable_openclaw | default(false), true)) | bool }}"
+        openclaw_provider_id_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_PROVIDER_ID=(.*)$') | first | default(openclaw_provider_id | default('custom'), true) }}"
+        openclaw_provider_base_url_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_PROVIDER_BASE_URL=(.*)$') | first | default(openclaw_provider_base_url | default(''), true) }}"
+        openclaw_model_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_MODEL=(.*)$') | first | default(openclaw_model | default('gpt-5.4'), true) }}"
+        openclaw_fallback_models_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_FALLBACK_MODELS=(.*)$') | first | default(openclaw_fallback_models | default(''), true) }}"
+        openclaw_api_key_effective: "{{ openclaw_api_key | default(tms_local_env_text | regex_findall('(?m)^OPENCLAW_API_KEY=(.*)$') | first | default('', true), true) }}"
+        openclaw_api_key_env_raw: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_API_KEY_ENV=(.*)$') | first | default(openclaw_api_key_env | default(''), true) }}"
+        openclaw_gateway_port_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_GATEWAY_PORT=(.*)$') | first | default(openclaw_gateway_port | default(18789), true) }}"
+        openclaw_telegram_enabled_effective: "{{ (tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_ENABLED=(.*)$') | first | default(openclaw_enable_telegram | default(true), true)) | bool }}"
+        openclaw_telegram_bot_token_effective: "{{ openclaw_telegram_bot_token | default(tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_BOT_TOKEN=(.*)$') | first | default('', true), true) }}"
+        openclaw_telegram_dm_policy_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_DM_POLICY=(.*)$') | first | default(openclaw_telegram_dm_policy | default('pairing'), true) }}"
+        openclaw_telegram_allow_from_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_ALLOW_FROM=(.*)$') | first | default(openclaw_telegram_allow_from | default(''), true) }}"
+        openclaw_telegram_group_policy_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_GROUP_POLICY=(.*)$') | first | default(openclaw_telegram_group_policy | default('allowlist'), true) }}"
+        openclaw_telegram_group_allow_from_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_GROUP_ALLOW_FROM=(.*)$') | first | default(openclaw_telegram_group_allow_from | default(''), true) }}"
+        openclaw_telegram_groups_effective: "{{ tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_GROUPS=(.*)$') | first | default(openclaw_telegram_groups | default(''), true) }}"
+        openclaw_telegram_groups_require_mention_effective: "{{ (tms_local_env_text | regex_findall('(?m)^OPENCLAW_TELEGRAM_GROUPS_REQUIRE_MENTION=(.*)$') | first | default(openclaw_telegram_groups_require_mention | default(true), true)) | bool }}"
+        openclaw_env_path: /etc/openclaw/openclaw.env
+      no_log: true
+      tags: always
+
+    - name: Resolve OpenClaw API key env var
+      ansible.builtin.set_fact:
+        openclaw_model_ref_effective: "{{ openclaw_model_effective if openclaw_model_effective.startswith(openclaw_provider_id_effective ~ '/') else (openclaw_provider_id_effective ~ '/' ~ openclaw_model_effective) }}"
+        openclaw_model_id_effective: "{{ openclaw_model_effective | regex_replace('^' ~ (openclaw_provider_id_effective | regex_escape) ~ '/', '') }}"
+        openclaw_api_key_env_effective: "{{ openclaw_api_key_env_raw if openclaw_api_key_env_raw | length > 0 else ((openclaw_provider_id_effective | upper | regex_replace('[^A-Z0-9]', '_')) ~ '_API_KEY') }}"
+        openclaw_webhook_url_default_effective: "{{ tms_openclaw_webhook_url if (tms_openclaw_webhook_url | default('', true) | length > 0) else ('http://127.0.0.1:' ~ openclaw_gateway_port_effective ~ '/hooks/tms') }}"
+      no_log: true
+      tags: always
+
+    - name: Resolve TMS secret and optional env values
+      ansible.builtin.set_fact:
+        bot_token_effective: "{{ bot_token | default(tms_local_env_text | regex_findall('(?m)^BOT_TOKEN=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^BOT_TOKEN=(.*)$') | first | default(''), true), true) }}"
+        admin_password_effective: "{{ admin_password | default(tms_local_env_text | regex_findall('(?m)^ADMIN_PASSWORD=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^ADMIN_PASSWORD=(.*)$') | first | default(''), true), true) }}"
+        regular_password_effective: "{{ regular_password | default(tms_local_env_text | regex_findall('(?m)^REGULAR_PASSWORD=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^REGULAR_PASSWORD=(.*)$') | first | default(''), true), true) }}"
+        tms_api_key_effective: "{{ tms_api_key | default(tms_local_env_text | regex_findall('(?m)^TMS_API_KEY=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_API_KEY=(.*)$') | first | default(lookup('password', '/dev/null length=64 chars=ascii_letters,digits'), true), true), true) }}"
+        qbittorrent_password_effective: "{{ qbittorrent_password | default(tms_local_env_text | regex_findall('(?m)^QBITTORRENT_PASSWORD=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^QBITTORRENT_PASSWORD=(.*)$') | first | default(lookup('password', '/dev/null length=24 chars=ascii_letters,digits'), true), true), true) }}"
+        tms_webhook_url_effective: "{{ tms_webhook_url | default(tms_local_env_text | regex_findall('(?m)^TMS_WEBHOOK_URL=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_WEBHOOK_URL=(.*)$') | first | default(openclaw_webhook_url_default_effective if ((tms_enable_openclaw_webhook | default(false)) or openclaw_enabled_effective) else '', true), true), true) }}"
+        tms_webhook_token_effective: "{{ tms_webhook_token | default(tms_local_env_text | regex_findall('(?m)^TMS_WEBHOOK_TOKEN=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_WEBHOOK_TOKEN=(.*)$') | first | default(lookup('password', '/dev/null length=64 chars=ascii_lowercase,digits') if ((tms_enable_openclaw_webhook | default(false)) or openclaw_enabled_effective) else '', true), true), true) }}"
+        tms_webhook_format_effective: "{{ tms_webhook_format | default(tms_local_env_text | regex_findall('(?m)^TMS_WEBHOOK_FORMAT=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_WEBHOOK_FORMAT=(.*)$') | first | default(tms_openclaw_webhook_format | default('') if ((tms_enable_openclaw_webhook | default(false)) or openclaw_enabled_effective) else '', true), true), true) }}"
+        telegram_proxy_effective: "{{ telegram_proxy | default(tms_local_env_text | regex_findall('(?m)^TELEGRAM_PROXY=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TELEGRAM_PROXY=(.*)$') | first | default('', true), true), true) }}"
+        content_proxy_effective: "{{ content_proxy | default(tms_local_env_text | regex_findall('(?m)^(?:CONTENT_PROXY|PROXY)=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^(?:CONTENT_PROXY|PROXY)=(.*)$') | first | default('', true), true), true) }}"
+        content_proxy_domains_effective: "{{ content_proxy_domains | default(tms_local_env_text | regex_findall('(?m)^(?:CONTENT_PROXY_DOMAINS|PROXY_DOMAINS)=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^(?:CONTENT_PROXY_DOMAINS|PROXY_DOMAINS)=(.*)$') | first | default('', true), true), true) }}"
+        video_compatibility_mode_effective: "{{ video_compatibility_mode | default(tms_local_env_text | regex_findall('(?m)^VIDEO_COMPATIBILITY_MODE=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^VIDEO_COMPATIBILITY_MODE=(.*)$') | first | default(tms_enable_tv_compatibility | ternary('true', 'false'), true), true), true) }}"
+      no_log: true
+      tags: always
+
+    - name: Require required credentials
+      ansible.builtin.assert:
+        that:
+          - bot_token_effective | length > 0
+          - admin_password_effective | length > 0
+          - regular_password_effective | length > 0
+        fail_msg: "Set bot_token, admin_password, and regular_password in vault, or keep them in the existing server .env."
+      no_log: true
+      tags: always
+
+    - name: Require OpenClaw Telegram token
+      ansible.builtin.assert:
+        that:
+          - not openclaw_enabled_effective or not openclaw_telegram_enabled_effective or openclaw_telegram_bot_token_effective | length > 0
+        fail_msg: "Set OPENCLAW_TELEGRAM_BOT_TOKEN in local .env or openclaw_telegram_bot_token in vault. Use a separate Telegram bot token from TMS BOT_TOKEN."
+      no_log: true
+      tags: always
+
+    - name: Check local TMS binary exists
+      ansible.builtin.stat:
+        path: "{{ tms_binary_src }}"
+      delegate_to: localhost
+      become: false
+      register: tms_local_binary
+      tags: always
+
+    - name: Require local TMS binary
+      ansible.builtin.assert:
+        that:
+          - tms_local_binary.stat.exists
+        fail_msg: "Build the remote binary first: make build-remote"
+      tags: always
+
+  tasks:
+    - name: Install runtime packages
+      ansible.builtin.pacman:
+        name: "{{ ['ffmpeg', 'yt-dlp', 'aria2', 'qbittorrent-nox', 'python'] + (['minidlna'] if tms_enable_minidlna_effective else []) + (['nodejs', 'npm'] if openclaw_enabled_effective else []) }}"
+        state: present
+        update_cache: true
+      tags: packages
+
+    - name: Ensure Prowlarr group exists
+      ansible.builtin.group:
+        name: "{{ prowlarr_group }}"
+        system: true
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Ensure Prowlarr user exists
+      ansible.builtin.user:
+        name: "{{ prowlarr_user }}"
+        group: "{{ prowlarr_group }}"
+        home: "{{ prowlarr_data_dir }}"
+        create_home: true
+        system: true
+        shell: /usr/bin/nologin
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Query latest Prowlarr release
+      ansible.builtin.uri:
+        url: "{{ prowlarr_release_api_url }}"
+        return_content: true
+        status_code: 200
+      register: prowlarr_release
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Select Prowlarr linux x64 release asset
+      ansible.builtin.set_fact:
+        prowlarr_download_url: "{{ (prowlarr_release.json.assets | selectattr('browser_download_url', 'search', 'linux-core-x64\\.tar\\.gz$') | map(attribute='browser_download_url') | first) }}"
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Require Prowlarr release asset
+      ansible.builtin.assert:
+        that:
+          - prowlarr_download_url | length > 0
+        fail_msg: "Could not find a linux-core-x64 Prowlarr release asset in the latest GitHub release."
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Ensure Prowlarr install parent exists
+      ansible.builtin.file:
+        path: /opt
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Install Prowlarr from GitHub release
+      ansible.builtin.unarchive:
+        src: "{{ prowlarr_download_url }}"
+        dest: /opt
+        remote_src: true
+        owner: root
+        group: "{{ prowlarr_group }}"
+        mode: "0755"
+      notify: Restart Prowlarr
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Ensure Prowlarr data directory exists
+      ansible.builtin.file:
+        path: "{{ prowlarr_data_dir }}"
+        state: directory
+        owner: "{{ prowlarr_user }}"
+        group: "{{ prowlarr_group }}"
+        mode: "0750"
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Install Prowlarr systemd unit
+      ansible.builtin.template:
+        src: templates/prowlarr.service.j2
+        dest: "/etc/systemd/system/{{ prowlarr_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart Prowlarr
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Ensure TMS group exists
+      ansible.builtin.group:
+        name: "{{ tms_group }}"
+        system: true
+      tags: users
+
+    - name: Ensure TMS user exists
+      ansible.builtin.user:
+        name: "{{ tms_user }}"
+        group: "{{ tms_group }}"
+        home: "{{ tms_home }}"
+        create_home: true
+        system: true
+        shell: /usr/bin/nologin
+      tags: users
+
+    - name: Add TMS user to systemd-journal when available
+      ansible.builtin.user:
+        name: "{{ tms_user }}"
+        groups: systemd-journal
+        append: true
+      failed_when: false
+      tags: users
+
+    - name: Ensure TMS directories exist
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ tms_config_dir }}", owner: root, group: "{{ tms_group }}", mode: "0750" }
+        - { path: "{{ tms_movie_path_effective }}", owner: "{{ tms_user }}", group: "{{ tms_group }}", mode: "2770" }
+        - { path: "{{ tms_movie_path_effective }}/incomplete", owner: "{{ tms_user }}", group: "{{ tms_group }}", mode: "2770" }
+        - { path: "{{ tms_locale_dir }}", owner: root, group: root, mode: "0755" }
+        - { path: "{{ tms_home }}/.config/qBittorrent", owner: "{{ tms_user }}", group: "{{ tms_group }}", mode: "0750" }
+      tags: files
+
+    - name: Copy locale files
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../locales/"
+        dest: "{{ tms_locale_dir }}/"
+        owner: root
+        group: root
+        mode: "0644"
+      tags: files
+
+    - name: Copy env example
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../.env.example"
+        dest: "{{ tms_config_dir }}/.env.example"
+        owner: root
+        group: root
+        mode: "0644"
+      tags: files
+
+    - name: Generate qBittorrent PBKDF2 password hash
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import base64, hashlib, sys
+            password = sys.argv[1].encode()
+            salt = hashlib.sha256(b"telegram-media-server-qbittorrent:" + password).digest()[:16]
+            digest = hashlib.pbkdf2_hmac("sha512", password, salt, 100000, 64)
+            print("@ByteArray(%s:%s)" % (base64.b64encode(salt).decode(), base64.b64encode(digest).decode()))
+          - "{{ qbittorrent_password_effective }}"
+      register: qbittorrent_password_hash_cmd
+      changed_when: false
+      no_log: true
+      tags: qbittorrent
+
+    - name: Install qBittorrent config
+      ansible.builtin.template:
+        src: templates/qBittorrent.conf.j2
+        dest: "{{ tms_home }}/.config/qBittorrent/qBittorrent.conf"
+        owner: "{{ tms_user }}"
+        group: "{{ tms_group }}"
+        mode: "0640"
+      notify: Restart qBittorrent
+      tags: qbittorrent
+
+    - name: Install qBittorrent systemd unit
+      ansible.builtin.template:
+        src: templates/qbittorrent-nox.service.j2
+        dest: "/etc/systemd/system/{{ qbittorrent_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart qBittorrent
+      tags: qbittorrent
+
+    - name: Start qBittorrent
+      ansible.builtin.systemd:
+        name: "{{ qbittorrent_service_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      tags: qbittorrent
+
+    - name: Start Prowlarr
+      ansible.builtin.systemd:
+        name: "{{ prowlarr_service_name }}"
+        enabled: true
+        state: started
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Wait for Prowlarr config.xml
+      ansible.builtin.find:
+        paths: "{{ prowlarr_config_paths }}"
+        patterns: config.xml
+        recurse: true
+        file_type: file
+      register: prowlarr_config_find
+      retries: 30
+      delay: 2
+      until: prowlarr_config_find.matched | int > 0
+      when: tms_enable_prowlarr
+      tags: prowlarr
+
+    - name: Read Prowlarr config.xml
+      ansible.builtin.slurp:
+        src: "{{ prowlarr_config_find.files[0].path }}"
+      register: prowlarr_config_xml
+      when: tms_enable_prowlarr
+      no_log: true
+      tags: prowlarr
+
+    - name: Extract Prowlarr API key
+      ansible.builtin.set_fact:
+        prowlarr_api_key: "{{ (prowlarr_config_xml.content | b64decode | regex_search('<ApiKey>([^<]+)</ApiKey>', '\\1') | first) }}"
+      when: tms_enable_prowlarr
+      no_log: true
+      tags: prowlarr
+
+    - name: Install minidlna config
+      ansible.builtin.template:
+        src: templates/minidlna.conf.j2
+        dest: /etc/minidlna.conf
+        owner: root
+        group: root
+        mode: "0644"
+      when: tms_enable_minidlna_effective
+      notify: Restart minidlna
+      tags: minidlna
+
+    - name: Start or stop minidlna based on config
+      ansible.builtin.systemd:
+        name: "{{ minidlna_service_name }}"
+        enabled: "{{ tms_enable_minidlna_effective }}"
+        state: "{{ 'started' if tms_enable_minidlna_effective else 'stopped' }}"
+      failed_when: false
+      tags: minidlna
+
+    - name: Ensure OpenClaw group exists
+      ansible.builtin.group:
+        name: "{{ openclaw_group }}"
+        system: true
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Ensure OpenClaw user exists
+      ansible.builtin.user:
+        name: "{{ openclaw_user }}"
+        group: "{{ openclaw_group }}"
+        home: "{{ openclaw_home }}"
+        create_home: true
+        system: true
+        shell: /usr/bin/nologin
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Ensure OpenClaw directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ openclaw_user }}"
+        group: "{{ openclaw_group }}"
+        mode: "0750"
+      loop:
+        - "{{ openclaw_home }}"
+        - "{{ openclaw_state_dir }}"
+        - "{{ openclaw_workspace_dir }}"
+        - "{{ openclaw_state_dir }}/skills"
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Ensure OpenClaw system config directory exists
+      ansible.builtin.file:
+        path: /etc/openclaw
+        state: directory
+        owner: root
+        group: "{{ openclaw_group }}"
+        mode: "0750"
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Install OpenClaw npm package
+      ansible.builtin.command:
+        cmd: "npm install -g {{ openclaw_npm_package }}"
+      register: openclaw_npm_install
+      changed_when: "'up to date' not in (openclaw_npm_install.stdout + openclaw_npm_install.stderr)"
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Check OpenClaw CLI
+      ansible.builtin.command:
+        cmd: "{{ openclaw_bin }} --version"
+      changed_when: false
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Install TMS OpenClaw skill
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../openclaw-skill-tms/"
+        dest: "{{ openclaw_state_dir }}/skills/{{ openclaw_tms_skill_slug }}/"
+        owner: "{{ openclaw_user }}"
+        group: "{{ openclaw_group }}"
+        mode: "0640"
+        directory_mode: "0750"
+      notify: Restart OpenClaw
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Install OpenClaw environment file
+      ansible.builtin.template:
+        src: templates/openclaw.env.j2
+        dest: "{{ openclaw_env_path }}"
+        owner: root
+        group: "{{ openclaw_group }}"
+        mode: "0640"
+      notify: Restart OpenClaw
+      no_log: true
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Install OpenClaw config
+      ansible.builtin.template:
+        src: templates/openclaw.json.j2
+        dest: "{{ openclaw_config_path }}"
+        owner: "{{ openclaw_user }}"
+        group: "{{ openclaw_group }}"
+        mode: "0640"
+      notify: Restart OpenClaw
+      no_log: true
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Install OpenClaw systemd unit
+      ansible.builtin.template:
+        src: templates/openclaw.service.j2
+        dest: "/etc/systemd/system/{{ openclaw_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart OpenClaw
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Start or stop OpenClaw based on config
+      ansible.builtin.systemd:
+        name: "{{ openclaw_service_name }}"
+        enabled: "{{ openclaw_enabled_effective }}"
+        state: "{{ 'started' if openclaw_enabled_effective else 'stopped' }}"
+        daemon_reload: true
+      failed_when: false
+      tags: openclaw
+
+    - name: Install TMS binary with backup
+      ansible.builtin.copy:
+        src: "{{ tms_binary_src }}"
+        dest: "{{ tms_install_dir }}/{{ tms_binary_name }}"
+        owner: root
+        group: root
+        mode: "0755"
+        backup: true
+      notify: Restart TMS
+      tags: deploy
+
+    - name: Install TMS env file
+      ansible.builtin.template:
+        src: templates/tms.env.j2
+        dest: "{{ tms_config_dir }}/.env"
+        owner: root
+        group: "{{ tms_group }}"
+        mode: "0640"
+      notify: Restart TMS
+      no_log: true
+      tags: config
+
+    - name: Install TMS systemd unit
+      ansible.builtin.template:
+        src: templates/telegram-media-server.service.j2
+        dest: "/etc/systemd/system/{{ tms_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart TMS
+      tags: systemd
+
+    - name: Start TMS
+      ansible.builtin.systemd:
+        name: "{{ tms_service_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      tags: service
+
+    - name: Flush handlers before smoke tests
+      ansible.builtin.meta: flush_handlers
+      tags: smoke
+
+    - name: Check qBittorrent login
+      ansible.builtin.uri:
+        url: "{{ qbittorrent_url }}/api/v2/auth/login"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: "{{ qbittorrent_username }}"
+          password: "{{ qbittorrent_password_effective }}"
+        headers:
+          Referer: "{{ qbittorrent_url }}/"
+        status_code: [200, 204]
+      register: qbittorrent_login
+      retries: 10
+      delay: 2
+      until: (qbittorrent_login.status | default(0)) in [200, 204]
+      no_log: true
+      tags: smoke
+
+    - name: Check qBittorrent version
+      ansible.builtin.uri:
+        url: "{{ qbittorrent_url }}/api/v2/app/version"
+        method: GET
+        headers:
+          Referer: "{{ qbittorrent_url }}/"
+          Cookie: "{{ qbittorrent_login.cookies_string | default('') }}"
+        return_content: true
+        status_code: 200
+      tags: smoke
+
+    - name: Check Prowlarr API
+      ansible.builtin.uri:
+        url: "{{ prowlarr_url }}/api/v1/system/status"
+        method: GET
+        headers:
+          X-Api-Key: "{{ prowlarr_api_key }}"
+        status_code: 200
+      when: tms_enable_prowlarr
+      register: prowlarr_api_check
+      retries: 10
+      delay: 2
+      until: (prowlarr_api_check.status | default(0)) == 200
+      no_log: true
+      tags: smoke
+
+    - name: Check TMS health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ tms_api_listen.split(':')[-1] }}/api/v1/health"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 200
+      register: tms_health_check
+      retries: 10
+      delay: 2
+      until: (tms_health_check.status | default(0)) == 200
+      no_log: true
+      tags: smoke
+
+    - name: Check OpenClaw health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ openclaw_gateway_port_effective }}/healthz"
+        method: GET
+        status_code: 200
+      register: openclaw_health_check
+      retries: 10
+      delay: 2
+      until: (openclaw_health_check.status | default(0)) == 200
+      when: openclaw_enabled_effective
+      tags: smoke
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart qBittorrent
+      ansible.builtin.systemd:
+        name: "{{ qbittorrent_service_name }}"
+        state: restarted
+        enabled: true
+        daemon_reload: true
+
+    - name: Restart TMS
+      ansible.builtin.systemd:
+        name: "{{ tms_service_name }}"
+        state: restarted
+        enabled: true
+        daemon_reload: true
+
+    - name: Restart minidlna
+      ansible.builtin.systemd:
+        name: "{{ minidlna_service_name }}"
+        state: restarted
+        enabled: true
+
+    - name: Restart Prowlarr
+      ansible.builtin.systemd:
+        name: "{{ prowlarr_service_name }}"
+        state: restarted
+        enabled: true
+        daemon_reload: true
+
+    - name: Restart OpenClaw
+      ansible.builtin.systemd:
+        name: "{{ openclaw_service_name }}"
+        state: restarted
+        enabled: true
+        daemon_reload: true
