@@ -134,7 +134,7 @@
   tasks:
     - name: Install runtime packages
       ansible.builtin.pacman:
-        name: "{{ ['ffmpeg', 'yt-dlp', 'aria2', 'qbittorrent-nox', 'python'] + (['minidlna'] if tms_enable_minidlna_effective else []) + (['nodejs', 'npm'] if openclaw_enabled_effective else []) }}"
+        name: "{{ ['ffmpeg', 'yt-dlp', 'aria2', 'qbittorrent-nox', 'python'] + (['minidlna'] if tms_enable_minidlna_effective else []) + (['nodejs', 'npm'] if openclaw_enabled_effective else []) + (['privoxy'] if (openclaw_enabled_effective and telegram_proxy_effective.startswith('socks5://')) else []) }}"
         state: present
         update_cache: true
       tags: packages
@@ -427,6 +427,30 @@
       when: openclaw_enabled_effective
       tags: openclaw
 
+    - name: Install OpenClaw Telegram proxy bridge config
+      ansible.builtin.template:
+        src: templates/privoxy-openclaw.conf.j2
+        dest: /etc/privoxy/config
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Restart privoxy
+      no_log: true
+      when:
+        - openclaw_enabled_effective
+        - telegram_proxy_effective.startswith('socks5://')
+      tags: openclaw
+
+    - name: Start OpenClaw Telegram proxy bridge
+      ansible.builtin.systemd:
+        name: privoxy.service
+        enabled: true
+        state: started
+      when:
+        - openclaw_enabled_effective
+        - telegram_proxy_effective.startswith('socks5://')
+      tags: openclaw
+
     - name: Install OpenClaw npm package
       ansible.builtin.command:
         cmd: "npm install -g {{ openclaw_npm_package }}"
@@ -488,6 +512,19 @@
       notify:
         - Reload systemd
         - Restart OpenClaw
+      when: openclaw_enabled_effective
+      tags: openclaw
+
+    - name: Stop legacy OpenClaw user gateway service
+      ansible.builtin.systemd:
+        name: openclaw-gateway.service
+        scope: user
+        enabled: false
+        state: stopped
+      become: false
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      failed_when: false
       when: openclaw_enabled_effective
       tags: openclaw
 
@@ -654,3 +691,9 @@
         state: restarted
         enabled: true
         daemon_reload: true
+
+    - name: Restart privoxy
+      ansible.builtin.systemd:
+        name: privoxy.service
+        state: restarted
+        enabled: true

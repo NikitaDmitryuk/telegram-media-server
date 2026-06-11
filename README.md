@@ -22,7 +22,7 @@
 
 ## OpenClaw skill
 
-An [OpenClaw](https://openclaw.ai/) skill for managing TMS downloads via the REST API (add by URL/magnet/torrent, list, delete, search) lives in **[openclaw-skill-tms/](openclaw-skill-tms/)**. Install from [ClawHub](https://clawhub.ai/): `clawhub install tms`, or copy the `openclaw-skill-tms` folder into your agent's `skills` directory. See [openclaw-skill-tms/README.md](openclaw-skill-tms/README.md) for setup (`TMS_API_URL`, `TMS_API_KEY`) and usage.
+An [OpenClaw](https://openclaw.ai/) skill for managing TMS downloads via the REST API (add by URL/magnet/torrent, list, delete, search) lives in **[openclaw-skill-tms/](openclaw-skill-tms/)**. Install from [ClawHub](https://clawhub.ai/): `openclaw skills install tms`, or copy the `openclaw-skill-tms` folder into your agent's `skills` directory. See [openclaw-skill-tms/README.md](openclaw-skill-tms/README.md) for setup (`TMS_API_URL`, `TMS_API_KEY`) and usage.
 
 **Integration requirements:** the skill uses the TMS REST API. With Ansible installs the API key is generated in `/etc/telegram-media-server/.env`. If `OPENCLAW_ENABLED=true` is set in the local Ansible input `.env`, Ansible installs OpenClaw on the server, copies the local `openclaw-skill-tms` skill into OpenClaw's managed skills directory, configures model defaults, and enables hooks for TMS completion events.
 

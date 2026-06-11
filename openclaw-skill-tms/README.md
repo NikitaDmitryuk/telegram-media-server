@@ -18,8 +18,8 @@ This **OpenClaw skill** talks to the same TMS backend over its REST API. Instead
 The skill lets your OpenClaw agent talk to a running TMS instance over its REST API. The agent can:
 
 - **Add downloads** — by video URL (yt-dlp), magnet link, .torrent URL, or `torrent_base64` (raw `.torrent` file encoded in standard Base64 when no fetchable URL exists).
-- **List downloads** — see status (queued, downloading, converting, completed, failed, stopped), progress, and errors.
-- **Delete a download** — stop and remove by ID.
+- **List downloads** — see queued, active, and completed/library items with status, progress, and errors.
+- **Delete a download** — remove by ID everywhere: queue/active state, library DB, files, and qBittorrent when applicable.
 - **Search torrents** — when TMS has Prowlarr configured, search indexers and add results as downloads.
 
 All requests use the TMS API base URL and API key you configure. The skill does not emulate the Telegram bot; it uses the same backend via HTTP.
@@ -40,7 +40,7 @@ All requests use the TMS API base URL and API key you configure. The skill does 
    - `TMS_API_URL` — **optional.** Base URL of TMS API. When not set and agent runs on the same host as TMS, default is `http://127.0.0.1:8080`. Set when TMS is on another host (e.g. `http://tms-host:8080`).
    - `TMS_API_KEY` — **optional.** Omit when TMS and OpenClaw run on the same host (localhost is accepted without auth). Set when accessing TMS from another host (same value as `TMS_API_KEY` in TMS config).
 
-   In `~/.openclaw/openclaw.json` you can set per-skill env. For same-host you can leave env empty or set only URL:
+   In `~/.openclaw/openclaw.json` you can set per-skill env. For same-host you can leave env empty or set only URL. For authenticated remote access, either set `skills.entries.tms.env.TMS_API_KEY` or use `skills.entries.tms.apiKey` because the skill declares `TMS_API_KEY` as its primary env:
    ```json5
    {
      skills: {
@@ -48,7 +48,9 @@ All requests use the TMS API base URL and API key you configure. The skill does 
          tms: {
            enabled: true
            // env: {}   // optional: default http://127.0.0.1:8080, no key
-           // Or for another host: env: { TMS_API_URL: "http://tms:8080", TMS_API_KEY: "..." }
+           // Or for another host:
+           // env: { TMS_API_URL: "http://tms:8080" },
+           // apiKey: { source: "env", provider: "default", id: "TMS_API_KEY" }
          }
        }
      }
@@ -76,19 +78,19 @@ The agent will use the TMS API (health, list, add, delete, search) as described 
 | User says | Agent action |
 |-----------|--------------|
 | *"Add this link: https://youtube.com/watch?v=..."* | `POST /api/v1/downloads` with `{"url": "..."}`; reports back id and title. |
-| *"What's downloading?"* | `GET /api/v1/downloads`; summarizes list with status and progress. |
-| *"Remove download 2"* | `DELETE /api/v1/downloads/2`; confirms removal. |
+| *"What's downloading?"* | `GET /api/v1/downloads`; summarizes queued, active, and completed/library items. |
+| *"Remove download 2"* | `DELETE /api/v1/downloads/2`; confirms removal everywhere. |
 | *"Find torrents for Matrix 1080p"* | `GET /api/v1/search?q=Matrix%201080p`; can then add one via `POST /downloads` with magnet, torrent URL, or `torrent_base64` if the user provides a `.torrent` file. |
 
 ## ClawHub
 
-If this skill is published to [ClawHub](https://clawhub.ai/), install the CLI (`npm i -g clawhub` — not available via Homebrew), then:
+If this skill is published to [ClawHub](https://clawhub.ai/), install it with OpenClaw:
 
 ```bash
-clawhub install tms
+openclaw skills install tms
 ```
 
-After publication, the skill page on ClawHub may list the exact slug if it differs.
+For direct ClawHub CLI workflows, install the CLI (`npm i -g clawhub` or `pnpm add -g clawhub`). Legacy/direct CLI install may also be available as `clawhub install tms`, but `openclaw skills install tms` is the preferred OpenClaw flow.
 
 ## API docs
 
@@ -113,7 +115,7 @@ This skill is **instruction-only**: it contains no install scripts, no code to e
 1. **Trusted TMS host** — Ensure `TMS_API_URL` points to a TMS instance you control or trust, and that the network path (e.g. LAN or VPN) is what you expect.
 2. **API key** — Use a TMS API key with the minimal permissions you need; avoid reusing a key that has broader or admin access elsewhere.
 3. **Webhooks** — If you set `TMS_WEBHOOK_URL` on TMS, you are exposing an endpoint that will receive completion/failure/stopped events. Secure and authenticate that endpoint.
-4. **Autonomous invocation** — By default the agent can invoke this skill on its own (e.g. start or stop downloads). If you want to allow only explicit user requests, disable model invocation for this skill or restrict when it is enabled.
+4. **Autonomous invocation** — By default the agent can invoke this skill on its own (e.g. add or remove downloads). If you want to allow only explicit user requests, disable model invocation for this skill or restrict when it is enabled.
 5. **Secrets** — Store `TMS_API_KEY` in per-skill or agent config (e.g. `openclaw.json`), not in public repos. Rotate the key if it may have been compromised.
 
 The skill may be subject to security scanning (e.g. VirusTotal, OpenClaw checks) as part of the ClawHub listing; its behavior is limited to the described API client role.
@@ -129,7 +131,7 @@ To publish or update this skill on ClawHub from the repo root:
 1. Install CLI via npm (ClawHub is not in Homebrew): `npm i -g clawhub` or `pnpm add -g clawhub`.
 2. Log in: `clawhub login` (or `clawhub login --token <token>`).
 3. Publish:  
-   `clawhub publish ./openclaw-skill-tms --slug tms --name "TMS (Telegram Media Server)" --version 1.0.0 --changelog "Initial release" --tags latest`
-4. For updates: bump version and changelog, then run `clawhub publish` again with new `--version` and `--changelog`.
+   `clawhub skill publish ./openclaw-skill-tms --slug tms --name "TMS (Telegram Media Server)" --version 1.0.8 --changelog "Update OpenClaw skill metadata and TMS delete/list semantics" --tags latest`
+4. For updates: bump version and changelog, then run `clawhub skill publish` again with new `--version` and `--changelog`.
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.

@@ -2,8 +2,10 @@
 {% set telegram_allow_from = openclaw_telegram_allow_from_effective.split(',') | map('trim') | reject('equalto', '') | list %}
 {% set telegram_group_allow_from = openclaw_telegram_group_allow_from_effective.split(',') | map('trim') | reject('equalto', '') | list %}
 {% set telegram_groups = openclaw_telegram_groups_effective.split(',') | map('trim') | reject('equalto', '') | list %}
+{% set telegram_proxy = 'http://127.0.0.1:8118' if telegram_proxy_effective.startswith('socks5://') else telegram_proxy_effective %}
 {
   "gateway": {
+    "mode": "local",
     "port": {{ openclaw_gateway_port_effective | int }},
     "bind": {{ openclaw_gateway_host | to_json }}
   },
@@ -38,7 +40,8 @@
       "enabled": true,
       "botToken": {{ openclaw_telegram_bot_token_effective | to_json }},
       "dmPolicy": {{ openclaw_telegram_dm_policy_effective | to_json }},
-      "groupPolicy": {{ openclaw_telegram_group_policy_effective | to_json }}{% if telegram_allow_from | length > 0 %},
+      "groupPolicy": {{ openclaw_telegram_group_policy_effective | to_json }}{% if telegram_proxy | length > 0 %},
+      "proxy": {{ telegram_proxy | to_json }}{% endif %}{% if telegram_allow_from | length > 0 %},
       "allowFrom": [{% for item in telegram_allow_from %}{{ item | to_json }}{% if not loop.last %}, {% endif %}{% endfor %}]{% endif %}{% if telegram_group_allow_from | length > 0 %},
       "groupAllowFrom": [{% for item in telegram_group_allow_from %}{{ item | to_json }}{% if not loop.last %}, {% endif %}{% endfor %}]{% endif %}{% if telegram_groups | length > 0 %},
       "groups": {
