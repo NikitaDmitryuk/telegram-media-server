@@ -90,7 +90,7 @@
         qbittorrent_password_effective: "{{ qbittorrent_password | default(tms_local_env_text | regex_findall('(?m)^QBITTORRENT_PASSWORD=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^QBITTORRENT_PASSWORD=(.*)$') | first | default(lookup('password', '/dev/null length=24 chars=ascii_letters,digits'), true), true), true) }}"
         tms_webhook_url_effective: "{{ tms_webhook_url | default(tms_local_env_text | regex_findall('(?m)^TMS_WEBHOOK_URL=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_WEBHOOK_URL=(.*)$') | first | default(openclaw_webhook_url_default_effective if ((tms_enable_openclaw_webhook | default(false)) or openclaw_enabled_effective) else '', true), true), true) }}"
         tms_webhook_token_effective: "{{ tms_webhook_token | default(tms_local_env_text | regex_findall('(?m)^TMS_WEBHOOK_TOKEN=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_WEBHOOK_TOKEN=(.*)$') | first | default(lookup('password', '/dev/null length=64 chars=ascii_lowercase,digits') if ((tms_enable_openclaw_webhook | default(false)) or openclaw_enabled_effective) else '', true), true), true) }}"
-        tms_webhook_format_effective: "{{ tms_webhook_format | default(tms_local_env_text | regex_findall('(?m)^TMS_WEBHOOK_FORMAT=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_WEBHOOK_FORMAT=(.*)$') | first | default(tms_openclaw_webhook_format | default('') if ((tms_enable_openclaw_webhook | default(false)) or openclaw_enabled_effective) else '', true), true), true) }}"
+        tms_webhook_format_effective: "{{ tms_webhook_format | default(tms_local_env_text | regex_findall('(?m)^TMS_WEBHOOK_FORMAT=(.*)$') | first | default((tms_openclaw_webhook_format | default('openclaw_agent', true)) if ((tms_enable_openclaw_webhook | default(false)) or openclaw_enabled_effective) else (tms_existing_env_text | regex_findall('(?m)^TMS_WEBHOOK_FORMAT=(.*)$') | first | default('', true)), true), true) }}"
         telegram_proxy_effective: "{{ telegram_proxy | default(tms_local_env_text | regex_findall('(?m)^TELEGRAM_PROXY=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TELEGRAM_PROXY=(.*)$') | first | default('', true), true), true) }}"
         content_proxy_effective: "{{ content_proxy | default(tms_local_env_text | regex_findall('(?m)^(?:CONTENT_PROXY|PROXY)=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^(?:CONTENT_PROXY|PROXY)=(.*)$') | first | default('', true), true), true) }}"
         content_proxy_domains_effective: "{{ content_proxy_domains | default(tms_local_env_text | regex_findall('(?m)^(?:CONTENT_PROXY_DOMAINS|PROXY_DOMAINS)=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^(?:CONTENT_PROXY_DOMAINS|PROXY_DOMAINS)=(.*)$') | first | default('', true), true), true) }}"
@@ -432,8 +432,8 @@
         src: templates/privoxy-openclaw.conf.j2
         dest: /etc/privoxy/config
         owner: root
-        group: root
-        mode: "0600"
+        group: privoxy
+        mode: "0640"
       notify: Restart privoxy
       no_log: true
       when:
@@ -456,6 +456,7 @@
         cmd: "npm install -g {{ openclaw_npm_package }}"
       register: openclaw_npm_install
       changed_when: "'up to date' not in (openclaw_npm_install.stdout + openclaw_npm_install.stderr)"
+      notify: Restart OpenClaw
       when: openclaw_enabled_effective
       tags: openclaw
 
@@ -523,7 +524,7 @@
         state: stopped
       become: false
       environment:
-        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.user_uid }}"
       failed_when: false
       when: openclaw_enabled_effective
       tags: openclaw

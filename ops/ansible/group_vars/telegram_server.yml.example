@@ -25,7 +25,7 @@ tms_enable_tv_compatibility: false
 tms_enable_openclaw: false
 tms_enable_openclaw_webhook: false
 tms_openclaw_webhook_url: ""
-tms_openclaw_webhook_format: ""
+tms_openclaw_webhook_format: openclaw_agent
 tms_extra_env: {}
 
 openclaw_user: openclaw
