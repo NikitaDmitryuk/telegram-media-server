@@ -12,7 +12,7 @@ COPY internal ./internal
 
 RUN go build -o /telegram-media-server ./cmd/telegram-media-server
 
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu:26.04 AS runtime
 
 # yt-dlp via pip: always correct for the runtime architecture, no arch detection needed.
 RUN apt-get update && \
