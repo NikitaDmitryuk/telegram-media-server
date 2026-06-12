@@ -11,7 +11,7 @@
     - name: Require Arch Linux
       ansible.builtin.assert:
         that:
-          - ansible_distribution == "Archlinux"
+          - ansible_facts.distribution == "Archlinux"
         fail_msg: "This Ansible installer supports Arch Linux only."
       tags: always
 
