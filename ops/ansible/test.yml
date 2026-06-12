@@ -1,0 +1,194 @@
+---
+- name: Test Telegram Media Server installation
+  hosts: telegram_server
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - group_vars/telegram_server.yml
+
+  vars:
+    tms_api_base_url: "http://127.0.0.1:8080"
+    tms_fixture_torrent: "{{ playbook_dir }}/../../integration/fixtures/big-buck-bunny.torrent"
+
+  tasks:
+    - name: Read generated TMS env
+      ansible.builtin.slurp:
+        src: "{{ tms_config_dir }}/.env"
+      register: tms_env_slurp
+      no_log: true
+
+    - name: Resolve generated secrets for smoke tests
+      ansible.builtin.set_fact:
+        tms_env_text: "{{ tms_env_slurp.content | b64decode }}"
+        tms_api_key_effective: "{{ (tms_env_slurp.content | b64decode) | regex_findall('(?m)^TMS_API_KEY=(.*)$') | first }}"
+        qbittorrent_username_effective: "{{ (tms_env_slurp.content | b64decode) | regex_findall('(?m)^QBITTORRENT_USERNAME=(.*)$') | first | default('admin', true) }}"
+        qbittorrent_password_effective: "{{ (tms_env_slurp.content | b64decode) | regex_findall('(?m)^QBITTORRENT_PASSWORD=(.*)$') | first }}"
+        prowlarr_api_key_effective: "{{ (tms_env_slurp.content | b64decode) | regex_findall('(?m)^PROWLARR_API_KEY=(.*)$') | first | default('', true) }}"
+        minidlna_enabled_effective: "{{ ((tms_env_slurp.content | b64decode) | regex_findall('(?m)^MINIDLNA_ENABLED=(.*)$') | first | default('false', true)) | bool }}"
+      no_log: true
+
+    - name: Verify required services are active
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      check_mode: true
+      loop:
+        - telegram-media-server.service
+        - qbittorrent-nox.service
+        - prowlarr.service
+      register: required_services
+      failed_when: required_services.changed
+
+    - name: Verify minidlna active when enabled
+      ansible.builtin.systemd:
+        name: minidlna.service
+        state: started
+      check_mode: true
+      register: minidlna_service
+      failed_when: minidlna_service.changed
+      when: minidlna_enabled_effective
+
+    - name: Verify TMS health API
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/health"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 200
+      no_log: true
+
+    - name: Verify TMS downloads API returns an array
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/downloads"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 200
+        return_content: true
+      register: tms_downloads_before
+      no_log: true
+      failed_when: tms_downloads_before.json is not sequence
+
+    - name: Delete stale Big Buck Bunny fixture entries
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/downloads/{{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 204
+      loop: "{{ tms_downloads_before.json | selectattr('title', 'equalto', 'Big Buck Bunny') | list }}"
+      no_log: true
+
+    - name: Verify stale Big Buck Bunny entries are gone
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/downloads"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 200
+        return_content: true
+      register: tms_downloads_after_preclean
+      until: "(tms_downloads_after_preclean.json | selectattr('title', 'equalto', 'Big Buck Bunny') | list | length) == 0"
+      retries: 20
+      delay: 1
+      no_log: true
+
+    - name: Login to qBittorrent Web API
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8081/api/v2/auth/login"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: "{{ qbittorrent_username_effective }}"
+          password: "{{ qbittorrent_password_effective }}"
+        status_code:
+          - 200
+          - 204
+      register: qb_login
+      no_log: true
+
+    - name: Verify qBittorrent version API
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8081/api/v2/app/version"
+        method: GET
+        headers:
+          Cookie: "{{ qb_login.cookies_string }}"
+        status_code: 200
+        return_content: true
+      no_log: true
+
+    - name: Verify Prowlarr API
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9696/api/v1/system/status?apikey={{ prowlarr_api_key_effective }}"
+        method: GET
+        status_code: 200
+      when: prowlarr_api_key_effective | length > 0
+      no_log: true
+
+    - name: Check OpenClaw service if installed
+      ansible.builtin.command:
+        cmd: systemctl is-active openclaw.service
+      register: openclaw_active
+      changed_when: false
+      failed_when: false
+
+    - name: Verify OpenClaw health if active
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18789/health"
+        method: GET
+        status_code: 200
+      when: openclaw_active.rc == 0
+
+    - name: Add Big Buck Bunny torrent through TMS API
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/downloads"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          title: Big Buck Bunny
+          torrent_base64: "{{ lookup('ansible.builtin.pipe', 'base64 < ' ~ (tms_fixture_torrent | quote)) | regex_replace('\\s+', '') }}"
+        status_code: 201
+        return_content: true
+      register: tms_add_fixture
+      no_log: true
+
+    - name: Verify fixture appears in downloads list
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/downloads"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 200
+        return_content: true
+      register: tms_downloads_after_add
+      until: "(tms_downloads_after_add.json | selectattr('id', 'equalto', tms_add_fixture.json.id) | list | length) == 1"
+      retries: 10
+      delay: 1
+      no_log: true
+
+    - name: Delete fixture through TMS API
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/downloads/{{ tms_add_fixture.json.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 204
+      no_log: true
+
+    - name: Verify fixture disappears from downloads list
+      ansible.builtin.uri:
+        url: "{{ tms_api_base_url }}/api/v1/downloads"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 200
+        return_content: true
+      register: tms_downloads_after_delete
+      until: "(tms_downloads_after_delete.json | selectattr('id', 'equalto', tms_add_fixture.json.id) | list | length) == 0"
+      retries: 20
+      delay: 1
+      no_log: true

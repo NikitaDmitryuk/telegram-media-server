@@ -25,6 +25,7 @@ const (
 	tickerInterval = 10 * time.Millisecond
 	testFileMode   = 0600
 	byteRange      = 256
+	loadedPercent  = 100
 )
 
 // TestConfig creates a configuration suitable for testing
@@ -181,62 +182,154 @@ func (t *TestSQLiteDatabase) addFiles(ctx context.Context, movieID uint, files [
 	return nil
 }
 
-// Add other required methods...
-func (*TestSQLiteDatabase) RemoveMovie(_ context.Context, _ uint) error { return nil }
-func (*TestSQLiteDatabase) GetMovieList(_ context.Context) ([]database.Movie, error) {
-	return nil, nil
+func (t *TestSQLiteDatabase) RemoveMovie(ctx context.Context, movieID uint) error {
+	return t.db.WithContext(ctx).Delete(&database.Movie{}, movieID).Error
 }
-func (*TestSQLiteDatabase) UpdateDownloadedPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*TestSQLiteDatabase) UpdateEpisodesProgress(_ context.Context, _ uint, _ int) error {
-	return nil
-}
-func (*TestSQLiteDatabase) SetLoaded(_ context.Context, _ uint, _ string) error { return nil }
 
-func (*TestSQLiteDatabase) RefreshMovieFileSizeFromDisk(_ context.Context, _ uint, _ string) (int64, error) {
-	return 0, nil
+func (t *TestSQLiteDatabase) GetMovieList(ctx context.Context) ([]database.Movie, error) {
+	var movies []database.Movie
+	if err := t.db.WithContext(ctx).Find(&movies).Error; err != nil {
+		return nil, err
+	}
+	return movies, nil
 }
-func (*TestSQLiteDatabase) UpdateConversionStatus(_ context.Context, _ uint, _ string) error {
-	return nil
+
+func (t *TestSQLiteDatabase) UpdateDownloadedPercentage(ctx context.Context, movieID uint, percentage int) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("downloaded_percentage", percentage).Error
 }
-func (*TestSQLiteDatabase) UpdateConversionPercentage(_ context.Context, _ uint, _ int) error {
-	return nil
+
+func (t *TestSQLiteDatabase) UpdateEpisodesProgress(ctx context.Context, movieID uint, completedEpisodes int) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("completed_episodes", completedEpisodes).Error
 }
-func (*TestSQLiteDatabase) SetTvCompatibility(_ context.Context, _ uint, _ string) error { return nil }
-func (*TestSQLiteDatabase) SetQBittorrentHash(_ context.Context, _ uint, _ string) error { return nil }
-func (*TestSQLiteDatabase) GetMovieByID(_ context.Context, _ uint) (database.Movie, error) {
-	return database.Movie{}, nil
+
+func (t *TestSQLiteDatabase) SetLoaded(ctx context.Context, movieID uint, _ string) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("downloaded_percentage", loadedPercent).Error
 }
-func (*TestSQLiteDatabase) GetIncompleteQBittorrentDownloads(_ context.Context) ([]database.Movie, error) {
-	return nil, nil
+
+func (t *TestSQLiteDatabase) RefreshMovieFileSizeFromDisk(ctx context.Context, movieID uint, movieRoot string) (int64, error) {
+	files, err := t.GetFilesByMovieID(ctx, movieID)
+	if err != nil {
+		return 0, err
+	}
+	var sum int64
+	for i := range files {
+		info, statErr := os.Stat(filepath.Join(movieRoot, files[i].FilePath))
+		if statErr == nil {
+			sum += info.Size()
+		}
+	}
+	if sum > 0 {
+		if err := t.UpdateMovieFileSize(ctx, movieID, sum); err != nil {
+			return 0, err
+		}
+	}
+	return sum, nil
 }
-func (*TestSQLiteDatabase) GetFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
+
+func (t *TestSQLiteDatabase) UpdateConversionStatus(ctx context.Context, movieID uint, status string) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("conversion_status", status).Error
 }
-func (*TestSQLiteDatabase) RemoveFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
+
+func (t *TestSQLiteDatabase) UpdateConversionPercentage(ctx context.Context, movieID uint, percentage int) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("conversion_percentage", percentage).Error
 }
-func (*TestSQLiteDatabase) ReplaceMainMovieFiles(_ context.Context, _ uint, _ []string) error {
-	return nil
+
+func (t *TestSQLiteDatabase) SetTvCompatibility(ctx context.Context, movieID uint, compat string) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("tv_compatibility", compat).Error
 }
-func (*TestSQLiteDatabase) UpdateMovieFileSize(_ context.Context, _ uint, _ int64) error {
-	return nil
+
+func (t *TestSQLiteDatabase) SetQBittorrentHash(ctx context.Context, movieID uint, hash string) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("qbittorrent_hash", hash).Error
 }
-func (*TestSQLiteDatabase) UpdateMovieTotalEpisodes(_ context.Context, _ uint, _ int) error {
-	return nil
+
+func (t *TestSQLiteDatabase) GetMovieByID(ctx context.Context, movieID uint) (database.Movie, error) {
+	var movie database.Movie
+	if err := t.db.WithContext(ctx).First(&movie, movieID).Error; err != nil {
+		return database.Movie{}, err
+	}
+	return movie, nil
 }
-func (*TestSQLiteDatabase) RemoveTempFilesByMovieID(_ context.Context, _ uint) error {
-	return nil
+
+func (t *TestSQLiteDatabase) GetIncompleteQBittorrentDownloads(ctx context.Context) ([]database.Movie, error) {
+	var movies []database.Movie
+	if err := t.db.WithContext(ctx).
+		Where("qbittorrent_hash != '' AND downloaded_percentage < 100").
+		Find(&movies).Error; err != nil {
+		return nil, err
+	}
+	return movies, nil
 }
-func (*TestSQLiteDatabase) MovieExistsFiles(_ context.Context, _ []string) (bool, error) {
+
+func (t *TestSQLiteDatabase) GetFilesByMovieID(ctx context.Context, movieID uint) ([]database.MovieFile, error) {
+	return t.getFiles(ctx, movieID, false)
+}
+
+func (t *TestSQLiteDatabase) RemoveFilesByMovieID(ctx context.Context, movieID uint) error {
+	return t.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, false).
+		Delete(&database.MovieFile{}).Error
+}
+
+func (t *TestSQLiteDatabase) ReplaceMainMovieFiles(ctx context.Context, movieID uint, paths []string) error {
+	if err := t.RemoveFilesByMovieID(ctx, movieID); err != nil {
+		return err
+	}
+	return t.addFiles(ctx, movieID, paths, false)
+}
+
+func (t *TestSQLiteDatabase) UpdateMovieFileSize(ctx context.Context, movieID uint, size int64) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("file_size", size).Error
+}
+
+func (t *TestSQLiteDatabase) UpdateMovieTotalEpisodes(ctx context.Context, movieID uint, total int) error {
+	return t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).
+		Update("total_episodes", total).Error
+}
+
+func (t *TestSQLiteDatabase) RemoveTempFilesByMovieID(ctx context.Context, movieID uint) error {
+	return t.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, true).
+		Delete(&database.MovieFile{}).Error
+}
+
+func (t *TestSQLiteDatabase) MovieExistsFiles(ctx context.Context, files []string) (bool, error) {
+	for _, file := range files {
+		var count int64
+		if err := t.db.WithContext(ctx).Model(&database.MovieFile{}).Where("file_path = ?", file).Count(&count).Error; err != nil {
+			return false, err
+		}
+		if count > 0 {
+			return true, nil
+		}
+	}
 	return false, nil
 }
-func (*TestSQLiteDatabase) MovieExistsUploadedFile(_ context.Context, _ string) (bool, error) {
-	return false, nil
+
+func (t *TestSQLiteDatabase) MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error) {
+	var count int64
+	if err := t.db.WithContext(ctx).Model(&database.MovieFile{}).
+		Where("file_path LIKE ?", "%"+fileName).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
-func (*TestSQLiteDatabase) GetTempFilesByMovieID(_ context.Context, _ uint) ([]database.MovieFile, error) {
-	return nil, nil
+
+func (t *TestSQLiteDatabase) GetTempFilesByMovieID(ctx context.Context, movieID uint) ([]database.MovieFile, error) {
+	return t.getFiles(ctx, movieID, true)
+}
+
+func (t *TestSQLiteDatabase) getFiles(ctx context.Context, movieID uint, temp bool) ([]database.MovieFile, error) {
+	var files []database.MovieFile
+	if err := t.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, temp).Find(&files).Error; err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 func (*TestSQLiteDatabase) Login(
@@ -266,8 +359,12 @@ func (*TestSQLiteDatabase) GenerateTemporaryPassword(_ context.Context, _ time.D
 func (*TestSQLiteDatabase) GetUserByChatID(_ context.Context, _ int64) (database.User, error) {
 	return database.User{}, nil
 }
-func (*TestSQLiteDatabase) MovieExistsId(_ context.Context, _ uint) (bool, error) {
-	return false, nil
+func (t *TestSQLiteDatabase) MovieExistsId(ctx context.Context, movieID uint) (bool, error) {
+	var count int64
+	if err := t.db.WithContext(ctx).Model(&database.Movie{}).Where("id = ?", movieID).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // TempDir creates a temporary directory for testing

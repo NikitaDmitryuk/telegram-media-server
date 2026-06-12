@@ -1,0 +1,2 @@
+[telegram_server]
+telegram-server ansible_host=192.168.0.216 ansible_user=nikita ansible_port=22 ansible_python_interpreter=/usr/bin/python3

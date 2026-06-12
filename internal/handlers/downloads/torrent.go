@@ -32,6 +32,11 @@ func HandleTorrentFile(
 		return
 	}
 
-	downloaderInstance := tmsfactory.NewTorrentDownloader(doc.FileName, a.Config.MoviePath, a.Config)
+	downloaderInstance, err := tmsfactory.NewTorrentDownloader(doc.FileName, a.Config.MoviePath, a.Config)
+	if err != nil {
+		logutils.Log.WithError(err).Error("Failed to create torrent downloader")
+		sendDownloadStartError(a, chatID, err, tgbotapi.NewRemoveKeyboard(false))
+		return
+	}
 	HandleDownload(a, chatID, downloaderInstance)
 }

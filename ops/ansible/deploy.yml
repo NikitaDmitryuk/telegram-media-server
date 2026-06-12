@@ -1,0 +1,96 @@
+---
+- name: Deploy Telegram Media Server binary
+  hosts: telegram_server
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - group_vars/telegram_server.yml
+
+  tasks:
+    - name: Load optional vault vars
+      ansible.builtin.include_vars:
+        file: group_vars/telegram_server.vault.yml
+      failed_when: false
+      no_log: true
+
+    - name: Read local Ansible input env
+      ansible.builtin.set_fact:
+        tms_local_env_text: "{{ lookup('ansible.builtin.file', playbook_dir + '/../../.env', errors='ignore') | default('', true) }}"
+      no_log: true
+
+    - name: Check existing TMS env
+      ansible.builtin.stat:
+        path: "{{ tms_config_dir }}/.env"
+      register: tms_existing_env_stat
+
+    - name: Read existing TMS env
+      ansible.builtin.slurp:
+        src: "{{ tms_config_dir }}/.env"
+      register: tms_existing_env_slurp
+      when: tms_existing_env_stat.stat.exists
+      no_log: true
+
+    - name: Parse existing TMS env
+      ansible.builtin.set_fact:
+        tms_existing_env_text: "{{ (tms_existing_env_slurp.content | default('') | b64decode) if tms_existing_env_stat.stat.exists else '' }}"
+      no_log: true
+
+    - name: Resolve TMS API key
+      ansible.builtin.set_fact:
+        tms_api_key_effective: "{{ tms_api_key | default(tms_local_env_text | regex_findall('(?m)^TMS_API_KEY=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TMS_API_KEY=(.*)$') | first | default('', true), true), true) }}"
+      no_log: true
+
+    - name: Require TMS API key for deploy smoke test
+      ansible.builtin.assert:
+        that:
+          - tms_api_key_effective | length > 0
+        fail_msg: "Set tms_api_key in vault or keep TMS_API_KEY in the existing server .env."
+      no_log: true
+
+    - name: Check local TMS binary exists
+      ansible.builtin.stat:
+        path: "{{ tms_binary_src }}"
+      delegate_to: localhost
+      become: false
+      register: tms_local_binary
+
+    - name: Require local TMS binary
+      ansible.builtin.assert:
+        that:
+          - tms_local_binary.stat.exists
+        fail_msg: "Build the remote binary first: make build-remote"
+
+    - name: Install TMS binary with backup
+      ansible.builtin.copy:
+        src: "{{ tms_binary_src }}"
+        dest: "{{ tms_install_dir }}/{{ tms_binary_name }}"
+        owner: root
+        group: root
+        mode: "0755"
+        backup: true
+      notify: Restart TMS
+
+    - name: Flush restart before smoke test
+      ansible.builtin.meta: flush_handlers
+
+    - name: Check TMS health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ tms_api_listen.split(':')[-1] }}/api/v1/health"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ tms_api_key_effective }}"
+        status_code: 200
+      register: tms_health_check
+      retries: 10
+      delay: 2
+      until: (tms_health_check.status | default(0)) == 200
+      no_log: true
+
+  handlers:
+    - name: Restart TMS
+      ansible.builtin.systemd:
+        name: "{{ tms_service_name }}"
+        state: restarted
+        enabled: true
+        daemon_reload: true

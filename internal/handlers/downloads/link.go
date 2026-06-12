@@ -12,15 +12,16 @@ import (
 func HandleDownloadLink(
 	a *app.App,
 	update *tgbotapi.Update,
+	link string,
 ) {
 	message := update.Message
 	chatID := message.Chat.ID
 
-	logutils.Log.WithField("link", message.Text).Info("Starting download for a valid link")
+	logutils.Log.WithField("link", link).Info("Starting download for a valid link")
 	ctx := context.Background()
-	downloaderInstance, err := tmsfactory.CreateDownloaderFromURL(ctx, message.Text, a.Config.MoviePath, a.Config)
+	downloaderInstance, err := tmsfactory.CreateDownloaderFromURL(ctx, link, a.Config.MoviePath, a.Config)
 	if err != nil {
-		logutils.Log.WithError(err).WithField("link", message.Text).Debug("HandleDownloadLink: CreateDownloaderFromURL failed")
+		logutils.Log.WithError(err).WithField("link", link).Debug("HandleDownloadLink: CreateDownloaderFromURL failed")
 		sendDownloadStartError(a, chatID, err, nil)
 		return
 	}

@@ -49,8 +49,9 @@ type openclawAgentBody struct {
 }
 
 // effectiveWebhookFormat picks how to encode the webhook body.
-// OpenClaw /hooks/wake requires {"text":"..."}; /hooks/agent requires {"message":"..."}.
-// Without hooks.mappings, posting TMS {id,title,...} to /hooks/wake returns 400.
+// OpenClaw /hooks/wake requires {"text":"..."}; /hooks/agent and mapped
+// agent hooks like /hooks/tms require {"message":"..."}.
+// Without a matching format, posting TMS {id,title,...} to OpenClaw returns 400.
 func effectiveWebhookFormat(webhookURL, explicit string) string {
 	switch strings.ToLower(strings.TrimSpace(explicit)) {
 	case "openclaw_wake", "wake":
@@ -68,6 +69,9 @@ func effectiveWebhookFormat(webhookURL, explicit string) string {
 		return formatOpenClawWake
 	}
 	if strings.Contains(u, "/hooks/agent") {
+		return formatOpenClawAgent
+	}
+	if strings.Contains(u, "/hooks/tms") {
 		return formatOpenClawAgent
 	}
 	return formatTMS

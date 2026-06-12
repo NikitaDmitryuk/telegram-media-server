@@ -6,9 +6,46 @@ import (
 	"path/filepath"
 	"testing"
 
+	tmsdownloader "github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/testutils"
 )
+
+type deleteMovieManagerMock struct {
+	stoppedIDs []uint
+	removedIDs []uint
+}
+
+func (*deleteMovieManagerMock) StartDownload(
+	tmsdownloader.Downloader,
+	notifier.QueueNotifier,
+) (id uint, progressChan chan float64, errChan chan error, err error) {
+	return 0, nil, nil, nil
+}
+
+func (*deleteMovieManagerMock) ResumeDownload(uint, tmsdownloader.Downloader, string, int, notifier.QueueNotifier) (chan error, error) {
+	return nil, nil
+}
+
+func (m *deleteMovieManagerMock) StopDownload(movieID uint) error {
+	m.stoppedIDs = append(m.stoppedIDs, movieID)
+	return nil
+}
+
+func (*deleteMovieManagerMock) StopDownloadSilent(uint) error { return nil }
+func (*deleteMovieManagerMock) StopAllDownloads()             {}
+func (*deleteMovieManagerMock) GetActiveDownloads() []uint    { return nil }
+func (*deleteMovieManagerMock) GetQueueItems() []map[string]any {
+	return nil
+}
+
+func (m *deleteMovieManagerMock) RemoveQBittorrentTorrent(_ context.Context, movieID uint) error {
+	m.removedIDs = append(m.removedIDs, movieID)
+	return nil
+}
+
+func (*deleteMovieManagerMock) ResumePendingTVConversions(context.Context) {}
 
 func TestHasEnoughSpace(t *testing.T) {
 	logutils.InitLogger("debug")
@@ -174,6 +211,58 @@ func TestDeleteMainFilesByMovieID(t *testing.T) {
 	err = DeleteMainFilesByMovieID(movieID, tempDir, db, nil)
 	if err != nil {
 		t.Errorf("DeleteMainFilesByMovieID failed: %v", err)
+	}
+}
+
+func TestDeleteMovieRemovesDBFilesAndQBittorrentTorrent(t *testing.T) {
+	logutils.InitLogger("debug")
+
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	db := testutils.TestDatabase(t)
+	manager := &deleteMovieManagerMock{}
+
+	movieID, err := db.AddMovie(ctx, "Big Buck Bunny", 1024, []string{"bbb.mp4"}, []string{"incomplete/bbb.torrent"}, 0)
+	if err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	hashErr := db.SetQBittorrentHash(ctx, movieID, "fake-hash")
+	if hashErr != nil {
+		t.Fatalf("SetQBittorrentHash: %v", hashErr)
+	}
+	for _, rel := range []string{"bbb.mp4", filepath.Join("incomplete", "bbb.torrent")} {
+		path := filepath.Join(tempDir, rel)
+		mkdirErr := os.MkdirAll(filepath.Dir(path), 0700)
+		if mkdirErr != nil {
+			t.Fatalf("MkdirAll: %v", mkdirErr)
+		}
+		writeErr := os.WriteFile(path, []byte("content"), 0600)
+		if writeErr != nil {
+			t.Fatalf("WriteFile: %v", writeErr)
+		}
+	}
+
+	deleteErr := DeleteMovie(movieID, tempDir, db, manager)
+	if deleteErr != nil {
+		t.Fatalf("DeleteMovie: %v", deleteErr)
+	}
+	exists, err := db.MovieExistsId(ctx, movieID)
+	if err != nil {
+		t.Fatalf("MovieExistsId: %v", err)
+	}
+	if exists {
+		t.Fatal("movie still exists in DB")
+	}
+	for _, rel := range []string{"bbb.mp4", filepath.Join("incomplete", "bbb.torrent")} {
+		if _, err := os.Stat(filepath.Join(tempDir, rel)); !os.IsNotExist(err) {
+			t.Fatalf("%s should be deleted, stat err: %v", rel, err)
+		}
+	}
+	if len(manager.stoppedIDs) != 1 || manager.stoppedIDs[0] != movieID {
+		t.Fatalf("StopDownload calls = %v, want [%d]", manager.stoppedIDs, movieID)
+	}
+	if len(manager.removedIDs) != 1 || manager.removedIDs[0] != movieID {
+		t.Fatalf("RemoveQBittorrentTorrent calls = %v, want [%d]", manager.removedIDs, movieID)
 	}
 }
 

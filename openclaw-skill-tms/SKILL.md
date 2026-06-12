@@ -1,31 +1,32 @@
 ---
 name: tms
-version: "1.0.7"
-description: Manage downloads via Telegram Media Server (TMS) REST API — add by URL (video/magnet/torrent URL) or torrent_base64 (.torrent bytes), list, delete, search torrents.
-metadata:
-  {"openclaw":{"requires":{"env":[]},"primaryEnv":"TMS_API_URL"}}
+version: "1.0.9"
+description: "Control Telegram Media Server downloads over REST: add URLs/torrents, list status, delete, and search via Prowlarr."
+homepage: https://github.com/NikitaDmitryuk/telegram-media-server/tree/main/openclaw-skill-tms
+user-invocable: false
+metadata: {"openclaw":{"requires":{"env":[]},"primaryEnv":"TMS_API_KEY"}}
 ---
 
 # TMS (Telegram Media Server) API skill
 
-Use this skill when the user wants to add downloads, check download status, stop a download, or search for torrents via the TMS backend. All requests go to the TMS REST API.
+Use this skill when the user wants to add downloads, check download status, remove a download, or search for torrents via the TMS backend. All requests go to the TMS REST API.
 
-**How to use:** This skill does not add a "tms" command. The agent must make HTTP requests (GET/POST/DELETE) to the TMS endpoints. The **full API contract** (paths, request/response schemas, examples) is included in this document below — no need to fetch any URL to get the API spec. Use the OpenAPI spec (inline) section to build and invoke API calls.
+**How to use:** This skill is not a `/tms` slash command. The agent must make HTTP requests (GET/POST/DELETE) to the TMS endpoints. Prefer OpenClaw's HTTP/web request capability when available; do not use shell commands or `curl` unless HTTP tooling is unavailable. The **full API contract** (paths, request/response schemas, examples) is included in this document below, so there is no need to fetch any URL to get the API spec.
 
 ## Base URL and authentication
 
 - **Base URL:** Use env `TMS_API_URL` if set; otherwise, when TMS and OpenClaw run on the **same host**, use **`http://127.0.0.1:8080`** (TMS default API listen). Do not add a trailing slash. All endpoint paths in the spec use the prefix `/api/v1` — e.g. `GET /health` means **`GET {BaseURL}/api/v1/health`**.
-- **Authentication:** Optional. When TMS and OpenClaw run on the same host, TMS accepts requests from localhost without a key — `TMS_API_KEY` can be omitted. When OpenClaw runs on another host (or you want auth), set `TMS_API_KEY` and send every API request with either `Authorization: Bearer <TMS_API_KEY>` or header `X-API-Key: <TMS_API_KEY>`.
+- **Authentication:** If env `TMS_API_KEY` is configured, always send every API request with `Authorization: Bearer <TMS_API_KEY>` or header `X-API-Key: <TMS_API_KEY>`. If a request returns 401, retry once with the configured `TMS_API_KEY`; do not ask the user to reveal the key. Only omit auth when `TMS_API_KEY` is truly absent and TMS is explicitly configured to allow unauthenticated localhost requests.
 
 ## Operations (summary)
 
 1. **Health check** — `GET {BaseURL}/api/v1/health` — returns `{"status":"ok"}` if the API is up.
-2. **List downloads** — `GET {BaseURL}/api/v1/downloads` — returns a JSON array of downloads with `id`, `title`, `status` (queued, downloading, converting, completed, failed, stopped), `progress`, `conversion_progress`, `error` (if failed), `position_in_queue` (if queued). Snapshot is best-effort.
+2. **List downloads** — `GET {BaseURL}/api/v1/downloads` — returns a JSON array of queued, active, and completed/library items with `id`, `title`, `status` (queued, downloading, converting, completed, failed, stopped), `progress`, `conversion_progress`, `error` (if failed), `position_in_queue` (if queued). Empty state is `[]`. Snapshot is best-effort.
 3. **Add download** — `POST {BaseURL}/api/v1/downloads` with JSON body that includes **exactly one** of `url` or `torrent_base64`, plus optional `title`.
    - **`url`:** video URL (yt-dlp), magnet (`magnet:...`), HTTPS URL to a `.torrent` file, or (when Prowlarr is on TMS) Prowlarr proxy download URL. Prefer **magnet** from search results when adding a torrent.
    - **`torrent_base64`:** standard Base64 encoding of a `.torrent` file’s raw bytes (no extra HTTP fetch by TMS). Use when the agent has the torrent file content (e.g. user upload, read from disk in workspace) but no public HTTPS URL. Body size limit applies (~1 MiB JSON).
-   Optional `title` overrides the display name. Response: `201` with `{"id": <number>, "title": "<string>"}`. Use `id` for delete or status.
-4. **Delete download** — `DELETE {BaseURL}/api/v1/downloads/{id}` — stops and removes the download. Response: `204` no body. `id` is the numeric id from the add response or list.
+   Optional `title` overrides the display name. Response: `201` with `{"id": <number>, "title": "<string>"}`. Use `id` for delete or status. If the user asks to add a movie and does not explicitly request a duplicate, call `GET /downloads` first and avoid adding an existing item with the same title/status.
+4. **Delete download** — `DELETE {BaseURL}/api/v1/downloads/{id}` — removes the item everywhere: active download or queue, DB/library row, local files, and qBittorrent entry when applicable. Response: `204` no body. `id` is the numeric id from the add response or list.
 5. **Search torrents** — `GET {BaseURL}/api/v1/search?q=<query>&limit=20&quality=1080` — requires Prowlarr configured on TMS. `q` is required; `limit` (1–100, default 20) and `quality` (optional filter) may be used. Returns array of `{title, size, magnet, torrent_url, indexer_name, peers}`. When adding from search, use the **magnet** field in POST /downloads (or torrent_url); you may pass `title` from the result.
 
 Detailed request/response schemas and status codes are in the **OpenAPI spec (inline)** below.
@@ -39,8 +40,8 @@ openapi: 3.1.0
 info:
   title: TMS REST API
   description: |
-    Telegram Media Server API. Use to add downloads by URL (video/magnet/torrent URL) or torrent_base64 (.torrent file), list downloads with status,
-    delete a download, or search torrents. All endpoints require Authorization Bearer or X-API-Key.
+    Telegram Media Server API. Use to add downloads by URL (video/magnet/torrent), list queued/active/completed
+    downloads with status, remove downloads everywhere, or search torrents. All endpoints require Authorization Bearer or X-API-Key.
   version: 1.0.0
 
 servers:
@@ -75,7 +76,7 @@ paths:
       tags: [downloads]
       summary: List downloads
       description: |
-        Call to get current downloads (queued, active, completed). Returns array of items with id, title, status (queued|downloading|converting|completed|failed|stopped), progress (0-100), conversion_progress, error (if failed), position_in_queue (if queued). Snapshot is best-effort.
+        Call to get current downloads (queued, active, completed/library). Returns an array of items with id, title, status (queued|downloading|converting|completed|failed|stopped), progress (0-100), conversion_progress, error (if failed), position_in_queue (if queued). Empty state is []. Snapshot is best-effort.
       operationId: listDownloads
       responses:
         '200':
@@ -89,7 +90,7 @@ paths:
       tags: [downloads]
       summary: Create a download
       description: |
-        Call to add a download. Body: JSON with exactly one of "url" or "torrent_base64", plus optional "title". "url": video URL (yt-dlp), magnet (magnet:...), HTTPS URL to a .torrent file, or Prowlarr proxy download URL. "torrent_base64": standard Base64 of a .torrent file (no separate HTTP fetch). Prefer magnet from search results when applicable. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
+        Call to add a download. Body: JSON with exactly one of "url" or "torrent_base64", plus optional "title". "url": video URL (yt-dlp), magnet (magnet:...), HTTPS URL to a .torrent file, or Prowlarr proxy download URL. "torrent_base64": standard Base64 of a .torrent file (no separate HTTP fetch). Prefer magnet from search results when applicable. If the user did not explicitly request a duplicate, call GET /downloads first and avoid adding an existing title. Response gives id (number) and title (string). Use this id for DELETE /downloads/{id}.
       operationId: addDownload
       requestBody:
         required: true
@@ -122,8 +123,8 @@ paths:
   /downloads/{id}:
     delete:
       tags: [downloads]
-      summary: Stop and remove a download
-      description: Call to stop the download with given id and remove it. id is the numeric id returned by POST /downloads. Returns 204 with no body on success.
+      summary: Remove a download everywhere
+      description: Call to remove the item with given id everywhere: active download or queue, DB/library row, local files, and qBittorrent entry when applicable. id is the numeric id returned by POST /downloads or GET /downloads. Returns 204 with no body on success.
       operationId: deleteDownload
       parameters:
         - name: id
@@ -132,7 +133,7 @@ paths:
           schema: { type: integer, minimum: 1 }
       responses:
         '204':
-          description: Download stopped
+          description: Download removed
         '400':
           description: Invalid id (not a number)
           content:

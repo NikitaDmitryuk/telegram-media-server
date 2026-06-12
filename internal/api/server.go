@@ -42,7 +42,8 @@ type Server struct {
 	srv    *http.Server
 }
 
-// NewServer creates a new API server. When apiKey is empty, only requests from localhost are accepted.
+// NewServer creates a new API server. Localhost requests are accepted without
+// a key; non-localhost requests require apiKey when configured.
 func NewServer(a *app.App, listenAddr, apiKey string) *Server {
 	s := &Server{app: a, apiKey: apiKey}
 	mux := http.NewServeMux()
@@ -117,7 +118,10 @@ func (s *Server) chain(h Handler) http.HandlerFunc {
 		w.Header().Set("X-Request-ID", requestID)
 		r = r.WithContext(ctx)
 
-		if s.apiKey != "" {
+		if isLocalhostOrAllowedInDocker(r) {
+			// Same-host integrations such as OpenClaw can call TMS over the
+			// loopback API without exposing secrets to the agent prompt.
+		} else if s.apiKey != "" {
 			token := ""
 			if ah := r.Header.Get("Authorization"); strings.HasPrefix(ah, "Bearer ") {
 				token = strings.TrimSpace(ah[7:])

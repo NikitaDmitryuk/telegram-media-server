@@ -1,0 +1,6 @@
+listen-address 127.0.0.1:8118
+toggle 1
+enable-remote-toggle 0
+enable-edit-actions 0
+accept-intercepted-requests 0
+forward-socks5t / {{ telegram_proxy_effective | regex_replace('^socks5://', '') | regex_replace('/.*$', '') }} .

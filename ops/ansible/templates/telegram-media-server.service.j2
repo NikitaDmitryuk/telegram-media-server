@@ -1,0 +1,16 @@
+[Unit]
+Description=Telegram Media Server
+After=network-online.target {{ qbittorrent_service_name }}.service
+Wants=network-online.target {{ qbittorrent_service_name }}.service
+
+[Service]
+User={{ tms_user }}
+Group={{ tms_group }}
+ExecStart={{ tms_install_dir }}/{{ tms_binary_name }}
+EnvironmentFile={{ tms_config_dir }}/.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

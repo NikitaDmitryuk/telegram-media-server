@@ -22,6 +22,13 @@ LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
 LOG_LINES ?= 100
 SYSTEMD_UNIT ?= telegram-media-server
 COMPOSE_SERVICE ?= telegram-media-server
+REMOTE_GOOS ?= linux
+REMOTE_GOARCH ?= amd64
+REMOTE_BINARY := $(BUILD_DIR)/$(BINARY_NAME)-$(REMOTE_GOOS)-$(REMOTE_GOARCH)
+REMOTE_SSH ?= telegram-server
+REMOTE_BUILD_DIR ?= /tmp/telegram-media-server-build
+ANSIBLE_INVENTORY ?= ops/ansible/inventory.ini
+ANSIBLE_VAULT_ARGS ?=
 
 # Dependency checks
 .PHONY: check-deps
@@ -89,16 +96,72 @@ build-simple:
 	@echo "Building $(BINARY_NAME) for CI..."
 	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/telegram-media-server
 
+.PHONY: build-remote
+build-remote:
+	@echo "Building $(BINARY_NAME) for $(REMOTE_GOOS)/$(REMOTE_GOARCH) on $(REMOTE_SSH) with CGO..."
+	@mkdir -p $(BUILD_DIR)
+	rsync -az --delete \
+		--exclude .git \
+		--exclude .env \
+		--exclude build \
+		--exclude ops/ansible/inventory.ini \
+		--exclude ops/ansible/group_vars/telegram_server.vault.yml \
+		./ $(REMOTE_SSH):$(REMOTE_BUILD_DIR)/
+	ssh $(REMOTE_SSH) 'cd $(REMOTE_BUILD_DIR) && mkdir -p $(BUILD_DIR) && GOOS=$(REMOTE_GOOS) GOARCH=$(REMOTE_GOARCH) CGO_ENABLED=1 go build -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)" -trimpath -o $(REMOTE_BINARY) ./cmd/telegram-media-server'
+	scp $(REMOTE_SSH):$(REMOTE_BUILD_DIR)/$(REMOTE_BINARY) $(REMOTE_BINARY)
+
 .PHONY: clean
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR) $(BINARY_NAME)
 	go clean -cache -testcache
 
-# Установка (Arch Linux, Ubuntu/Debian): интерактивный скрипт — .env, qBittorrent, Prowlarr, minidlna.
+# Remote installation/deploy via Ansible (Arch Linux target).
 .PHONY: install
-install:
-	@bash scripts/install.sh
+install: build-remote
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "Error: ansible-playbook is required. Install Ansible first."; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(ANSIBLE_INVENTORY)" ]; then \
+		echo "Error: $(ANSIBLE_INVENTORY) not found. Copy ops/ansible/inventory.ini.example first."; \
+		exit 1; \
+	fi
+	ansible-playbook -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/site.yml
+
+.PHONY: deploy
+deploy: build-remote
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "Error: ansible-playbook is required. Install Ansible first."; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(ANSIBLE_INVENTORY)" ]; then \
+		echo "Error: $(ANSIBLE_INVENTORY) not found. Copy ops/ansible/inventory.ini.example first."; \
+		exit 1; \
+	fi
+	ansible-playbook -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/deploy.yml
+
+.PHONY: ansible-check
+ansible-check:
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "Error: ansible-playbook is required. Install Ansible first."; \
+		exit 1; \
+	fi
+	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/site.yml
+	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/deploy.yml
+	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/test.yml
+
+.PHONY: test-remote
+test-remote:
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "Error: ansible-playbook is required. Install Ansible first."; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(ANSIBLE_INVENTORY)" ]; then \
+		echo "Error: $(ANSIBLE_INVENTORY) not found. Copy ops/ansible/inventory.ini.example first."; \
+		exit 1; \
+	fi
+	ansible-playbook -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/test.yml
 
 .PHONY: uninstall
 uninstall:
@@ -327,7 +390,11 @@ help:
 	@echo "Build:"
 	@echo "  build          - Build the application (with dependency check)"
 	@echo "  build-simple   - Build for CI (no dependencies check)"
-	@echo "  install        - Install (Arch/Ubuntu, interactive script)"
+	@echo "  build-remote   - Build linux/amd64 binary for Ansible deploy"
+	@echo "  install        - Build and install remote stack with Ansible"
+	@echo "  deploy         - Build and deploy only the TMS binary with Ansible"
+	@echo "  ansible-check  - Run Ansible syntax checks"
+	@echo "  test-remote    - Run post-install Ansible smoke and scenario tests"
 	@echo "  uninstall      - Uninstall system service"
 	@echo "  clean          - Clean build artifacts"
 	@echo ""

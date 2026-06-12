@@ -15,6 +15,7 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/factory"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/notifier"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/prowlarr"
@@ -30,11 +31,12 @@ func Health(w http.ResponseWriter, _ *http.Request, _ *app.App) {
 // ListDownloads returns GET /api/v1/downloads — best effort snapshot of queue + active + DB.
 func ListDownloads(w http.ResponseWriter, r *http.Request, a *app.App) {
 	ctx := r.Context()
-	var items []DownloadItem
+	items := make([]DownloadItem, 0)
+	seen := make(map[uint]struct{})
 
 	// Queue items
 	for _, q := range a.DownloadManager.GetQueueItems() {
-		movieID, _ := uintFromMap(q, "movie_id")
+		movieID := uintFromMap(q, "movie_id")
 		title, _ := q["title"].(string)
 		pos, _ := q["position"].(int)
 		items = append(items, DownloadItem{
@@ -44,6 +46,9 @@ func ListDownloads(w http.ResponseWriter, r *http.Request, a *app.App) {
 			Progress:        0,
 			PositionInQueue: &pos,
 		})
+		if movieID != 0 {
+			seen[movieID] = struct{}{}
+		}
 	}
 
 	// Active downloads (from jobs)
@@ -63,10 +68,47 @@ func ListDownloads(w http.ResponseWriter, r *http.Request, a *app.App) {
 			Status:             status,
 			Progress:           movie.DownloadedPercentage,
 			ConversionProgress: movie.ConversionPercentage,
+			ConversionStatus:   movie.ConversionStatus,
+			TvCompatibility:    movie.TvCompatibility,
+			SizeBytes:          movie.FileSize,
+			SizeGB:             formatDownloadSizeGB(movie.FileSize),
+		})
+		seen[movie.ID] = struct{}{}
+	}
+
+	movies, err := a.DB.GetMovieList(ctx)
+	if err != nil {
+		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(ctx)).Warn("ListDownloads: GetMovieList failed")
+		writeJSON(w, http.StatusOK, items)
+		return
+	}
+	for i := range movies {
+		if _, ok := seen[movies[i].ID]; ok {
+			continue
+		}
+		status := downloadStatusFromMovie(&movies[i])
+		items = append(items, DownloadItem{
+			ID:                 movies[i].ID,
+			Title:              movies[i].Name,
+			Status:             status,
+			Progress:           movies[i].DownloadedPercentage,
+			ConversionProgress: movies[i].ConversionPercentage,
+			ConversionStatus:   movies[i].ConversionStatus,
+			TvCompatibility:    movies[i].TvCompatibility,
+			SizeBytes:          movies[i].FileSize,
+			SizeGB:             formatDownloadSizeGB(movies[i].FileSize),
 		})
 	}
 
 	writeJSON(w, http.StatusOK, items)
+}
+
+func formatDownloadSizeGB(size int64) string {
+	if size <= 0 {
+		return ""
+	}
+	const bytesPerGiB = 1024 * 1024 * 1024
+	return strconv.FormatFloat(float64(size)/bytesPerGiB, 'f', 2, 64)
 }
 
 const downloadPercentComplete = 100
@@ -87,40 +129,54 @@ func downloadStatusFromMovie(m *database.Movie) string {
 	}
 }
 
-func uintFromMap(m map[string]any, key string) (uint, bool) {
+func uintFromMap(m map[string]any, key string) uint {
 	v, ok := m[key]
 	if !ok {
-		return 0, false
+		return 0
 	}
 	switch n := v.(type) {
 	case int:
 		if n < 0 {
-			return 0, false
+			return 0
 		}
-		return uint(n), true
+		return uint(n)
 	case float64:
 		if n < 0 {
-			return 0, false
+			return 0
 		}
-		return uint(n), true
+		return uint(n)
 	case uint:
-		return n, true
+		return n
 	}
-	return 0, false
+	return 0
 }
 
 // DeleteDownload handles DELETE /api/v1/downloads/:id.
 func DeleteDownload(w http.ResponseWriter, r *http.Request, a *app.App, id uint) {
-	err := a.DownloadManager.StopDownload(id)
-	if err != nil {
+	if err := deleteDownloadEverywhere(r.Context(), a, id); err != nil {
 		logutils.Log.WithError(err).WithFields(map[string]any{
 			"movie_id":   id,
 			"request_id": RequestIDFromContext(r.Context()),
-		}).Error("DeleteDownload: StopDownload failed")
-		writeError(w, http.StatusInternalServerError, "failed to stop download")
+		}).Error("DeleteDownload: delete failed")
+		writeError(w, http.StatusInternalServerError, "failed to delete download")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func deleteDownloadEverywhere(ctx context.Context, a *app.App, id uint) error {
+	exists := false
+	if a.DB != nil {
+		var err error
+		exists, err = a.DB.MovieExistsId(ctx, id)
+		if err != nil {
+			return err
+		}
+	}
+	if exists {
+		return filemanager.DeleteMovie(id, a.Config.MoviePath, a.DB, a.DownloadManager)
+	}
+	return a.DownloadManager.StopDownload(id)
 }
 
 // maxAddDownloadBodyBytes limits POST /api/v1/downloads body size to avoid DoS.

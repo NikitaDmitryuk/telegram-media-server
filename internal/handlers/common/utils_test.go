@@ -92,6 +92,91 @@ func TestIsValidLink(t *testing.T) {
 	}
 }
 
+func TestExtractLink(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		want      string
+		wantFound bool
+	}{
+		{
+			name:      "Plain HTTPS URL",
+			input:     "https://example.com/movie",
+			want:      "https://example.com/movie",
+			wantFound: true,
+		},
+		{
+			name:      "URL inside Russian text",
+			input:     "Скачай пожалуйста https://youtu.be/dQw4w9WgXcQ когда будет время",
+			want:      "https://youtu.be/dQw4w9WgXcQ",
+			wantFound: true,
+		},
+		{
+			name:      "URL with query params",
+			input:     "нашел https://example.com/watch?v=abc123&category=video",
+			want:      "https://example.com/watch?v=abc123&category=video",
+			wantFound: true,
+		},
+		{
+			name:      "URL in angle brackets",
+			input:     "download <https://example.com/file.torrent>",
+			want:      "https://example.com/file.torrent",
+			wantFound: true,
+		},
+		{
+			name:      "URL in quotes",
+			input:     `download "https://example.com/file.torrent"`,
+			want:      "https://example.com/file.torrent",
+			wantFound: true,
+		},
+		{
+			name:      "URL with trailing punctuation",
+			input:     "вот ссылка https://example.com/movie.",
+			want:      "https://example.com/movie",
+			wantFound: true,
+		},
+		{
+			name:      "Magnet link",
+			input:     "вот magnet:?xt=urn:btih:abcdef1234567890&dn=Movie",
+			want:      "magnet:?xt=urn:btih:abcdef1234567890&dn=Movie",
+			wantFound: true,
+		},
+		{
+			name:      "First supported URL wins",
+			input:     "first https://example.com/one second https://example.com/two",
+			want:      "https://example.com/one",
+			wantFound: true,
+		},
+		{
+			name:      "No URL",
+			input:     "this is just text",
+			wantFound: false,
+		},
+		{
+			name:      "Unsupported scheme",
+			input:     "download ftp://example.com/file",
+			wantFound: false,
+		},
+		{
+			name:      "Domain without scheme",
+			input:     "download example.com/file",
+			wantFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := ExtractLink(tt.input)
+			if found != tt.wantFound {
+				t.Fatalf("ExtractLink(%q) found = %v, want %v", tt.input, found, tt.wantFound)
+			}
+			if got != tt.want {
+				t.Fatalf("ExtractLink(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsTorrentFile(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"gorm.io/gorm"
 )
 
 func (s *SQLiteDatabase) AddMovie(
@@ -14,84 +16,91 @@ func (s *SQLiteDatabase) AddMovie(
 	mainFiles, tempFiles []string,
 	totalEpisodes int,
 ) (uint, error) {
-	movie := Movie{
-		Name:                 name,
-		FileSize:             fileSize,
-		DownloadedPercentage: 0,
-		TotalEpisodes:        totalEpisodes,
-	}
+	var movieID uint
+	err := s.withRetry(ctx, "AddMovie", func() error {
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			movie := Movie{
+				Name:                 name,
+				FileSize:             fileSize,
+				DownloadedPercentage: 0,
+				TotalEpisodes:        totalEpisodes,
+			}
 
-	result := s.db.WithContext(ctx).Create(&movie)
-	if result.Error != nil {
-		return 0, result.Error
-	}
+			if err := tx.Create(&movie).Error; err != nil {
+				return err
+			}
 
-	if err := s.addFiles(ctx, movie.ID, mainFiles, false); err != nil {
+			if err := addFilesWithDB(tx, movie.ID, mainFiles, false); err != nil {
+				return err
+			}
+
+			if err := addFilesWithDB(tx, movie.ID, tempFiles, true); err != nil {
+				return err
+			}
+
+			movieID = movie.ID
+			return nil
+		})
+	})
+	if err != nil {
 		return 0, err
 	}
-
-	if err := s.addFiles(ctx, movie.ID, tempFiles, true); err != nil {
-		return 0, err
-	}
-
-	return movie.ID, nil
+	return movieID, nil
 }
 
 func (s *SQLiteDatabase) UpdateMovieName(ctx context.Context, movieID uint, name string) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("name", name)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "UpdateMovieName", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("name", name).Error
+	})
 }
 
 func (s *SQLiteDatabase) UpdateMovieFileSize(ctx context.Context, movieID uint, size int64) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("file_size", size)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "UpdateMovieFileSize", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("file_size", size).Error
+	})
 }
 
 func (s *SQLiteDatabase) UpdateMovieTotalEpisodes(ctx context.Context, movieID uint, total int) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("total_episodes", total)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "UpdateMovieTotalEpisodes", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("total_episodes", total).Error
+	})
 }
 
 func (s *SQLiteDatabase) RemoveMovie(ctx context.Context, movieID uint) error {
-	result := s.db.WithContext(ctx).Delete(&Movie{}, movieID)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "RemoveMovie", func() error {
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("movie_id = ?", movieID).Delete(&MovieFile{}).Error; err != nil {
+				return err
+			}
+			return tx.Delete(&Movie{}, movieID).Error
+		})
+	})
 }
 
 func (s *SQLiteDatabase) GetMovieList(ctx context.Context) ([]Movie, error) {
 	var movies []Movie
-	result := s.db.WithContext(ctx).Find(&movies)
-	if result.Error != nil {
-		return nil, result.Error
+	if err := s.withRetry(ctx, "GetMovieList", func() error {
+		return s.db.WithContext(ctx).Find(&movies).Error
+	}); err != nil {
+		return nil, err
 	}
 	return movies, nil
 }
 
 func (s *SQLiteDatabase) UpdateDownloadedPercentage(ctx context.Context, movieID uint, percentage int) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("downloaded_percentage", percentage)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "UpdateDownloadedPercentage", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).
+			Where("id = ? AND downloaded_percentage <> ?", movieID, percentage).
+			Update("downloaded_percentage", percentage).Error
+	})
 }
 
 func (s *SQLiteDatabase) UpdateEpisodesProgress(ctx context.Context, movieID uint, completedEpisodes int) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("completed_episodes", completedEpisodes)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "UpdateEpisodesProgress", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).
+			Where("id = ? AND completed_episodes <> ?", movieID, completedEpisodes).
+			Update("completed_episodes", completedEpisodes).Error
+	})
 }
 
 func (s *SQLiteDatabase) SetLoaded(ctx context.Context, movieID uint, movieRoot string) error {
@@ -100,11 +109,9 @@ func (s *SQLiteDatabase) SetLoaded(ctx context.Context, movieID uint, movieRoot 
 	if sum, err := s.sumMainFilesSizeOnDisk(ctx, movieID, movieRoot); err == nil && sum > 0 {
 		updates["file_size"] = sum
 	}
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Updates(updates)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "SetLoaded", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Updates(updates).Error
+	})
 }
 
 // RefreshMovieFileSizeFromDisk updates file_size from actual main files on disk (e.g. magnet had unknown size at add time).
@@ -113,9 +120,10 @@ func (s *SQLiteDatabase) RefreshMovieFileSizeFromDisk(ctx context.Context, movie
 	if err != nil || sum <= 0 {
 		return sum, err
 	}
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("file_size", sum)
-	if result.Error != nil {
-		return 0, result.Error
+	if err := s.withRetry(ctx, "RefreshMovieFileSizeFromDisk", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("file_size", sum).Error
+	}); err != nil {
+		return 0, err
 	}
 	return sum, nil
 }
@@ -141,53 +149,55 @@ func (s *SQLiteDatabase) sumMainFilesSizeOnDisk(ctx context.Context, movieID uin
 }
 
 func (s *SQLiteDatabase) UpdateConversionStatus(ctx context.Context, movieID uint, status string) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("conversion_status", status)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "UpdateConversionStatus", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).
+			Where("id = ? AND conversion_status <> ?", movieID, status).
+			Update("conversion_status", status).Error
+	})
 }
 
 func (s *SQLiteDatabase) UpdateConversionPercentage(ctx context.Context, movieID uint, percentage int) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("conversion_percentage", percentage)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "UpdateConversionPercentage", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).
+			Where("id = ? AND conversion_percentage <> ?", movieID, percentage).
+			Update("conversion_percentage", percentage).Error
+	})
 }
 
 func (s *SQLiteDatabase) SetTvCompatibility(ctx context.Context, movieID uint, compat string) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("tv_compatibility", compat)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "SetTvCompatibility", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).
+			Where("id = ? AND tv_compatibility <> ?", movieID, compat).
+			Update("tv_compatibility", compat).Error
+	})
 }
 
 func (s *SQLiteDatabase) SetQBittorrentHash(ctx context.Context, movieID uint, hash string) error {
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Update("qbittorrent_hash", hash)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "SetQBittorrentHash", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).
+			Where("id = ? AND qbittorrent_hash <> ?", movieID, hash).
+			Update("qbittorrent_hash", hash).Error
+	})
 }
 
 func (s *SQLiteDatabase) GetMovieByID(ctx context.Context, movieID uint) (Movie, error) {
 	var movie Movie
-	result := s.db.WithContext(ctx).First(&movie, movieID)
-	if result.Error != nil {
-		return Movie{}, result.Error
+	if err := s.withRetry(ctx, "GetMovieByID", func() error {
+		return s.db.WithContext(ctx).First(&movie, movieID).Error
+	}); err != nil {
+		return Movie{}, err
 	}
 	return movie, nil
 }
 
 func (s *SQLiteDatabase) GetIncompleteQBittorrentDownloads(ctx context.Context) ([]Movie, error) {
 	var movies []Movie
-	result := s.db.WithContext(ctx).
-		Where("qbittorrent_hash != '' AND downloaded_percentage < 100").
-		Find(&movies)
-	if result.Error != nil {
-		return nil, result.Error
+	if err := s.withRetry(ctx, "GetIncompleteQBittorrentDownloads", func() error {
+		return s.db.WithContext(ctx).
+			Where("qbittorrent_hash != '' AND downloaded_percentage < 100").
+			Find(&movies).Error
+	}); err != nil {
+		return nil, err
 	}
 	return movies, nil
 }
@@ -195,9 +205,10 @@ func (s *SQLiteDatabase) GetIncompleteQBittorrentDownloads(ctx context.Context) 
 func (s *SQLiteDatabase) MovieExistsFiles(ctx context.Context, files []string) (bool, error) {
 	for _, file := range files {
 		var count int64
-		result := s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path = ?", file).Count(&count)
-		if result.Error != nil {
-			return false, result.Error
+		if err := s.withRetry(ctx, "MovieExistsFiles", func() error {
+			return s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path = ?", file).Count(&count).Error
+		}); err != nil {
+			return false, err
 		}
 		if count > 0 {
 			return true, nil
@@ -208,18 +219,20 @@ func (s *SQLiteDatabase) MovieExistsFiles(ctx context.Context, files []string) (
 
 func (s *SQLiteDatabase) MovieExistsId(ctx context.Context, movieID uint) (bool, error) {
 	var count int64
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Count(&count)
-	if result.Error != nil {
-		return false, result.Error
+	if err := s.withRetry(ctx, "MovieExistsId", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Count(&count).Error
+	}); err != nil {
+		return false, err
 	}
 	return count > 0, nil
 }
 
 func (s *SQLiteDatabase) MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error) {
 	var count int64
-	result := s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path LIKE ?", fmt.Sprintf("%%%s", fileName)).Count(&count)
-	if result.Error != nil {
-		return false, result.Error
+	if err := s.withRetry(ctx, "MovieExistsUploadedFile", func() error {
+		return s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path LIKE ?", fmt.Sprintf("%%%s", fileName)).Count(&count).Error
+	}); err != nil {
+		return false, err
 	}
 	return count > 0, nil
 }

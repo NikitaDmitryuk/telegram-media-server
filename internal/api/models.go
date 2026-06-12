@@ -12,6 +12,10 @@ type DownloadItem struct {
 	Status             string `json:"status"` // queued, downloading, converting, completed, failed, stopped
 	Progress           int    `json:"progress"`
 	ConversionProgress int    `json:"conversion_progress,omitempty"`
+	ConversionStatus   string `json:"conversion_status,omitempty"`
+	TvCompatibility    string `json:"tv_compatibility,omitempty"`
+	SizeBytes          int64  `json:"size_bytes,omitempty"`
+	SizeGB             string `json:"size_gb,omitempty"`
 	Error              string `json:"error,omitempty"`
 	PositionInQueue    *int   `json:"position_in_queue,omitempty"`
 }

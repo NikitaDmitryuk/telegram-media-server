@@ -56,7 +56,14 @@ func TestListMoviesHandler_WithMovies(t *testing.T) {
 		t.Errorf("Expected chat ID 123, got %d", msg.ChatID)
 	}
 
-	for _, sub := range []string{"Test Movie 1", "Test Movie 2", "[75/0]", "[100/0]", "1.00", "2.00"} {
+	for _, sub := range []string{
+		"Test Movie 1",
+		"Test Movie 2",
+		"DL 75% | CV waiting 0% | TV unknown",
+		"DL 100% | CV waiting 0% | TV unknown",
+		"1.00",
+		"2.00",
+	} {
 		if !strings.Contains(msg.Text, sub) {
 			t.Errorf("Expected message to contain %q, got: %s", sub, msg.Text)
 		}
@@ -125,14 +132,55 @@ func TestListMoviesHandler_CompatibilityMode(t *testing.T) {
 	}
 
 	msg := bot.SentMessages[0]
-	if !strings.Contains(msg.Text, "100/100") {
-		t.Errorf("Expected '100/100' in compat mode, got: %s", msg.Text)
+	if !strings.Contains(msg.Text, "DL 100% | CV waiting 100% | TV green") {
+		t.Errorf("Expected explicit compat status in compat mode, got: %s", msg.Text)
 	}
 	if !strings.Contains(msg.Text, "🟢") {
 		t.Errorf("Expected green sticker, got: %s", msg.Text)
 	}
 	if !strings.Contains(msg.Text, "TV Ready Movie") {
 		t.Errorf("Expected movie name, got: %s", msg.Text)
+	}
+}
+
+func TestFormatListProgressAndSticker_StatusVariants(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		movie        database.Movie
+		wantProgress string
+		wantSticker  string
+	}{
+		{
+			name:         "unknown_waiting",
+			movie:        database.Movie{DownloadedPercentage: 50},
+			wantProgress: "DL 50% | CV waiting 0% | TV unknown",
+			wantSticker:  "⚪ ",
+		},
+		{
+			name:         "done_forces_conversion_100",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "done", TvCompatibility: "green"},
+			wantProgress: "DL 100% | CV done 100% | TV green",
+			wantSticker:  "🟢 ",
+		},
+		{
+			name:         "skipped_forces_conversion_100",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "skipped", TvCompatibility: "red"},
+			wantProgress: "DL 100% | CV skipped 100% | TV red",
+			wantSticker:  "🔴 ",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			progress, sticker := formatListProgressAndSticker(&tc.movie, true)
+			if progress != tc.wantProgress {
+				t.Fatalf("progress = %q, want %q", progress, tc.wantProgress)
+			}
+			if sticker != tc.wantSticker {
+				t.Fatalf("sticker = %q, want %q", sticker, tc.wantSticker)
+			}
+		})
 	}
 }
 

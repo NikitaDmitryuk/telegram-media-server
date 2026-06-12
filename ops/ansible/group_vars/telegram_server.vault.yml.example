@@ -1,0 +1,19 @@
+# Create the real file with:
+#   ansible-vault create ops/ansible/group_vars/telegram_server.vault.yml
+
+bot_token: "123456:telegram-bot-token"
+admin_password: "change-me-admin"
+regular_password: "change-me-regular"
+
+# Optional. If omitted, Ansible preserves existing server .env values.
+# On a fresh install, tms_api_key and qbittorrent_password are generated.
+# tms_api_key: "change-me-api-key"
+# qbittorrent_password: "change-me-qbit"
+# Optional explicit webhook overrides. Normally enable OpenClaw in
+# group_vars/telegram_server.yml and let Ansible generate/preserve the token.
+# tms_webhook_token: ""
+# telegram_proxy: ""
+# content_proxy: ""
+# content_proxy_domains: ""
+# openclaw_api_key: ""
+# openclaw_telegram_bot_token: ""

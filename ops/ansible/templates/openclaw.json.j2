@@ -1,0 +1,82 @@
+{% set fallbacks = openclaw_fallback_models_effective.split(',') | map('trim') | reject('equalto', '') | list %}
+{% set telegram_allow_from = openclaw_telegram_allow_from_effective.split(',') | map('trim') | reject('equalto', '') | list %}
+{% set telegram_group_allow_from = openclaw_telegram_group_allow_from_effective.split(',') | map('trim') | reject('equalto', '') | list %}
+{% set telegram_groups = openclaw_telegram_groups_effective.split(',') | map('trim') | reject('equalto', '') | list %}
+{% set telegram_proxy = 'http://127.0.0.1:8118' if telegram_proxy_effective.startswith('socks5://') else telegram_proxy_effective %}
+{
+  "gateway": {
+    "mode": "local",
+    "port": {{ openclaw_gateway_port_effective | int }},
+    "bind": {{ openclaw_gateway_host | to_json }}
+  },
+  "agents": {
+    "defaults": {
+      "workspace": {{ openclaw_workspace_dir | to_json }},
+      "model": {
+        "primary": {{ openclaw_model_ref_effective | to_json }}{% if fallbacks | length > 0 %},
+        "fallbacks": [{% for model in fallbacks %}{{ (model if model.startswith(openclaw_provider_id_effective ~ '/') else (openclaw_provider_id_effective ~ '/' ~ model)) | to_json }}{% if not loop.last %}, {% endif %}{% endfor %}]{% endif %}
+      },
+      "models": {
+        {{ openclaw_model_ref_effective | to_json }}: { "alias": "Primary" }{% for model in fallbacks %},
+        {{ (model if model.startswith(openclaw_provider_id_effective ~ '/') else (openclaw_provider_id_effective ~ '/' ~ model)) | to_json }}: { "alias": "Fallback {{ loop.index }}" }{% endfor %}
+      }
+    }
+  }{% if openclaw_provider_base_url_effective | length > 0 or openclaw_api_key_effective | length > 0 %},
+  "models": {
+    "providers": {
+      {{ openclaw_provider_id_effective | to_json }}: {
+{% if openclaw_provider_base_url_effective | length > 0 %}
+        "baseUrl": {{ openclaw_provider_base_url_effective | to_json }},
+{% endif %}
+        "models": [{ "id": {{ openclaw_model_id_effective | to_json }}, "name": {{ openclaw_model_id_effective | to_json }} }]{% if openclaw_api_key_effective | length > 0 %},
+        "apiKey": "${{ openclaw_api_key_env_effective }}"
+{% endif %}
+      }
+    }
+  }{% endif %},
+{% if openclaw_telegram_enabled_effective %}
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": {{ openclaw_telegram_bot_token_effective | to_json }},
+      "dmPolicy": {{ openclaw_telegram_dm_policy_effective | to_json }},
+      "groupPolicy": {{ openclaw_telegram_group_policy_effective | to_json }}{% if telegram_proxy | length > 0 %},
+      "proxy": {{ telegram_proxy | to_json }}{% endif %}{% if telegram_allow_from | length > 0 %},
+      "allowFrom": [{% for item in telegram_allow_from %}{{ item | to_json }}{% if not loop.last %}, {% endif %}{% endfor %}]{% endif %}{% if telegram_group_allow_from | length > 0 %},
+      "groupAllowFrom": [{% for item in telegram_group_allow_from %}{{ item | to_json }}{% if not loop.last %}, {% endif %}{% endfor %}]{% endif %}{% if telegram_groups | length > 0 %},
+      "groups": {
+{% for group_id in telegram_groups %}
+        {{ group_id | to_json }}: { "requireMention": {{ openclaw_telegram_groups_require_mention_effective | ternary('true', 'false') }} }{% if not loop.last %},{% endif %}
+{% endfor %}
+      }{% endif %}
+    }
+  },
+{% endif %}
+  "hooks": {
+    "enabled": true,
+    "token": {{ tms_webhook_token_effective | to_json }},
+    "path": "/hooks",
+    "defaultSessionKey": "hook:ingress",
+    "allowRequestSessionKey": false,
+    "allowedSessionKeyPrefixes": ["hook:"],
+    "mappings": [
+      {
+        "match": { "path": "tms" },
+        "action": "agent",
+        "agentId": "main",
+        "deliver": true
+      }
+    ]
+  },
+  "skills": {
+    "entries": {
+      {{ openclaw_tms_skill_slug | to_json }}: {
+        "enabled": true,
+        "apiKey": {{ tms_api_key_effective | to_json }},
+        "env": {
+          "TMS_API_URL": {{ openclaw_tms_api_url | to_json }}
+        }
+      }
+    }
+  }
+}

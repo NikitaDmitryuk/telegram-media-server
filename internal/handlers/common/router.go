@@ -35,11 +35,16 @@ func Router(
 	if update.Message.IsCommand() {
 		cmd := update.Message.Command()
 		allowWithoutAccess := cmd == "login" || cmd == "start"
-		if !allowWithoutAccess && !auth.CheckAccess(update, a.DB) {
+		allowed := true
+		role := models.UserRole("")
+		if !allowWithoutAccess {
+			allowed, role = auth.AuthMiddleware(update, a.DB)
+		}
+		if !allowed {
 			a.Bot.SendMessage(update.Message.Chat.ID, lang.Translate("general.user_prompts.unknown_user", nil), nil)
 			return
 		}
-		handleCommand(a, update)
+		handleCommand(a, update, role)
 		return
 	}
 
@@ -54,6 +59,7 @@ func Router(
 func handleCommand(
 	a *app.App,
 	update *tgbotapi.Update,
+	role models.UserRole,
 ) {
 	command := update.Message.Command()
 	switch command {
@@ -68,7 +74,7 @@ func handleCommand(
 	case "temp":
 		auth.GenerateTempPasswordHandler(a, update)
 	case "logs":
-		if !auth.CheckAccessWithRole(update, []models.UserRole{models.AdminRole}, a.DB) {
+		if role != models.AdminRole {
 			a.Bot.SendMessage(update.Message.Chat.ID, lang.Translate("error.authentication.access_denied", nil), nil)
 			return
 		}
@@ -123,8 +129,8 @@ func handleUnknownMessage(
 	text string,
 	chatID int64,
 ) {
-	if IsValidLink(text) {
-		tmsdownloads.HandleDownloadLink(a, update)
+	if link, ok := ExtractLink(text); ok {
+		tmsdownloads.HandleDownloadLink(a, update, link)
 	} else if doc := update.Message.Document; doc != nil && IsTorrentFile(doc.FileName) {
 		tmsdownloads.HandleTorrentFile(a, update)
 	} else {
