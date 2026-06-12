@@ -129,8 +129,8 @@ func handleUnknownMessage(
 	text string,
 	chatID int64,
 ) {
-	if IsValidLink(text) {
-		tmsdownloads.HandleDownloadLink(a, update)
+	if link, ok := ExtractLink(text); ok {
+		tmsdownloads.HandleDownloadLink(a, update, link)
 	} else if doc := update.Message.Document; doc != nil && IsTorrentFile(doc.FileName) {
 		tmsdownloads.HandleTorrentFile(a, update)
 	} else {

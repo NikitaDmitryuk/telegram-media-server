@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -488,6 +489,86 @@ func TestShouldPersistProgress(t *testing.T) {
 	}
 	if !shouldPersistProgress(10, 10, now, now.Add(progressFlushInterval)) {
 		t.Fatal("should persist unchanged progress after flush interval")
+	}
+}
+
+type progressWriteCountingDB struct {
+	testutils.DatabaseStub
+	mu    sync.Mutex
+	calls []int
+}
+
+func (db *progressWriteCountingDB) UpdateDownloadedPercentage(_ context.Context, _ uint, percentage int) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.calls = append(db.calls, percentage)
+	return nil
+}
+
+func (db *progressWriteCountingDB) callCount() int {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return len(db.calls)
+}
+
+func TestMonitorSkipsRepeatedProgressWritesBeforeFlush(t *testing.T) {
+	cfg := testutils.TestConfig(t.TempDir())
+	cfg.DownloadSettings.DownloadTimeout = 0
+	cfg.DownloadSettings.ProgressUpdateInterval = 50 * time.Millisecond
+	cfg.VideoSettings.CompatibilityMode = false
+
+	db := &progressWriteCountingDB{}
+	dm := NewDownloadManager(cfg, db)
+
+	progressChan := make(chan float64, 10)
+	errChan := make(chan error, 1)
+	outerErrChan := make(chan error, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	job := downloadJob{
+		downloader:    &testutils.MockDownloader{ShouldBlock: true},
+		startTime:     time.Now(),
+		progressChan:  progressChan,
+		errChan:       errChan,
+		ctx:           ctx,
+		cancel:        cancel,
+		queueNotifier: notifier.Noop,
+	}
+
+	dm.mu.Lock()
+	dm.jobs[1] = &job
+	dm.mu.Unlock()
+	dm.semaphore <- struct{}{}
+
+	go dm.monitorDownload(1, &job, outerErrChan)
+
+	progressChan <- 10.1
+	deadline := time.Now().Add(time.Second)
+	for db.callCount() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := db.callCount(); got != 1 {
+		t.Fatalf("UpdateDownloadedPercentage calls after first progress = %d, want 1", got)
+	}
+
+	progressChan <- 10.2
+	progressChan <- 10.3
+	close(progressChan)
+	errChan <- nil
+
+	select {
+	case err := <-outerErrChan:
+		if err != nil {
+			t.Fatalf("monitor returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("monitor did not complete in time")
+	}
+
+	if got := db.callCount(); got != 1 {
+		t.Fatalf("UpdateDownloadedPercentage calls = %d, want 1", got)
 	}
 }
 

@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	sqliteRetryAttempts = 5
-	sqliteRetryDelay    = 25 * time.Millisecond
+	sqliteRetryAttempts = 10
+	sqliteRetryDelay    = 50 * time.Millisecond
+	sqliteRetryMaxDelay = 500 * time.Millisecond
 )
 
 func (*SQLiteDatabase) withRetry(ctx context.Context, operation string, fn func() error) error {
@@ -26,7 +27,11 @@ func (*SQLiteDatabase) withRetry(ctx context.Context, operation string, fn func(
 		if attempt == 0 && logutils.Log != nil {
 			logutils.Log.WithError(err).WithField("operation", operation).Debug("SQLite busy; retrying operation")
 		}
-		timer := time.NewTimer(sqliteRetryDelay * time.Duration(attempt+1))
+		delay := sqliteRetryDelay * time.Duration(1<<attempt)
+		if delay > sqliteRetryMaxDelay {
+			delay = sqliteRetryMaxDelay
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()

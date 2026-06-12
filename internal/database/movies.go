@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"gorm.io/gorm"
 )
 
 func (s *SQLiteDatabase) AddMovie(
@@ -14,27 +16,36 @@ func (s *SQLiteDatabase) AddMovie(
 	mainFiles, tempFiles []string,
 	totalEpisodes int,
 ) (uint, error) {
-	movie := Movie{
-		Name:                 name,
-		FileSize:             fileSize,
-		DownloadedPercentage: 0,
-		TotalEpisodes:        totalEpisodes,
-	}
+	var movieID uint
+	err := s.withRetry(ctx, "AddMovie", func() error {
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			movie := Movie{
+				Name:                 name,
+				FileSize:             fileSize,
+				DownloadedPercentage: 0,
+				TotalEpisodes:        totalEpisodes,
+			}
 
-	result := s.db.WithContext(ctx).Create(&movie)
-	if result.Error != nil {
-		return 0, result.Error
-	}
+			if err := tx.Create(&movie).Error; err != nil {
+				return err
+			}
 
-	if err := s.addFiles(ctx, movie.ID, mainFiles, false); err != nil {
+			if err := addFilesWithDB(tx, movie.ID, mainFiles, false); err != nil {
+				return err
+			}
+
+			if err := addFilesWithDB(tx, movie.ID, tempFiles, true); err != nil {
+				return err
+			}
+
+			movieID = movie.ID
+			return nil
+		})
+	})
+	if err != nil {
 		return 0, err
 	}
-
-	if err := s.addFiles(ctx, movie.ID, tempFiles, true); err != nil {
-		return 0, err
-	}
-
-	return movie.ID, nil
+	return movieID, nil
 }
 
 func (s *SQLiteDatabase) UpdateMovieName(ctx context.Context, movieID uint, name string) error {
@@ -56,11 +67,14 @@ func (s *SQLiteDatabase) UpdateMovieTotalEpisodes(ctx context.Context, movieID u
 }
 
 func (s *SQLiteDatabase) RemoveMovie(ctx context.Context, movieID uint) error {
-	result := s.db.WithContext(ctx).Delete(&Movie{}, movieID)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "RemoveMovie", func() error {
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("movie_id = ?", movieID).Delete(&MovieFile{}).Error; err != nil {
+				return err
+			}
+			return tx.Delete(&Movie{}, movieID).Error
+		})
+	})
 }
 
 func (s *SQLiteDatabase) GetMovieList(ctx context.Context) ([]Movie, error) {
@@ -191,9 +205,10 @@ func (s *SQLiteDatabase) GetIncompleteQBittorrentDownloads(ctx context.Context) 
 func (s *SQLiteDatabase) MovieExistsFiles(ctx context.Context, files []string) (bool, error) {
 	for _, file := range files {
 		var count int64
-		result := s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path = ?", file).Count(&count)
-		if result.Error != nil {
-			return false, result.Error
+		if err := s.withRetry(ctx, "MovieExistsFiles", func() error {
+			return s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path = ?", file).Count(&count).Error
+		}); err != nil {
+			return false, err
 		}
 		if count > 0 {
 			return true, nil
@@ -204,18 +219,20 @@ func (s *SQLiteDatabase) MovieExistsFiles(ctx context.Context, files []string) (
 
 func (s *SQLiteDatabase) MovieExistsId(ctx context.Context, movieID uint) (bool, error) {
 	var count int64
-	result := s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Count(&count)
-	if result.Error != nil {
-		return false, result.Error
+	if err := s.withRetry(ctx, "MovieExistsId", func() error {
+		return s.db.WithContext(ctx).Model(&Movie{}).Where("id = ?", movieID).Count(&count).Error
+	}); err != nil {
+		return false, err
 	}
 	return count > 0, nil
 }
 
 func (s *SQLiteDatabase) MovieExistsUploadedFile(ctx context.Context, fileName string) (bool, error) {
 	var count int64
-	result := s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path LIKE ?", fmt.Sprintf("%%%s", fileName)).Count(&count)
-	if result.Error != nil {
-		return false, result.Error
+	if err := s.withRetry(ctx, "MovieExistsUploadedFile", func() error {
+		return s.db.WithContext(ctx).Model(&MovieFile{}).Where("file_path LIKE ?", fmt.Sprintf("%%%s", fileName)).Count(&count).Error
+	}); err != nil {
+		return false, err
 	}
 	return count > 0, nil
 }

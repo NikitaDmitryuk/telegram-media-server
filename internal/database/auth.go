@@ -59,31 +59,28 @@ func (s *SQLiteDatabase) createOrUpdateUser(
 	expiresAt *time.Time,
 ) (bool, error) {
 	var user User
-	var resultErr error
-	if err := s.withRetry(ctx, "createOrUpdateUser.First", func() error {
-		resultErr = s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error
-		return resultErr
-	}); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, err
-	}
+	err := s.withRetry(ctx, "createOrUpdateUser", func() error {
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			resultErr := tx.Where("chat_id = ?", chatID).First(&user).Error
+			if resultErr != nil && !errors.Is(resultErr, gorm.ErrRecordNotFound) {
+				return resultErr
+			}
 
-	if errors.Is(resultErr, gorm.ErrRecordNotFound) {
-		user = User{
-			Name:      userName,
-			ChatID:    chatID,
-			Role:      role,
-			ExpiresAt: expiresAt,
-		}
-		err := s.withRetry(ctx, "createOrUpdateUser.Create", func() error {
-			return s.db.WithContext(ctx).Create(&user).Error
+			if errors.Is(resultErr, gorm.ErrRecordNotFound) {
+				user = User{
+					Name:      userName,
+					ChatID:    chatID,
+					Role:      role,
+					ExpiresAt: expiresAt,
+				}
+				return tx.Create(&user).Error
+			}
+
+			user.Name = userName
+			user.Role = role
+			user.ExpiresAt = expiresAt
+			return tx.Save(&user).Error
 		})
-		return err == nil, err
-	}
-	user.Name = userName
-	user.Role = role
-	user.ExpiresAt = expiresAt
-	err := s.withRetry(ctx, "createOrUpdateUser.Save", func() error {
-		return s.db.WithContext(ctx).Save(&user).Error
 	})
 	return err == nil, err
 }
@@ -135,41 +132,46 @@ func isTemporaryPasswordValid(passwords []TemporaryPassword) bool {
 }
 
 func (s *SQLiteDatabase) AssignTemporaryPassword(ctx context.Context, password string, chatID int64) error {
-	var tempPassword TemporaryPassword
-	result := s.db.WithContext(ctx).Where("password = ?", password).First(&tempPassword)
-	if result.Error != nil {
-		return result.Error
-	}
+	return s.withRetry(ctx, "AssignTemporaryPassword", func() error {
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var tempPassword TemporaryPassword
+			result := tx.Where("password = ?", password).First(&tempPassword)
+			if result.Error != nil {
+				return result.Error
+			}
 
-	var user User
-	result = s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("user not found")
-		}
-		return result.Error
-	}
+			var user User
+			result = tx.Where("chat_id = ?", chatID).First(&user)
+			if result.Error != nil {
+				if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("user not found")
+				}
+				return result.Error
+			}
 
-	return s.db.WithContext(ctx).Model(&tempPassword).Association("Users").Append(&user)
+			return tx.Model(&tempPassword).Association("Users").Append(&user)
+		})
+	})
 }
 
 func (s *SQLiteDatabase) ExtendTemporaryUser(ctx context.Context, chatID int64, newExpiration time.Time) error {
 	var user User
-	result := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("user not found")
+	return s.withRetry(ctx, "ExtendTemporaryUser", func() error {
+		result := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user)
+		if result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("user not found")
+			}
+			return result.Error
 		}
-		return result.Error
-	}
 
-	if user.Role != "temporary" {
-		return fmt.Errorf("user is not temporary")
-	}
+		if user.Role != "temporary" {
+			return fmt.Errorf("user is not temporary")
+		}
 
-	user.ExpiresAt = &newExpiration
-	result = s.db.WithContext(ctx).Save(&user)
-	return result.Error
+		user.ExpiresAt = &newExpiration
+		return s.db.WithContext(ctx).Save(&user).Error
+	})
 }
 
 func (s *SQLiteDatabase) GenerateTemporaryPassword(ctx context.Context, duration time.Duration) (string, error) {
@@ -186,9 +188,10 @@ func (s *SQLiteDatabase) GenerateTemporaryPassword(ctx context.Context, duration
 		ExpiresAt: expiresAt,
 	}
 
-	result := s.db.WithContext(ctx).Create(&tempPassword)
-	if result.Error != nil {
-		return "", result.Error
+	if err := s.withRetry(ctx, "GenerateTemporaryPassword", func() error {
+		return s.db.WithContext(ctx).Create(&tempPassword).Error
+	}); err != nil {
+		return "", err
 	}
 
 	return password, nil
@@ -196,9 +199,10 @@ func (s *SQLiteDatabase) GenerateTemporaryPassword(ctx context.Context, duration
 
 func (s *SQLiteDatabase) GetUserByChatID(ctx context.Context, chatID int64) (User, error) {
 	var user User
-	result := s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user)
-	if result.Error != nil {
-		return User{}, result.Error
+	if err := s.withRetry(ctx, "GetUserByChatID", func() error {
+		return s.db.WithContext(ctx).Where("chat_id = ?", chatID).First(&user).Error
+	}); err != nil {
+		return User{}, err
 	}
 	return user, nil
 }

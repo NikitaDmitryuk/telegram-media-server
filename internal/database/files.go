@@ -6,15 +6,15 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *SQLiteDatabase) addFiles(ctx context.Context, movieID uint, files []string, isTemp bool) error {
-	for _, file := range files {
-		movieFile := MovieFile{MovieID: movieID, FilePath: file, TempFile: isTemp}
-		result := s.db.WithContext(ctx).Create(&movieFile)
-		if result.Error != nil {
-			return result.Error
-		}
+func addFilesWithDB(db *gorm.DB, movieID uint, files []string, isTemp bool) error {
+	if len(files) == 0 {
+		return nil
 	}
-	return nil
+	movieFiles := make([]MovieFile, 0, len(files))
+	for _, file := range files {
+		movieFiles = append(movieFiles, MovieFile{MovieID: movieID, FilePath: file, TempFile: isTemp})
+	}
+	return db.Create(&movieFiles).Error
 }
 
 func (s *SQLiteDatabase) GetFilesByMovieID(ctx context.Context, movieID uint) ([]MovieFile, error) {
@@ -28,11 +28,9 @@ func (s *SQLiteDatabase) GetFilesByMovieID(ctx context.Context, movieID uint) ([
 }
 
 func (s *SQLiteDatabase) RemoveFilesByMovieID(ctx context.Context, movieID uint) error {
-	result := s.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, false).Delete(&MovieFile{})
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "RemoveFilesByMovieID", func() error {
+		return s.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, false).Delete(&MovieFile{}).Error
+	})
 }
 
 // ReplaceMainMovieFiles replaces all main (non-temp) file records for the movie.
@@ -42,23 +40,15 @@ func (s *SQLiteDatabase) ReplaceMainMovieFiles(ctx context.Context, movieID uint
 			if err := tx.Where("movie_id = ? AND temp_file = ?", movieID, false).Delete(&MovieFile{}).Error; err != nil {
 				return err
 			}
-			for _, file := range paths {
-				movieFile := MovieFile{MovieID: movieID, FilePath: file, TempFile: false}
-				if err := tx.Create(&movieFile).Error; err != nil {
-					return err
-				}
-			}
-			return nil
+			return addFilesWithDB(tx, movieID, paths, false)
 		})
 	})
 }
 
 func (s *SQLiteDatabase) RemoveTempFilesByMovieID(ctx context.Context, movieID uint) error {
-	result := s.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, true).Delete(&MovieFile{})
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return s.withRetry(ctx, "RemoveTempFilesByMovieID", func() error {
+		return s.db.WithContext(ctx).Where("movie_id = ? AND temp_file = ?", movieID, true).Delete(&MovieFile{}).Error
+	})
 }
 
 func (s *SQLiteDatabase) GetTempFilesByMovieID(ctx context.Context, movieID uint) ([]MovieFile, error) {

@@ -19,6 +19,7 @@ type SQLiteDatabase struct {
 const (
 	sqliteMaxIdleTime     = 5 * time.Minute
 	sqliteConnMaxLifetime = 30 * time.Minute
+	sqliteBusyTimeoutMS   = 15000
 )
 
 func NewSQLiteDatabase() *SQLiteDatabase {
@@ -27,7 +28,7 @@ func NewSQLiteDatabase() *SQLiteDatabase {
 
 func (s *SQLiteDatabase) Init(config *tmsconfig.Config) error {
 	dbPath := filepath.Join(config.MoviePath, "movie.db")
-	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on"
+	dsn := fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=WAL&_foreign_keys=on", dbPath, sqliteBusyTimeoutMS)
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
