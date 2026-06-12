@@ -2,6 +2,12 @@
 
 All notable changes to this skill are documented here.
 
+## [1.0.9] - Require configured TMS API key usage
+
+- **Authentication guidance:** clarified that when `TMS_API_KEY` is configured, the agent must send it on every TMS API request, including same-host installs.
+- **Agent behavior:** instructed agents to retry 401 responses with the configured key and not ask users to paste secrets into chat.
+- **Docs:** removed misleading same-host/no-key guidance for Ansible-generated installs, which create an API key by default.
+
 ## [1.0.8] - OpenClaw metadata and delete/list semantics
 
 - **OpenClaw metadata:** shortened the frontmatter description, added homepage, set `user-invocable: false`, and changed `metadata.openclaw.primaryEnv` to `TMS_API_KEY`.

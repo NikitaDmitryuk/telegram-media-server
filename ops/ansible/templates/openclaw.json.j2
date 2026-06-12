@@ -72,9 +72,9 @@
     "entries": {
       {{ openclaw_tms_skill_slug | to_json }}: {
         "enabled": true,
+        "apiKey": {{ tms_api_key_effective | to_json }},
         "env": {
-          "TMS_API_URL": {{ openclaw_tms_api_url | to_json }},
-          "TMS_API_KEY": {{ tms_api_key_effective | to_json }}
+          "TMS_API_URL": {{ openclaw_tms_api_url | to_json }}
         }
       }
     }

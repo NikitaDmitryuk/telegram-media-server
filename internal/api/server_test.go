@@ -214,17 +214,33 @@ func TestAPI_NoKey_DockerPrivateIPAllowed(t *testing.T) {
 	}
 }
 
-func TestAPI_Health_401WithoutKey(t *testing.T) {
+func TestAPI_ConfiguredKey_LocalhostAllowedWithoutKey(t *testing.T) {
 	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret"}
 	a := &app.App{Config: cfg}
 	srv := NewServer(a, "127.0.0.1:0", "secret")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
+	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("localhost without key when key configured: got status %d, want 200", rec.Code)
+	}
+}
+
+func TestAPI_Health_401WithoutKeyFromNonLocalhost(t *testing.T) {
+	cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret"}
+	a := &app.App{Config: cfg}
+	srv := NewServer(a, "127.0.0.1:0", "secret")
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", http.NoBody)
+	req.RemoteAddr = "8.8.8.8:12345"
 	rec := httptest.NewRecorder()
 	srv.srv.Handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("Health without key: got status %d, want 401", rec.Code)
+		t.Errorf("non-localhost health without key: got status %d, want 401", rec.Code)
 	}
 }
 

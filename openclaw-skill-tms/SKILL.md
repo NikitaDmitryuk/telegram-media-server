@@ -1,7 +1,7 @@
 ---
 name: tms
-version: "1.0.8"
-description: Control Telegram Media Server downloads over REST: add URLs/torrents, list status, delete, and search via Prowlarr.
+version: "1.0.9"
+description: "Control Telegram Media Server downloads over REST: add URLs/torrents, list status, delete, and search via Prowlarr."
 homepage: https://github.com/NikitaDmitryuk/telegram-media-server/tree/main/openclaw-skill-tms
 user-invocable: false
 metadata: {"openclaw":{"requires":{"env":[]},"primaryEnv":"TMS_API_KEY"}}
@@ -16,7 +16,7 @@ Use this skill when the user wants to add downloads, check download status, remo
 ## Base URL and authentication
 
 - **Base URL:** Use env `TMS_API_URL` if set; otherwise, when TMS and OpenClaw run on the **same host**, use **`http://127.0.0.1:8080`** (TMS default API listen). Do not add a trailing slash. All endpoint paths in the spec use the prefix `/api/v1` — e.g. `GET /health` means **`GET {BaseURL}/api/v1/health`**.
-- **Authentication:** Optional. When TMS and OpenClaw run on the same host, TMS accepts requests from localhost without a key — `TMS_API_KEY` can be omitted. When OpenClaw runs on another host (or you want auth), set `TMS_API_KEY` and send every API request with either `Authorization: Bearer <TMS_API_KEY>` or header `X-API-Key: <TMS_API_KEY>`.
+- **Authentication:** If env `TMS_API_KEY` is configured, always send every API request with `Authorization: Bearer <TMS_API_KEY>` or header `X-API-Key: <TMS_API_KEY>`. If a request returns 401, retry once with the configured `TMS_API_KEY`; do not ask the user to reveal the key. Only omit auth when `TMS_API_KEY` is truly absent and TMS is explicitly configured to allow unauthenticated localhost requests.
 
 ## Operations (summary)
 

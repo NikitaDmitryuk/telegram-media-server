@@ -1,10 +1,10 @@
 {
   "name": "TMS (Telegram Media Server)",
   "tagline": "Manage media downloads via REST API: video URLs, magnets, torrents, and search.",
-  "description": "Telegram Media Server (TMS) is a Telegram bot that downloads streaming video and torrents (yt-dlp, aria2/qBittorrent) and can serve them via DLNA. Install TMS from https://github.com/NikitaDmitryuk/telegram-media-server (see repo README). This instruction-only skill teaches OpenClaw to control a running TMS via REST: add downloads by URL, magnet, .torrent URL, or torrent_base64, list queued/active/completed items, remove downloads everywhere, and search torrents when Prowlarr is configured. Same-host mode needs no env; remote access can use TMS_API_URL and TMS_API_KEY.",
+  "description": "Telegram Media Server (TMS) is a Telegram bot that downloads streaming video and torrents (yt-dlp, aria2/qBittorrent) and can serve them via DLNA. Install TMS from https://github.com/NikitaDmitryuk/telegram-media-server (see repo README). This instruction-only skill teaches OpenClaw to control a running TMS via REST: add downloads by URL, magnet, .torrent URL, or torrent_base64, list queued/active/completed items, remove downloads everywhere, and search torrents when Prowlarr is configured. Default same-host URL is supported; use configured TMS_API_KEY whenever TMS API auth is enabled.",
   "category": "utility",
   "tags": ["downloads", "media", "api", "torrent", "yt-dlp", "tms"],
-  "version": "1.0.8",
+  "version": "1.0.9",
   "license": "MIT",
   "pricing": "free",
   "support_url": "https://github.com/NikitaDmitryuk/telegram-media-server/issues",
