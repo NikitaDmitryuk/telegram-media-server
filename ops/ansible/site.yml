@@ -185,6 +185,10 @@
       tags: always
 
   tasks:
+    - name: Configure optional subscription VPN
+      ansible.builtin.import_tasks: vpn.yml
+      tags: vpn
+
     - name: Install runtime packages
       ansible.builtin.pacman:
         name: "{{ ['ffmpeg', 'aria2', 'qbittorrent-nox', 'python', 'python-pip', 'python-virtualenv'] + (['chromium', 'xorg-server-xvfb', 'xorg-xauth'] if (tms_ytdlp_managed_cookies | default(false) | bool) else []) + (['minidlna'] if tms_enable_minidlna_effective else []) + (['nodejs', 'npm'] if openclaw_enabled_effective else []) + (['privoxy'] if (openclaw_enabled_effective and telegram_proxy_effective.startswith('socks5://')) else []) }}"
@@ -431,7 +435,7 @@
       delay: 2
       until: prowlarr_config_find.matched | int > 0
       when: tms_enable_prowlarr
-      tags: prowlarr
+      tags: [prowlarr, vpn]
 
     - name: Read Prowlarr config.xml
       ansible.builtin.slurp:
@@ -439,14 +443,14 @@
       register: prowlarr_config_xml
       when: tms_enable_prowlarr
       no_log: true
-      tags: prowlarr
+      tags: [prowlarr, vpn]
 
     - name: Extract Prowlarr API key
       ansible.builtin.set_fact:
         prowlarr_api_key: "{{ (prowlarr_config_xml.content | b64decode | regex_search('<ApiKey>([^<]+)</ApiKey>', '\\1') | first) }}"
       when: tms_enable_prowlarr
       no_log: true
-      tags: prowlarr
+      tags: [prowlarr, vpn]
 
     - name: Install minidlna config
       ansible.builtin.template:
@@ -584,7 +588,7 @@
       notify: Restart OpenClaw
       no_log: true
       when: openclaw_enabled_effective
-      tags: openclaw
+      tags: [openclaw, vpn]
 
     - name: Install OpenClaw systemd unit
       ansible.builtin.template:
@@ -721,7 +725,7 @@
         mode: "0640"
       notify: Restart TMS
       no_log: true
-      tags: config
+      tags: [config, vpn]
 
     - name: Install TMS systemd unit
       ansible.builtin.template:
@@ -733,7 +737,7 @@
       notify:
         - Reload systemd
         - Restart TMS
-      tags: systemd
+      tags: [systemd, vpn]
 
     - name: Start TMS
       ansible.builtin.systemd:
@@ -741,11 +745,11 @@
         enabled: true
         state: started
         daemon_reload: true
-      tags: service
+      tags: [service, vpn]
 
     - name: Flush handlers before smoke tests
       ansible.builtin.meta: flush_handlers
-      tags: smoke
+      tags: [smoke, vpn]
 
     - name: Check qBittorrent login
       ansible.builtin.uri:
@@ -803,7 +807,7 @@
       delay: 2
       until: (tms_health_check.status | default(0)) == 200
       no_log: true
-      tags: smoke
+      tags: [smoke, vpn]
 
     - name: Check OpenClaw health
       ansible.builtin.uri:
@@ -815,7 +819,7 @@
       delay: 2
       until: (openclaw_health_check.status | default(0)) == 200
       when: openclaw_enabled_effective
-      tags: smoke
+      tags: [smoke, vpn]
 
   handlers:
     - name: Reload systemd

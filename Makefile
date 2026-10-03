@@ -328,8 +328,12 @@ agent-context-check: agent-context-test
 	python3 scripts/validate_agent_context.py
 
 .PHONY: check
-check: agent-context-check lint vet test-unit
+check: agent-context-check test-proxy lint vet test-unit
 	@echo "All checks passed!"
+
+.PHONY: test-proxy
+test-proxy:
+	python3 -m unittest scripts/test_setup_proxy.py
 
 .PHONY: pre-commit
 pre-commit: format check

@@ -2,6 +2,10 @@
 Description=Telegram Media Server
 After=network-online.target {{ qbittorrent_service_name }}.service
 Wants=network-online.target {{ qbittorrent_service_name }}.service
+{% if tms_vpn_enabled | default(false) | bool %}
+After=telegram-media-server-vpn.service
+Wants=telegram-media-server-vpn.service
+{% endif %}
 
 [Service]
 User={{ tms_user }}
@@ -13,4 +17,3 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-

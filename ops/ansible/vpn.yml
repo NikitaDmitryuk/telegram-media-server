@@ -1,0 +1,181 @@
+---
+- name: Install and verify managed subscription VPN
+  when: tms_vpn_enabled | default(false) | bool
+  block:
+    - name: Require VPN subscription from Vault
+      ansible.builtin.assert:
+        that:
+          - tms_vpn_subscription_url | default('') is match('^https://[^\s]+$')
+        fail_msg: Set tms_vpn_subscription_url in Ansible Vault to an HTTPS subscription URL.
+      no_log: true
+
+    - name: Prevent extra env from overriding managed proxy settings
+      ansible.builtin.assert:
+        that:
+          - tms_extra_env.get('TELEGRAM_PROXY', 'http://127.0.0.1:10809') == 'http://127.0.0.1:10809'
+          - tms_extra_env.get('CONTENT_PROXY', 'http://127.0.0.1:10809') == 'http://127.0.0.1:10809'
+        fail_msg: Remove TELEGRAM_PROXY and CONTENT_PROXY overrides from tms_extra_env when managed VPN is enabled.
+      no_log: true
+
+    - name: Check managed VPN is already running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, --quiet, telegram-media-server-vpn.service]
+      register: tms_vpn_active
+      changed_when: false
+      failed_when: false
+
+    - name: Require free local proxy ports for a new client
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import socket, sys
+            sockets = []
+            try:
+                for port in (10808, 10809):
+                    s = socket.socket()
+                    sockets.append(s)
+                    s.bind(('127.0.0.1', port))
+            except OSError:
+                sys.exit('VPN proxy ports 10808/10809 are occupied; existing services were not changed')
+            finally:
+                for s in sockets:
+                    s.close()
+      when: tms_vpn_active.rc != 0
+      changed_when: false
+
+    - name: Install Xray and Python from Arch packages
+      ansible.builtin.pacman:
+        name: [xray, python]
+        state: present
+        update_cache: true
+
+    - name: Create VPN group
+      ansible.builtin.group:
+        name: tms-vpn
+        system: true
+
+    - name: Create VPN user
+      ansible.builtin.user:
+        name: tms-vpn
+        group: tms-vpn
+        system: true
+        create_home: false
+        shell: /usr/bin/nologin
+
+    - name: Create private VPN directory
+      ansible.builtin.file:
+        path: /etc/telegram-media-server-vpn
+        state: directory
+        owner: root
+        group: tms-vpn
+        mode: "0750"
+
+    - name: Store private VPN subscription URL
+      ansible.builtin.copy:
+        content: "{{ tms_vpn_subscription_url }}\n"
+        dest: /etc/telegram-media-server-vpn/subscription.url
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      diff: false
+
+    - name: Create libexec directory
+      ansible.builtin.file:
+        path: /usr/local/libexec
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install existing VPN setup script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../scripts/setup-proxy"
+        dest: /usr/local/libexec/telegram-media-server-setup-proxy
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install VPN units
+      ansible.builtin.template:
+        src: "templates/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - telegram-media-server-vpn.service
+        - telegram-media-server-vpn-update.service
+        - telegram-media-server-vpn-update.timer
+      register: tms_vpn_units
+
+    - name: Reload VPN units
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: tms_vpn_units.changed
+
+    - name: Fetch and transactionally apply VPN subscription
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/libexec/telegram-media-server-setup-proxy
+          - --subscription-file
+          - /etc/telegram-media-server-vpn/subscription.url
+          - --output
+          - /etc/telegram-media-server-vpn/config.json
+      register: tms_vpn_update
+      changed_when: "'VPN config updated' in tms_vpn_update.stderr"
+
+    - name: Enable and start cached VPN client
+      ansible.builtin.systemd:
+        name: telegram-media-server-vpn.service
+        state: started
+        enabled: true
+
+    - name: Verify VPN HTTPS before changing TMS settings
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import sys, urllib.request
+            try:
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({'https': 'http://127.0.0.1:10809'}))
+                with opener.open('https://api.ipify.org', timeout=15) as r:
+                    if r.status != 200:
+                        raise ValueError()
+                print('VPN HTTPS probe OK')
+            except Exception:
+                sys.exit('VPN HTTPS probe failed; TMS proxy settings were not changed')
+      changed_when: false
+
+    - name: Use verified VPN for Telegram and selected content domains
+      ansible.builtin.set_fact:
+        telegram_proxy_effective: http://127.0.0.1:10809
+        content_proxy_effective: http://127.0.0.1:10809
+
+    - name: Enable VPN refresh after boot and hourly
+      ansible.builtin.systemd:
+        name: telegram-media-server-vpn-update.timer
+        state: started
+        enabled: true
+
+- name: Check optional VPN timer exists
+  ansible.builtin.stat:
+    path: /etc/systemd/system/telegram-media-server-vpn-update.timer
+  register: tms_vpn_timer
+  when: not (tms_vpn_enabled | default(false) | bool)
+
+- name: Stop managed VPN when explicitly disabled
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - telegram-media-server-vpn-update.timer
+    - telegram-media-server-vpn.service
+  when:
+    - not (tms_vpn_enabled | default(false) | bool)
+    - tms_vpn_timer.stat.exists | default(false)

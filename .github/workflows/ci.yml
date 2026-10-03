@@ -48,6 +48,9 @@ jobs:
     - name: Run unit tests
       run: make test-unit
 
+    - name: Test VPN subscription updates
+      run: make test-proxy
+
     - name: Run integration tests
       run: make test-integration
 
