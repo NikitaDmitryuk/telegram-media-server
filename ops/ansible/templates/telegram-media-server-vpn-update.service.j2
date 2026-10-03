@@ -1,0 +1,10 @@
+[Unit]
+Description=Update Telegram Media Server VPN subscription
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/telegram-media-server-setup-proxy --subscription-file /etc/telegram-media-server-vpn/subscription.url --output /etc/telegram-media-server-vpn/config.json
+UMask=0077
+TimeoutStartSec=90

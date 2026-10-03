@@ -15,5 +15,7 @@ regular_password: "change-me-regular"
 # telegram_proxy: ""
 # content_proxy: ""
 # content_proxy_domains: ""
+# HTTPS /sub/... URL for a VLESS user (not a SOCKS5 user).
+# tms_vpn_subscription_url: "https://vpn.example.com/sub/replace-me"
 # openclaw_api_key: ""
 # openclaw_telegram_bot_token: ""

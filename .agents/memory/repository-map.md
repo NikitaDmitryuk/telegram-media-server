@@ -2,9 +2,9 @@
 kind: memory
 status: active
 date: 2026-08-29
-last-verified: 2026-08-29
+last-verified: 2026-10-03
 agent: codex
-evidence: cmd/telegram-media-server/main.go, internal/app/app.go, internal/api/server.go, internal/config/config.go
+evidence: cmd/telegram-media-server/main.go, internal/app/app.go, internal/api/server.go, internal/config/config.go, ops/ansible/vpn.yml, scripts/setup-proxy, scripts/test_setup_proxy.py
 ---
 
 # Repository map
@@ -33,7 +33,20 @@ the bot, database, configuration, download manager, and deletion queue reference
   compatibility support.
 - `internal/testutils`: shared test helpers.
 
-## Security invariant
+## Optional subscription VPN
+
+The Arch Linux Ansible installer optionally manages a separate loopback Xray
+client and hourly systemd updater; Go owns neither the VPN process nor subscription
+credentials. `scripts/setup-proxy` consumes the first subscription profile,
+validates a candidate with Xray, atomically replaces changed configs, and rolls back
+startup failures. Cached configs survive fetch failures and offline boots.
+Ansible verifies proxy HTTPS before replacing TMS proxy settings. Telegram always
+uses the configured proxy; yt-dlp retains the configured domain selection. The
+shared Telegram proxy setting also feeds optional OpenClaw configuration.
+`make deploy` remains binary-only. Runtime acceptance requires a target-host check;
+local conversion and rollback tests do not prove VPN connectivity.
+
+## REST API security invariant
 
 `internal/api/server.go` distinguishes local or Docker-host callers from remote
 callers. Local access can be allowed without an API key. Remote requests must not

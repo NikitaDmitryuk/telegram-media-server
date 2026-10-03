@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh Telegram Media Server VPN subscription hourly
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1h
+Unit=telegram-media-server-vpn-update.service
+
+[Install]
+WantedBy=timers.target

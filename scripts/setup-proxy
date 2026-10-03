@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Full Xray client setup from a 3x-ui link.
+Xray client setup from an HTTPS subscription or VLESS link.
 
 What it does (in order):
   1. Accepts a 3x-ui subscription URL or a raw vless:// share link.
@@ -13,6 +13,11 @@ What it does (in order):
 Usage (root required for system setup):
   sudo ./setup-proxy 'https://panel/sub/TOKEN'
   sudo ./setup-proxy 'vless://uuid@host:443?type=tcp&...'
+  sudo ./setup-proxy --subscription-file /etc/telegram-media-server-vpn/subscription.url \
+      --output /etc/telegram-media-server-vpn/config.json
+
+Managed --subscription-file mode validates changed configs and rolls back failed
+starts of a separate service. It does not install Xray or alter xray.service.
 
 Options:
   --dry-run      Show what would be done without changing anything.
@@ -23,16 +28,21 @@ Options:
 
 import argparse
 import base64
+import fcntl
+import grp
 import json
 import os
 import pwd
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Local inbound proxies (clients connect here)
@@ -78,7 +88,7 @@ def run(
     try:
         return subprocess.run(cmd, check=check, **kwargs)
     except FileNotFoundError:
-        raise SystemExit(f"command not found: {cmd[0]}")
+        raise ValueError(f"command not found: {cmd[0]}") from None
     except subprocess.CalledProcessError as exc:
         raise SystemExit(
             f"command failed (exit {exc.returncode}): {' '.join(cmd)}"
@@ -320,27 +330,47 @@ def enable_and_start(dry_run: bool) -> None:
 # Subscription / link handling
 # ---------------------------------------------------------------------------
 
+class HTTPSRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlsplit(newurl).scheme != "https":
+            raise ValueError("Subscription redirects must use HTTPS")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def fetch_subscription(url: str) -> str:
+    if urllib.parse.urlsplit(url).scheme != "https":
+        raise ValueError("Subscription must use HTTPS")
     req = urllib.request.Request(
         url, headers={"User-Agent": "Xray-Config-Builder/1"}
     )
-    with urllib.request.urlopen(req, timeout=15) as r:
-        raw = r.read().decode("utf-8", errors="ignore").strip()
-
-    # 3x-ui returns base64-encoded newline-separated share links
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), HTTPSRedirectHandler())
     try:
-        decoded = base64.b64decode(raw).decode("utf-8", errors="ignore")
-    except Exception:
-        raise SystemExit("Failed to base64-decode subscription response.")
-    return decoded
+        with opener.open(req, timeout=15) as r:
+            raw = r.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("Subscription exceeds 1 MiB")
+        return decode_subscription(raw)
+    except (OSError, ValueError):
+        raise ValueError("Cannot download or decode subscription") from None
+
+
+def decode_subscription(raw: bytes) -> str:
+    text = raw.decode("utf-8-sig").strip()
+    if "://" not in text:
+        compact = "".join(text.split())
+        text = base64.b64decode(compact + "=" * (-len(compact) % 4), validate=True).decode("utf-8-sig")
+    return text
 
 
 def first_vless_from_text(text: str) -> str:
     for line in text.replace("\r", "").split("\n"):
         line = line.strip()
-        if line.lower().startswith("vless://"):
-            return line
-    raise SystemExit("No vless:// link found in the subscription.")
+        if not line or line.startswith("#"):
+            continue
+        if not line.lower().startswith("vless://"):
+            raise ValueError("First subscription profile must be VLESS")
+        return line
+    raise ValueError("Subscription has no profiles")
 
 
 # ---------------------------------------------------------------------------
@@ -349,9 +379,7 @@ def first_vless_from_text(text: str) -> str:
 # Format (standard v2ray share-link spec):
 #   vless://UUID@HOST:PORT?type=tcp&security=reality&pbk=...&fp=...&sni=...&sid=...&spx=%2F&flow=xtls-rprx-vision#TAG
 #
-# No maintained, easily installable CLI tool exists for this conversion
-# (Xray-Link-Json needs Go; vless-link2xray-config needs git clone),
-# so we do the straightforward URL parsing here.
+# Use stdlib URL parsing; preserve XHTTP query settings from the subscription.
 # ---------------------------------------------------------------------------
 
 def parse_vless_link(link: str) -> dict:
@@ -362,12 +390,12 @@ def parse_vless_link(link: str) -> dict:
     parsed = urllib.parse.urlparse(link)
     query = urllib.parse.parse_qs(parsed.query)
 
-    m = re.match(r"([^@]+)@([^:]+):(\d+)", parsed.netloc)
-    if not m:
-        raise SystemExit(
-            f"Bad vless link format (expected uuid@host:port): {parsed.netloc}"
-        )
-    uuid, address, port = m.group(1), m.group(2), int(m.group(3))
+    try:
+        uuid, address, port = parsed.username, parsed.hostname, parsed.port
+        if not uuid or not address or not port or parsed.password or parsed.path not in ("", "/"):
+            raise ValueError()
+    except ValueError:
+        raise ValueError("Invalid VLESS profile address") from None
 
     def q(key: str, default: str = "") -> str:
         return (query.get(key) or [default])[0]
@@ -377,10 +405,18 @@ def parse_vless_link(link: str) -> dict:
     fp = q("fp", "chrome")
     pbk = q("pbk")
     sid = q("sid")
-    spx = urllib.parse.unquote(q("spx", "/"))
+    spx = q("spx", "/")
     flow = q("flow")
     network = q("type", "tcp")
     encryption = q("encryption", "none")
+    if network not in ("tcp", "raw", "xhttp", "ws", "grpc", "h2", "http"):
+        raise ValueError("Unsupported VLESS transport")
+    if security not in ("reality", "tls", "none"):
+        raise ValueError("Unsupported VLESS security")
+    if security == "reality" and not pbk:
+        raise ValueError("REALITY public key is required")
+    if network == "xhttp" and flow:
+        raise ValueError("XHTTP profile must not use Vision flow")
 
     user: dict = {"id": uuid, "encryption": encryption}
     if flow:
@@ -412,7 +448,7 @@ def parse_vless_link(link: str) -> dict:
         ws: dict = {}
         path = q("path")
         if path:
-            ws["path"] = urllib.parse.unquote(path)
+            ws["path"] = path
         host = q("host")
         if host:
             ws["headers"] = {"Host": host}
@@ -426,12 +462,25 @@ def parse_vless_link(link: str) -> dict:
         h2: dict = {}
         path = q("path")
         if path:
-            h2["path"] = urllib.parse.unquote(path)
+            h2["path"] = path
         host = q("host")
         if host:
             h2["host"] = host.split(",")
         if h2:
             stream["httpSettings"] = h2
+    elif network == "xhttp":
+        settings = {"path": q("path", "/"), "mode": q("mode", "auto")}
+        if q("host"):
+            settings["host"] = q("host")
+        if q("extra"):
+            try:
+                extra = json.loads(q("extra"))
+                if not isinstance(extra, dict):
+                    raise ValueError()
+            except ValueError:
+                raise ValueError("Invalid XHTTP extra settings") from None
+            settings["extra"] = extra
+        stream["xhttpSettings"] = settings
 
     return {
         "protocol": "vless",
@@ -450,6 +499,77 @@ def build_full_config(outbound: dict) -> dict:
         "inbounds": INBOUNDS,
         "outbounds": [outbound],
     }
+
+
+def atomic_config(path: Path, data: bytes, gid: int) -> None:
+    fd, temporary = tempfile.mkstemp(prefix=".xray-", suffix=".json", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            os.fchmod(f.fileno(), 0o640)
+            os.fchown(f.fileno(), -1, gid)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def service_ready(service: str) -> bool:
+    for _ in range(20):
+        if run(["systemctl", "is-active", "--quiet", service], check=False, capture=True).returncode == 0:
+            try:
+                for port in (10808, 10809):
+                    with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+                        pass
+                return True
+            except OSError:
+                pass
+        time.sleep(0.25)
+    return False
+
+
+def update_subscription(source: Path, target: Path, service: str, gid: int) -> bool:
+    # The lock also covers manual runs and the complete restart/rollback transaction.
+    with open(target.with_suffix(".lock"), "a", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        link = first_vless_from_text(fetch_subscription(source.read_text().strip()))
+        config = build_full_config(parse_vless_link(link))
+        data = (json.dumps(config, indent=2, sort_keys=True) + "\n").encode()
+        old = target.read_bytes() if target.exists() else None
+        if old == data:
+            log("VPN config unchanged")
+            return False
+        xray = find_xray_binary()
+        if not xray:
+            raise ValueError("Xray is not installed")
+        fd, candidate = tempfile.mkstemp(prefix=".candidate-", suffix=".json", dir=target.parent)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+            result = run([xray, "run", "-test", "-config", candidate], check=False, capture=True, timeout=15)
+            if result.returncode:
+                raise ValueError("Xray rejected subscription config")
+        finally:
+            os.unlink(candidate)
+        atomic_config(target, data, gid)
+        try:
+            result = run(["systemctl", "restart", service], check=False, capture=True, timeout=15)
+            if result.returncode or not service_ready(service):
+                raise ValueError("VPN service did not start")
+        except (ValueError, OSError, SystemExit, subprocess.TimeoutExpired):
+            if old is None:
+                target.unlink()
+                run(["systemctl", "stop", service], check=False, capture=True)
+            else:
+                atomic_config(target, old, gid)
+                result = run(["systemctl", "restart", service], check=False, capture=True)
+                if result.returncode or not service_ready(service):
+                    raise ValueError("VPN update failed; previous config restored but service recovery failed")
+            raise ValueError("VPN update failed; previous config restored")
+        log("VPN config updated")
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -527,12 +647,15 @@ def print_summary(config_path: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=(
-            "Set up an Xray client from a 3x-ui subscription URL or "
+            "Set up an Xray client from an HTTPS subscription URL or "
             "a vless:// share link.  Installs Xray if missing, writes "
             "the config, and enables the systemd service."
         ),
     )
-    ap.add_argument("link", help="3x-ui subscription URL or vless:// link")
+    ap.add_argument("link", nargs="?", help="HTTPS subscription URL or vless:// link")
+    ap.add_argument("--subscription-file", type=Path, help="private HTTPS URL file; transactional managed update")
+    ap.add_argument("--service", default="telegram-media-server-vpn.service")
+    ap.add_argument("--config-group", default="tms-vpn")
     ap.add_argument(
         "--dry-run",
         action="store_true",
@@ -558,17 +681,14 @@ def main() -> None:
         ),
     )
     args = ap.parse_args()
+    if args.subscription_file:
+        if args.link or not args.output or args.output == "-" or args.dry_run or args.config_only:
+            ap.error("Managed updates require --subscription-file and --output only")
+        update_subscription(args.subscription_file, Path(args.output), args.service, grp.getgrnam(args.config_group).gr_gid)
+        return
+    if not args.link:
+        ap.error("Provide a link or --subscription-file")
     link = args.link.strip()
-
-    # Guard: if the shell split the URL on '&', only the part before the
-    # first '&' reaches us.  Detect this and give a clear hint.
-    if link.lower().startswith("vless://") and "&" not in link and "?" in link:
-        raise SystemExit(
-            "Error: the URL appears truncated (no '&' found after '?').\n"
-            "Shell splits unquoted URLs on '&' characters.\n"
-            "Please wrap the link in single quotes:\n\n"
-            f"  {sys.argv[0]} '{link}...'\n"
-        )
 
     # -- 1. Resolve the vless link -------------------------------------------
     if link.startswith("http://") or link.startswith("https://"):
@@ -625,4 +745,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as exc:
+        log(str(exc))
+        sys.exit(1)
+    except (OSError, KeyError, subprocess.TimeoutExpired):
+        log("VPN operation failed; check file permissions and system configuration")
+        sys.exit(1)
