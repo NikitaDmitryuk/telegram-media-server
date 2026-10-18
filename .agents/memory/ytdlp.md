@@ -2,7 +2,7 @@
 kind: memory
 status: active
 date: 2026-08-29
-last-verified: 2026-08-29
+last-verified: 2026-10-18
 agent: codex
 evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.go, internal/downloader/video/cookies_test.go, internal/downloader/video/execution.go, internal/downloader/video/updater.go, internal/config/config.go, ops/ansible/site.yml, scripts/ytdlp-cookies-login.sh
 ---
@@ -18,6 +18,9 @@ evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.
 - `YTDLP_EXTRA_ARGS` and the optional `YTDLP_COOKIES_PATH` apply to metadata and
   download commands. Ansible can copy an external cookies file with restricted
   permissions; cookie contents never belong in Git.
+- Ansible reads controller `.env` as raw text; strip outer single/double quotes from
+  `YTDLP_EXTRA_ARGS` before rendering the server `.env`. Otherwise those quotes can
+  survive as part of the final yt-dlp argument and cause an `unknown option` error.
 - Optional managed mode provisions a YouTube-only jar through a temporary Chromium
   session exposed only over an SSH tunnel. The browser profile is deleted after export.
   A daily exclusive check refreshes valid cookies and persists lifecycle state outside
