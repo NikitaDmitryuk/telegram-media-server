@@ -10,7 +10,11 @@ Group={{ tms_group }}
 Environment=HOME={{ tms_home }}
 RuntimeMaxSec=20min
 ExecStartPre=/usr/bin/rm -rf {{ tms_ytdlp_managed_cookies_dir | default(tms_home ~ '/youtube-auth') }}/browser-profile
+{% set browser_proxy = telegram_proxy_effective | default('') | trim('"') | trim("'") %}
 ExecStart=/usr/bin/xvfb-run -a /usr/bin/chromium \
+{% if browser_proxy %}
+  --proxy-server={{ browser_proxy }} \
+{% endif %}
   --remote-debugging-address=127.0.0.1 \
   --remote-debugging-port=9222 \
   --remote-allow-origins=* \
