@@ -44,7 +44,9 @@ tms_openclaw_webhook_url: ""
 tms_openclaw_webhook_format: openclaw_agent
 tms_extra_env: {}
 
-# Optional local Xray client; subscription URL belongs in Ansible Vault.
+# Optional local Xray client. A non-empty TMS_VPN_SUBSCRIPTION_URL in local .env
+# enables it regardless of this flag and takes precedence over the Vault URL.
+# With an empty/absent local URL, set this to true and use the Vault subscription.
 tms_vpn_enabled: false
 
 openclaw_user: openclaw

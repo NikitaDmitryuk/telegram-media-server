@@ -26,6 +26,31 @@
       ansible.builtin.set_fact:
         tms_local_env_text: "{{ lookup('ansible.builtin.file', playbook_dir + '/../../.env', errors='ignore') | default('', true) }}"
       no_log: true
+      diff: false
+      tags: always
+
+    - name: Resolve local VPN subscription input
+      ansible.builtin.set_fact:
+        tms_vpn_local_subscription_url: >-
+          {{
+            tms_local_env_text
+            | regex_findall('(?m)^TMS_VPN_SUBSCRIPTION_URL=(.*)$')
+            | first
+            | default('', true)
+            | trim
+            | regex_replace("^(?:\"(.*)\"|'(.*)')$", "\\1\\2")
+            | trim
+          }}
+      no_log: true
+      diff: false
+      tags: always
+
+    - name: Resolve managed VPN settings
+      ansible.builtin.set_fact:
+        tms_vpn_subscription_url_effective: "{{ tms_vpn_local_subscription_url if (tms_vpn_local_subscription_url | length > 0) else (tms_vpn_subscription_url | default('', true)) }}"
+        tms_vpn_enabled_effective: "{{ (tms_vpn_local_subscription_url | length > 0) or (tms_vpn_enabled | default(false) | bool) }}"
+      no_log: true
+      diff: false
       tags: always
 
     - name: Check existing TMS env
