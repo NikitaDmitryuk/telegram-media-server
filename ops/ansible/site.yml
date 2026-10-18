@@ -696,6 +696,20 @@
         - config
         - ytdlp
 
+    - name: Require a Chromium-safe proxy for managed cookie login
+      ansible.builtin.assert:
+        that:
+          - >-
+            not (telegram_proxy_effective | default('') | trim('"') |
+            trim("'") | regex_search('://[^/]*@'))
+        fail_msg: "Managed yt-dlp cookie tooling cannot use a proxy URL with embedded credentials."
+      when: tms_ytdlp_managed_cookies | default(false) | bool
+      tags:
+        - config
+        - systemd
+        - vpn
+        - ytdlp
+
     - name: Install managed YouTube cookie exporter
       block:
         - name: Ensure local libexec directory exists
@@ -713,18 +727,6 @@
             owner: root
             group: root
             mode: "0755"
-      when: tms_ytdlp_managed_cookies | default(false) | bool
-      tags:
-        - config
-        - ytdlp
-
-    - name: Require a Chromium-safe proxy for managed cookie login
-      ansible.builtin.assert:
-        that:
-          - >-
-            not (telegram_proxy_effective | default('') | trim('"') |
-            trim("'") | regex_search('://[^/]*@'))
-        fail_msg: "Managed Chromium cookie login cannot use a proxy URL with embedded credentials."
       when: tms_ytdlp_managed_cookies | default(false) | bool
       tags:
         - config

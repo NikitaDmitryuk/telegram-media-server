@@ -4,7 +4,7 @@ status: active
 date: 2026-08-29
 last-verified: 2026-10-18
 agent: codex
-evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.go, internal/downloader/video/cookies_test.go, internal/downloader/video/execution.go, internal/downloader/video/updater.go, internal/config/config.go, ops/ansible/site.yml, scripts/ytdlp-cookies-login.sh
+evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.go, internal/downloader/video/cookies_test.go, internal/downloader/video/execution.go, internal/downloader/video/updater.go, internal/config/config.go, ops/ansible/site.yml, ops/ansible/templates/youtube-cookies-export.sh.j2, scripts/ytdlp-cookies-login.sh
 ---
 
 # yt-dlp runtime integration
@@ -25,6 +25,9 @@ evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.
   session exposed only over an SSH tunnel. The browser profile is deleted after export.
   A daily exclusive check refreshes valid cookies and persists lifecycle state outside
   the jar.
+- The one-time cookie exporter must pass the effective `TELEGRAM_PROXY` to each `yt-dlp`
+  command itself; Chromium's `--proxy-server` does not route the export and history
+  validation requests. See `ops/ansible/templates/youtube-cookies-export.sh.j2`.
 - Rejected cookies are disabled and both metadata and download receive one anonymous
   retry. Empty or unprovisioned cookie configuration stays silently anonymous. Each
   invalid episode produces one persistent, deduplicated notification per active admin;
