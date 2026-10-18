@@ -31,6 +31,7 @@ printf '# Netscape HTTP Cookie File\n' > "${raw}"
 {% endif %}
   --cookies-from-browser "chromium+basictext:${profile}" \
   --cookies "${raw}" \
+  --extractor-args 'youtubetab:skip=authcheck' \
   --skip-download --quiet --no-warnings \
   https://www.youtube.com/robots.txt
 

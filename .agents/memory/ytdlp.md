@@ -28,6 +28,9 @@ evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.
 - The one-time cookie exporter must pass the effective `TELEGRAM_PROXY` to each `yt-dlp`
   command itself; Chromium's `--proxy-server` does not route the export and history
   validation requests. See `ops/ansible/templates/youtube-cookies-export.sh.j2`.
+- For the exporter's `robots.txt` request, skip yt-dlp's YouTube tab authcheck because
+  this endpoint can return no initial playlist webpage; keep the later `:ythistory`
+  request as the authenticated-cookie validation.
 - Rejected cookies are disabled and both metadata and download receive one anonymous
   retry. Empty or unprovisioned cookie configuration stays silently anonymous. Each
   invalid episode produces one persistent, deduplicated notification per active admin;
