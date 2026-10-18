@@ -124,7 +124,8 @@
             tms_ytdlp_extra_args
             | default(tms_local_env_text | regex_findall('(?m)^YTDLP_EXTRA_ARGS=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^YTDLP_EXTRA_ARGS=(.*)$') | first | default('', true), true), true)
             | trim
-            | regex_replace("^(?:\"(.*)\"|'(.*)')$", "\\1\\2")
+            | trim('"')
+            | trim("'")
             | trim
           }}
         ytdlp_cookies_path_effective: "{{ (tms_ytdlp_managed_cookies_dir | default(tms_home ~ '/youtube-auth')) ~ '/youtube.cookies.txt' if (tms_ytdlp_managed_cookies | default(false) | bool) else (tms_ytdlp_cookies_dest | default(tms_config_dir ~ '/youtube.cookies.txt') if (tms_ytdlp_cookies_src | default('') | length > 0) else '') }}"
