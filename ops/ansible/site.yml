@@ -119,7 +119,14 @@
         telegram_proxy_effective: "{{ telegram_proxy | default(tms_local_env_text | regex_findall('(?m)^TELEGRAM_PROXY=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^TELEGRAM_PROXY=(.*)$') | first | default('', true), true), true) }}"
         content_proxy_effective: "{{ content_proxy | default(tms_local_env_text | regex_findall('(?m)^(?:CONTENT_PROXY|PROXY)=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^(?:CONTENT_PROXY|PROXY)=(.*)$') | first | default('', true), true), true) }}"
         content_proxy_domains_effective: "{{ content_proxy_domains | default(tms_local_env_text | regex_findall('(?m)^(?:CONTENT_PROXY_DOMAINS|PROXY_DOMAINS)=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^(?:CONTENT_PROXY_DOMAINS|PROXY_DOMAINS)=(.*)$') | first | default('', true), true), true) }}"
-        ytdlp_extra_args_effective: "{{ tms_ytdlp_extra_args | default(tms_local_env_text | regex_findall('(?m)^YTDLP_EXTRA_ARGS=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^YTDLP_EXTRA_ARGS=(.*)$') | first | default('', true), true), true) }}"
+        ytdlp_extra_args_effective: >-
+          {{
+            tms_ytdlp_extra_args
+            | default(tms_local_env_text | regex_findall('(?m)^YTDLP_EXTRA_ARGS=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^YTDLP_EXTRA_ARGS=(.*)$') | first | default('', true), true), true)
+            | trim
+            | regex_replace("^(?:\"(.*)\"|'(.*)')$", "\\1\\2")
+            | trim
+          }}
         ytdlp_cookies_path_effective: "{{ (tms_ytdlp_managed_cookies_dir | default(tms_home ~ '/youtube-auth')) ~ '/youtube.cookies.txt' if (tms_ytdlp_managed_cookies | default(false) | bool) else (tms_ytdlp_cookies_dest | default(tms_config_dir ~ '/youtube.cookies.txt') if (tms_ytdlp_cookies_src | default('') | length > 0) else '') }}"
         video_compatibility_mode_effective: "{{ video_compatibility_mode | default(tms_local_env_text | regex_findall('(?m)^VIDEO_COMPATIBILITY_MODE=(.*)$') | first | default(tms_existing_env_text | regex_findall('(?m)^VIDEO_COMPATIBILITY_MODE=(.*)$') | first | default(tms_enable_tv_compatibility | ternary('true', 'false'), true), true), true) }}"
       no_log: true
