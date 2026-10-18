@@ -8,6 +8,7 @@ fi
 profile={{ ((tms_ytdlp_managed_cookies_dir | default(tms_home ~ '/youtube-auth')) ~ '/browser-profile') | quote }}
 destination={{ ((tms_ytdlp_managed_cookies_dir | default(tms_home ~ '/youtube-auth')) ~ '/youtube.cookies.txt') | quote }}
 state_file={{ tms_ytdlp_cookies_state_path | default(tms_home ~ '/youtube-cookie-state.json') | quote }}
+{% set ytdlp_proxy = telegram_proxy_effective | default('') | trim('"') | trim("'") %}
 
 cleanup() {
 	rm -rf "${profile}"
@@ -25,8 +26,12 @@ chmod 0600 "${raw}" "${filtered}"
 printf '# Netscape HTTP Cookie File\n' > "${raw}"
 
 {{ tms_ytdlp_path | quote }} --ignore-config \
+{% if ytdlp_proxy %}
+  --proxy {{ ytdlp_proxy | quote }} \
+{% endif %}
   --cookies-from-browser "chromium+basictext:${profile}" \
   --cookies "${raw}" \
+  --extractor-args 'youtubetab:skip=authcheck' \
   --skip-download --quiet --no-warnings \
   https://www.youtube.com/robots.txt
 
@@ -46,6 +51,9 @@ if ! grep -Eq '^# (HTTP|Netscape HTTP) Cookie File$' "${filtered}" || ! grep -Eq
 fi
 
 {{ tms_ytdlp_path | quote }} --ignore-config \
+{% if ytdlp_proxy %}
+  --proxy {{ ytdlp_proxy | quote }} \
+{% endif %}
   --cookies "${filtered}" \
   --flat-playlist --playlist-items 1 --simulate --quiet --no-warnings \
   :ythistory
