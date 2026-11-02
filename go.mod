@@ -1,6 +1,6 @@
 module github.com/NikitaDmitryuk/telegram-media-server
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/go-bittorrent/magneturi v0.1.0
@@ -8,8 +8,8 @@ require (
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/google/uuid v1.6.0
 	github.com/jackpal/bencode-go v1.0.2
-	github.com/nicksnyder/go-i18n/v2 v2.6.1
-	golang.org/x/text v0.41.0
+	github.com/nicksnyder/go-i18n/v2 v2.7.0
+	golang.org/x/text v0.43.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )
