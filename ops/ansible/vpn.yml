@@ -1,13 +1,14 @@
 ---
 - name: Install and verify managed subscription VPN
-  when: tms_vpn_enabled | default(false) | bool
+  when: tms_vpn_enabled_effective | bool
   block:
-    - name: Require VPN subscription from Vault
+    - name: Require VPN subscription input
       ansible.builtin.assert:
         that:
-          - tms_vpn_subscription_url | default('') is match('^https://[^\s]+$')
-        fail_msg: Set tms_vpn_subscription_url in Ansible Vault to an HTTPS subscription URL.
+          - tms_vpn_subscription_url_effective is match('^https://[^\s]+$')
+        fail_msg: Set TMS_VPN_SUBSCRIPTION_URL in local .env or tms_vpn_subscription_url in Ansible Vault to an HTTPS subscription URL.
       no_log: true
+      diff: false
 
     - name: Prevent extra env from overriding managed proxy settings
       ansible.builtin.assert:
@@ -74,7 +75,7 @@
 
     - name: Store private VPN subscription URL
       ansible.builtin.copy:
-        content: "{{ tms_vpn_subscription_url }}\n"
+        content: "{{ tms_vpn_subscription_url_effective }}\n"
         dest: /etc/telegram-media-server-vpn/subscription.url
         owner: root
         group: root
@@ -166,7 +167,7 @@
   ansible.builtin.stat:
     path: /etc/systemd/system/telegram-media-server-vpn-update.timer
   register: tms_vpn_timer
-  when: not (tms_vpn_enabled | default(false) | bool)
+  when: not (tms_vpn_enabled_effective | bool)
 
 - name: Stop managed VPN when explicitly disabled
   ansible.builtin.systemd:
@@ -177,5 +178,5 @@
     - telegram-media-server-vpn-update.timer
     - telegram-media-server-vpn.service
   when:
-    - not (tms_vpn_enabled | default(false) | bool)
+    - not (tms_vpn_enabled_effective | bool)
     - tms_vpn_timer.stat.exists | default(false)

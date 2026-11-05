@@ -80,6 +80,7 @@ cd telegram-media-server
 cp ops/ansible/inventory.ini.example ops/ansible/inventory.ini
 cp ops/ansible/group_vars/telegram_server.yml.example ops/ansible/group_vars/telegram_server.yml
 cp .env.example .env
+chmod 600 .env
 make install
 ```
 
@@ -116,19 +117,32 @@ Ansible создаст `MOVIE_PATH`, настроит TMS и qBittorrent на т
 
 На Arch Linux установщик может поднять отдельный локальный Xray, который подключается
 к **первому профилю** HTTPS-подписки ultra/Happ. Приложение Happ на сервере не требуется.
-В `ops/ansible/group_vars/telegram_server.yml` задайте `tms_vpn_enabled: true`.
-Создайте или отредактируйте encrypted Vault:
+Добавьте действующую HTTPS-ссылку `/sub/…` **VLESS-пользователя** ultra в
+игнорируемый Git локальный `.env` (без кавычек или в паре одинарных/двойных
+кавычек; ограничьте доступ к файлу командой `chmod 600 .env`):
+
+```dotenv
+TMS_VPN_SUBSCRIPTION_URL=https://vpn.example.com/sub/replace-me
+```
+
+Непустая ссылка автоматически включает VPN, даже если в
+`ops/ansible/group_vars/telegram_server.yml` задано `tms_vpn_enabled: false`.
+Она имеет приоритет над `tms_vpn_subscription_url` в Vault. Значение используется
+только Ansible и не попадает в серверный runtime-файл TMS `.env`; задачи обработки
+ссылки скрыты через `no_log` и отключённый diff. Ссылка — секрет: храните реальное
+значение вне Git, команд шелла и журналов. SOCKS5-пользователь ultra не предоставляет
+VLESS-подписку.
+
+```sh
+make install
+```
+
+Если локальная переменная пуста или отсутствует, сохранён вариант с encrypted Vault:
+задайте `tms_vpn_enabled: true` в group_vars и `tms_vpn_subscription_url` в Vault.
+Создайте Vault командой ниже; существующий редактируйте через `ansible-vault edit`.
 
 ```sh
 ansible-vault create ops/ansible/group_vars/telegram_server.vault.yml
-# Для существующего Vault используйте ansible-vault edit.
-```
-
-В Vault добавьте `tms_vpn_subscription_url` с действующей HTTPS-ссылкой `/sub/…`
-**VLESS-пользователя** ultra. Ссылка — секрет; не помещайте её в Git, команды шелла
-или журналы. SOCKS5-пользователь ultra не предоставляет VLESS-подписку.
-
-```sh
 make install ANSIBLE_VAULT_ARGS=--ask-vault-pass
 ```
 
@@ -184,8 +198,9 @@ curl --proxy http://127.0.0.1:10809 https://api.ipify.org
 
 Журнал обновления содержит только безопасные сообщения; вывод ядра Xray подавлен,
 поскольку его диагностика может содержать параметры профиля. `make deploy` обновляет
-только бинарник TMS. Для отключения задайте `tms_vpn_enabled: false`, восстановите
-желаемые `TELEGRAM_PROXY`/`CONTENT_PROXY` в локальных настройках и выполните установку:
+только бинарник TMS. Для отключения удалите или очистите `TMS_VPN_SUBSCRIPTION_URL`
+в локальном `.env`, задайте `tms_vpn_enabled: false`, восстановите желаемые
+`TELEGRAM_PROXY`/`CONTENT_PROXY` в локальных настройках и выполните установку:
 управляемая служба и таймер остановятся, закрытый кеш сохранится.
 
 Локальная проверка: `make test-proxy` и `make ansible-check`. При установленном Xray
@@ -277,11 +292,11 @@ Ansible проверит файл и скопирует его в `/etc/telegram
 tms_ytdlp_managed_cookies: true
 ```
 
-После `make install` выполните `make ytdlp-cookies-login`. Команда запускает временный Chromium на сервере, пробрасывает его DevTools только через SSH на `http://127.0.0.1:9222` и показывает удалённую вкладку через screencast. Войдите в отдельный Google-аккаунт, подтвердите вход телефоном, откройте `https://www.youtube.com/robots.txt` и вернитесь в терминал. Экспортёр оставит только `youtube.com` cookies, проверит `:ythistory`, установит jar атомарно и удалит весь браузерный профиль. Пароль, 2FA и профиль не сохраняются.
+После `make install` выполните `make ytdlp-cookies-login`. Команда запускает временный Chromium на сервере, использует настроенный `TELEGRAM_PROXY` (если он задан), пробрасывает его DevTools только через SSH на `http://127.0.0.1:9222` и показывает удалённую вкладку через screencast. Войдите в отдельный Google-аккаунт, подтвердите вход телефоном, откройте `https://www.youtube.com/robots.txt` и вернитесь в терминал. Экспортёр оставит только `youtube.com` cookies, проверит `:ythistory`, установит jar атомарно и удалит весь браузерный профиль. Пароль, 2FA и профиль не сохраняются.
 
 Приложение проверяет jar раз в сутки (`YTDLP_COOKIES_CHECK_INTERVAL=24h`) и сохраняет обновлённые cookies, полученные от YouTube. После окончательного отзыва сессии cookies отключаются: публичные видео продолжают работать анонимно, а каждый текущий Telegram-администратор получает одно сообщение без повторов. После следующего успешного входа latch молча сбрасывается. Значение интервала `0` отключает фоновую проверку; пустой `YTDLP_COOKIES_PATH` полностью сохраняет старый анонимный режим.
 
-The managed mode uses an SSH-only temporary Chromium session, filters the export to YouTube domains, validates and refreshes the jar daily, and deletes the browser profile after every login. When the session expires, cookies are disabled so public videos continue anonymously, and each Telegram administrator receives one notification for that expiry episode. No password, 2FA secret, browser profile, or cookie content is committed or logged.
+The managed mode uses an SSH-only temporary Chromium session and the configured `TELEGRAM_PROXY` when present, filters the export to YouTube domains, validates and refreshes the jar daily, and deletes the browser profile after every login. When the session expires, cookies are disabled so public videos continue anonymously, and each Telegram administrator receives one notification for that expiry episode. No password, 2FA secret, browser profile, or cookie content is committed or logged.
 
 ---
 

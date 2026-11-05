@@ -16,6 +16,8 @@ regular_password: "change-me-regular"
 # content_proxy: ""
 # content_proxy_domains: ""
 # HTTPS /sub/... URL for a VLESS user (not a SOCKS5 user).
+# Fallback when TMS_VPN_SUBSCRIPTION_URL in local .env is empty/absent;
+# requires tms_vpn_enabled: true. A non-empty local URL takes precedence.
 # tms_vpn_subscription_url: "https://vpn.example.com/sub/replace-me"
 # openclaw_api_key: ""
 # openclaw_telegram_bot_token: ""
