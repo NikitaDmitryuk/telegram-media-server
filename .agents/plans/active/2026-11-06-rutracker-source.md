@@ -44,14 +44,18 @@ access, not account authentication. No alternate VPN or host route was selected.
 
 ## Progress
 
-Private snapshot of host/sources/proxies/tags was verified. Dedicated rutracker
-tag and solver proxy are persisted with a 120-second timeout. Native source form
-is prepared with .net and the same tag. The user entered credentials and clicked
-Save; validation remains pending with a spinner, so inspect backend phases before
-resubmitting or restarting anything. The persistent opt-in component is implemented and deployed. First creation
-changed=1 and repeated apply changed=0; version/loopback/resource/restart checks
-pass. Focused review findings on the declared volume, health version and metrics
-were corrected and verified.
+The source is saved and enabled after account entry directly in Prowlarr. Initial
+solver bounds caused cgroup PID denials; increasing its limits to 2 GiB, 1.5 CPU
+and 512 PIDs allowed validation to finish without further denials. Native RuTracker
+and deployed REST both return eight results for Пацаны 2 сезон кубик в кубе.
+Combined REST returns 150 each for Матрица and Дюна, and HTTP 200 [] for a random
+negative query. No downloads were started.
+
+The pinned loopback component is deployed with restart policy unless-stopped.
+A CI coverage run exposed a separate fast-exit stderr race in yt-dlp monitoring;
+the reviewed fix drains diagnostics before Wait and makes cancellation close the
+reader before reaping, including inherited stderr. Regression, race, coverage,
+make check, integration and Ansible checks pass locally.
 
 ## Decisions
 
@@ -64,13 +68,13 @@ Cloudflare rejection before login.
 
 ## Verification
 
-Anonymous control and .net login probes passed, including proxy/browser control,
-no OOM and loopback binding. Persistent component apply/idempotence passed. Account/source acceptance remains pending while the submitted Save request
-validates against Cloudflare; credentials were entered only in the local UI.
-The existing recovery PR head 8a3be0c has all nine checks green; new component
-changes require final verification and CI.
+Anonymous challenge access and authenticated saved-source queries passed. The
+helper is loopback-only, metrics disabled, pinned and resource bounded. Verify the
+final repeat apply preserves manual RuTracker, capture the real bot handlers,
+deploy the reviewed binary and wait for all latest-head CI checks before closure.
+A full host reboot was not performed.
 
 ## Handoff
 
-Keep the prepared browser form available for local account entry. Never copy
-credentials, cookies, raw responses or private server addresses into context.
+Keep the connected Prowlarr tab available. Never copy credentials, cookies, raw
+responses or private server addresses into context.

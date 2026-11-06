@@ -77,9 +77,9 @@
               - flaresolverr_existing.Mounts[0].Destination == '/config'
               - not flaresolverr_existing.HostConfig.Privileged
               - flaresolverr_existing.HostConfig.RestartPolicy.Name == 'unless-stopped'
-              - flaresolverr_existing.HostConfig.Memory == 1073741824
-              - flaresolverr_existing.HostConfig.NanoCpus == 1000000000
-              - flaresolverr_existing.HostConfig.PidsLimit == 256
+              - flaresolverr_existing.HostConfig.Memory == 2147483648
+              - flaresolverr_existing.HostConfig.NanoCpus == 1500000000
+              - flaresolverr_existing.HostConfig.PidsLimit == 512
               - flaresolverr_existing.HostConfig.ShmSize == 268435456
             fail_msg: >-
               Container name tms-flaresolverr is occupied by an unowned or drifted
@@ -115,11 +115,11 @@
               - --restart
               - unless-stopped
               - --memory
-              - 1g
+              - 2g
               - --cpus
-              - "1"
+              - "1.5"
               - --pids-limit
-              - "256"
+              - "512"
               - --shm-size
               - 256m
               - --env

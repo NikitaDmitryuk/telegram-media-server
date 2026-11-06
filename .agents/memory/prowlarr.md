@@ -83,6 +83,14 @@ tag skip the solver even if an unsaved test succeeded. IndexerProxy API resource
 have no enable field: validate persisted tags/host/timeout and the proxy test.
 Keep authenticated RuTracker manual; managed RuTor setup preserves it.
 
+The initial 1 GiB/1 CPU/256-PID solver bounds caused cgroup PID denials during
+native authentication. Raising this owned container to 2 GiB/1.5 CPU/512 PIDs
+allowed Save to complete; the denial counter stopped increasing. These are tested
+host settings, not universal minimum requirements. The saved authenticated source
+returned eight results for Пацаны 2 сезон кубик в кубе; combined REST searches
+returned eight for that query, 150 each for Матрица and Дюна and zero for a random
+negative query. Diagnostics only searched and did not start downloads.
+
 Queries are forwarded literally. A natural phrase with 2 сезон returned zero
 RuTor results while Пацаны S02 кубик returned nine releases, including the requested
 season and voice translation. This is independent of source readiness; automatic

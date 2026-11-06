@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -256,4 +257,79 @@ printf '[download] 100%%%%\n'
 	if got := strings.Count(string(data), "attempt"); got != 2 {
 		t.Fatalf("attempts=%d, want 2", got)
 	}
+}
+
+// A scanner can be scheduled after a fast process has already exited. Hold the
+// stderr reader back to exercise that case without relying on scheduler load.
+type delayedStderrReader struct {
+	io.ReadCloser
+	ready <-chan struct{}
+}
+
+func (r delayedStderrReader) Read(p []byte) (int, error) {
+	<-r.ready
+	return r.ReadCloser.Read(p)
+}
+
+func TestDownloadAttemptDrainsStderrBeforeWait(t *testing.T) {
+	cfg := testutils.TestConfig(t.TempDir())
+	const diagnostic = "ERROR: account cookies are no longer valid\n"
+	cfg.YtdlpPath = writeFakeYTDLP(t, "printf '"+diagnostic+"' >&2\nexit 1\n")
+	dl := &YTDLPDownloader{url: "https://example.com/public", config: cfg}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stdout, stderr, err := dl.startDownloadAttempt(ctx, filepath.Join(cfg.MoviePath, "video.mp4"), false, true)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	// The command exits immediately, while stderr is deliberately read later.
+	gate := make(chan struct{})
+	timer := time.AfterFunc(25*time.Millisecond, func() { close(gate) })
+	defer timer.Stop()
+	output, processErr := dl.waitForDownloadAttempt(ctx, stdout, delayedStderrReader{ReadCloser: stderr, ready: gate}, make(chan float64))
+	if processErr == nil {
+		t.Fatal("expected the fake command to fail")
+	}
+	if output != diagnostic {
+		t.Fatalf("stderr diagnostic = %q, want %q", output, diagnostic)
+	}
+}
+
+func TestDownloadCancellationClosesInheritedStderr(t *testing.T) {
+	cfg := testutils.TestConfig(t.TempDir())
+	// Only the descendant keeps stderr open; stdout reaches EOF immediately.
+	cfg.YtdlpPath = writeFakeYTDLP(t, "sleep 2 >/dev/null &\nexit 0\n")
+	dl := &YTDLPDownloader{url: "https://example.com/public", outputFileName: "video.mp4", config: cfg}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	progress, errorsCh, episodes, err := dl.StartDownload(ctx)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	timer := time.AfterFunc(100*time.Millisecond, cancel)
+	defer timer.Stop()
+	finished := make(chan struct{})
+	go func() {
+		for range progress {
+		}
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("canceled download waited for descendant to close stderr")
+	}
+	if downloadErr := <-errorsCh; downloadErr != nil {
+		t.Fatalf("canceled download: %v", downloadErr)
+	}
+	for range episodes {
+	}
+	if dl.cmd.ProcessState == nil {
+		t.Fatal("canceled download did not reap its direct process")
+	}
+	releaseUpdate, acquired := tryAcquireYTDLPUpdate()
+	if !acquired {
+		t.Fatal("canceled download retained its execution guard")
+	}
+	releaseUpdate()
 }
