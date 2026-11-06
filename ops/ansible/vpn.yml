@@ -176,6 +176,7 @@
     enabled: false
   loop:
     - telegram-media-server-vpn-update.timer
+    - telegram-media-server-vpn-update.service
     - telegram-media-server-vpn.service
   when:
     - not (tms_vpn_enabled_effective | bool)

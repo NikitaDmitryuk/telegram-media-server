@@ -2,9 +2,9 @@
 kind: memory
 status: active
 date: 2026-08-29
-last-verified: 2026-10-03
+last-verified: 2026-11-06
 agent: codex
-evidence: Makefile, .pre-commit-config.yaml, .github/workflows/ci.yml, scripts/test_setup_proxy.py, ops/ansible/site.yml
+evidence: Makefile, .pre-commit-config.yaml, .github/workflows/ci.yml, scripts/test_setup_proxy.py, ops/ansible/site.yml, ops/ansible/vpn.yml, ops/ansible/templates/telegram-media-server-vpn-update.service.j2
 ---
 
 # Verification commands
@@ -38,6 +38,11 @@ Live acceptance checks first-profile matching, Telegram through the proxy, an
 actual yt-dlp transfer, failed-refresh cache preservation, unchanged-refresh
 restart avoidance, cached client restart, and boot enablement. Cached restart
 and valid systemd units do not establish that a full host reboot was tested.
+
+The VPN refresh service retries failures every 30 seconds without a start-rate
+limit, so boot-time network/DNS failures do not defer recovery until the hourly
+timer. Disabling managed VPN must stop the update service as well as its timer
+and client: stopping only the timer does not cancel service restart attempts.
 
 On 2026-10-03, home-server acceptance passed: first-profile matching, Telegram
 `getMe`, a real YouTube video/audio transfer, preserved config after a failed
