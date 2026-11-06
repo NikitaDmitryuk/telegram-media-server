@@ -4,7 +4,7 @@ status: active
 date: 2026-08-29
 last-verified: 2026-11-06
 agent: codex
-evidence: Makefile, .pre-commit-config.yaml, .github/workflows/ci.yml, scripts/test_setup_proxy.py, ops/ansible/site.yml, ops/ansible/vpn.yml, ops/ansible/templates/telegram-media-server-vpn-update.service.j2
+evidence: Makefile, .pre-commit-config.yaml, .github/workflows/ci.yml, scripts/test_setup_proxy.py, ops/ansible/site.yml, ops/ansible/vpn.yml, ops/ansible/templates/telegram-media-server-vpn-update.service.j2, internal/bot/bot_test.go
 ---
 
 # Verification commands
@@ -43,6 +43,12 @@ The VPN refresh service retries failures every 30 seconds without a start-rate
 limit, so boot-time network/DNS failures do not defer recovery until the hourly
 timer. Disabling managed VPN must stop the update service as well as its timer
 and client: stopping only the timer does not cancel service restart attempts.
+
+VPN HTTPS, Telegram `getMe`, and REST health checks do not establish that bot
+commands can send replies. Acceptance must include `/start` and the movie-list
+response: an invalid UTF-8 movie name can make Telegram reject the whole list
+even while polling and API health remain healthy. `internal/bot/bot_test.go`
+checks outgoing message encoding at the HTTP form boundary.
 
 On 2026-10-03, home-server acceptance passed: first-profile matching, Telegram
 `getMe`, a real YouTube video/audio transfer, preserved config after a failed

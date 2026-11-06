@@ -96,7 +96,7 @@ func buildHTTPClient(proxyAddr string) (*http.Client, error) {
 }
 
 func (b *Bot) SendMessage(chatID int64, text string, keyboard any) {
-	msg := tgbotapi.NewMessage(chatID, text)
+	msg := tgbotapi.NewMessage(chatID, strings.ToValidUTF8(text, "�"))
 	if keyboard != nil {
 		switch k := keyboard.(type) {
 		case tgbotapi.ReplyKeyboardMarkup:
