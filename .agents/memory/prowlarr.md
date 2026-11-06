@@ -89,7 +89,13 @@ allowed Save to complete; the denial counter stopped increasing. These are teste
 host settings, not universal minimum requirements. The saved authenticated source
 returned eight results for Пацаны 2 сезон кубик в кубе; combined REST searches
 returned eight for that query, 150 each for Матрица and Дюна and zero for a random
-negative query. Diagnostics only searched and did not start downloads.
+negative query. The actual bot handler with captured transport passed the same
+8/150/150/0 controls, and the user confirmed the exact requested releases appeared
+in Telegram. Managed RuTor repeat apply preserved the full private RuTracker
+configuration hash with exactly two enabled sources. Solver repeat applies before
+and after an explicit container restart reported changed=0; post-restart health,
+loopback binding and resource/restart settings passed. Diagnostics only searched
+and did not start downloads.
 
 Queries are forwarded literally. A natural phrase with 2 сезон returned zero
 RuTor results while Пацаны S02 кубик returned nine releases, including the requested

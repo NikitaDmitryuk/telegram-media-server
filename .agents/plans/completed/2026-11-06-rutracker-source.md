@@ -1,6 +1,6 @@
 ---
 kind: plan
-status: active
+status: completed
 date: 2026-11-06
 last-verified: 2026-11-06
 agent: codex
@@ -68,13 +68,26 @@ Cloudflare rejection before login.
 
 ## Verification
 
-Anonymous challenge access and authenticated saved-source queries passed. The
-helper is loopback-only, metrics disabled, pinned and resource bounded. Verify the
-final repeat apply preserves manual RuTracker, capture the real bot handlers,
-deploy the reviewed binary and wait for all latest-head CI checks before closure.
-A full host reboot was not performed.
+Saved native RuTracker authentication and exact-query search passed. Captured real
+bot handlers returned 8 requested releases, 150 each for Матрица and Дюна, and
+zero plus the localized not-found message for a random query. The user confirmed
+the requested releases also appeared in the real Telegram bot.
+
+Managed RuTor repeat apply reported changed=0 and preserved the full private native
+RuTracker configuration hash, with exactly two enabled sources. Solver repeat
+applies before and after its explicit restart reported changed=0. After restart,
+health 3.5.2, loopback binding, resource limits and restart policy passed. A full
+host reboot was not performed.
+
+Go 1.26 make check, integration, exact CI coverage, build, focused race tests and
+Ansible/context checks passed. CI Test, Build and security checks passed for the
+runtime commit. The deployed binary fingerprint matches the local build; Telegram
+getMe, TMS, DLNA and the accepted Full HD TS remain healthy. Server environment,
+routes, qBittorrent configuration and Prowlarr version match the pre-change receipt.
+No diagnostic downloads were started.
 
 ## Handoff
 
-Keep the connected Prowlarr tab available. Never copy credentials, cookies, raw
+PR #177 contains the implementation and final CI checks. Keep the connected
+Prowlarr tab available. Never copy credentials, cookies, raw
 responses or private server addresses into context.
