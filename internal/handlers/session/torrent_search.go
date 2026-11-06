@@ -158,7 +158,11 @@ func HandleTorrentSearchQuery(a *app.App, update *tgbotapi.Update) {
 	page, err := client.SearchTorrents(query, 0, searchPageSize, nil, nil)
 	if err != nil {
 		logutils.Log.WithError(err).Error("Prowlarr search failed")
-		a.Bot.SendMessage(chatID, lang.Translate("general.torrent_search.failed", nil), ui.GetEmptyKeyboard())
+		messageKey := "general.torrent_search.failed"
+		if errors.Is(err, prowlarr.ErrNoUsableIndexers) {
+			messageKey = "general.torrent_search.no_indexers"
+		}
+		a.Bot.SendMessage(chatID, lang.Translate(messageKey, nil), ui.GetEmptyKeyboard())
 		DeleteSearchSession(chatID)
 		ui.SendMainMenuNoText(a.Bot, chatID)
 		return

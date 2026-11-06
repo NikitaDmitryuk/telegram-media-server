@@ -1,0 +1,54 @@
+---
+# Existing-installation component apply: no package upgrade or service restart.
+- name: Configure existing Prowlarr only
+  hosts: telegram_server
+  become: true
+  gather_facts: false
+  vars_files:
+    - group_vars/telegram_server.yml
+  tasks:
+    - name: Load optional vault vars
+      ansible.builtin.include_vars:
+        file: group_vars/telegram_server.vault.yml
+      failed_when: false
+      no_log: true
+
+    - name: Configure explicitly opted-in Prowlarr settings
+      when:
+        - tms_enable_prowlarr | default(false) | bool
+        - (prowlarr_manage_proxy | default(false) | bool) or (prowlarr_managed_indexers | default([]) | length > 0)
+      block:
+        - name: Find existing Prowlarr config
+          ansible.builtin.find:
+            paths: "{{ prowlarr_config_paths }}"
+            patterns: config.xml
+            recurse: true
+            file_type: file
+          register: prowlarr_setup_config
+
+        - name: Require one existing Prowlarr config
+          ansible.builtin.assert:
+            that: prowlarr_setup_config.matched | int == 1
+            fail_msg: Require exactly one existing Prowlarr config.xml for component setup.
+
+        - name: Read existing Prowlarr key
+          ansible.builtin.slurp:
+            src: "{{ prowlarr_setup_config.files[0].path }}"
+          register: prowlarr_setup_xml
+          no_log: true
+
+        - name: Read existing TMS proxy settings
+          ansible.builtin.slurp:
+            src: "{{ tms_config_dir }}/.env"
+          register: prowlarr_setup_env
+          no_log: true
+          when: prowlarr_manage_proxy | default(false) | bool
+
+        - name: Resolve existing Prowlarr key and effective HTTP proxy
+          ansible.builtin.set_fact:
+            prowlarr_api_key: "{{ prowlarr_setup_xml.content | b64decode | regex_findall('<ApiKey>([^<]+)</ApiKey>') | first }}"
+            telegram_proxy_effective: "{{ telegram_proxy_effective | default(telegram_proxy | default((prowlarr_setup_env.content | default('') | b64decode | regex_findall('(?m)^TELEGRAM_PROXY=(.*)$') | first | default('')))) | trim | regex_replace(\"^(?:\\\"(.*)\\\"|'(.*)')$\", '\\1\\2') }}"
+          no_log: true
+
+        - name: Apply existing-installation Prowlarr setup
+          ansible.builtin.include_tasks: prowlarr-setup-tasks.yml

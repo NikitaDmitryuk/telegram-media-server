@@ -81,6 +81,10 @@ qbittorrent_username: admin
 qbittorrent_webui_port: 8081
 qbittorrent_torrenting_port: 6881
 
+# Explicit opt-ins; leave disabled for manually managed Prowlarr installations.
+prowlarr_manage_proxy: false
+prowlarr_managed_indexers: []  # Supported public definition: rutor
+prowlarr_setup_snapshot_dir: /var/backups/tms-prowlarr
 prowlarr_service_name: prowlarr
 prowlarr_url: http://127.0.0.1:9696
 prowlarr_user: prowlarr

@@ -51,6 +51,9 @@ jobs:
     - name: Test VPN subscription updates
       run: make test-proxy
 
+    - name: Test managed Prowlarr setup
+      run: make test-prowlarr
+
     - name: Run integration tests
       run: make test-integration
 

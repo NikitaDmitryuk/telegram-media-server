@@ -153,6 +153,7 @@ ansible-check:
 	fi
 	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/site.yml
 	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/deploy.yml
+	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/prowlarr-setup.yml
 	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/test.yml
 
 .PHONY: test-remote
@@ -328,12 +329,16 @@ agent-context-check: agent-context-test
 	python3 scripts/validate_agent_context.py
 
 .PHONY: check
-check: agent-context-check test-proxy lint vet test-unit
+check: agent-context-check test-proxy test-prowlarr lint vet test-unit
 	@echo "All checks passed!"
 
 .PHONY: test-proxy
 test-proxy:
 	python3 -m unittest scripts/test_setup_proxy.py
+
+.PHONY: test-prowlarr
+test-prowlarr:
+	python3 -m unittest scripts/test_setup_prowlarr.py
 
 .PHONY: pre-commit
 pre-commit: format check

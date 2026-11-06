@@ -451,6 +451,42 @@ See the full list in the [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp
    ```
    If variables are not set, integration will be disabled.
 
+### Управляемые источники / Managed indexers
+
+Для публичного RuTor без аккаунта явно включите управление в локальном
+`ops/ansible/group_vars/telegram_server.yml`:
+
+```yaml
+prowlarr_manage_proxy: true
+prowlarr_managed_indexers: [rutor]
+```
+
+На уже установленном сервере применяйте только компонент:
+
+```bash
+ansible-playbook -i ops/ansible/inventory.ini ops/ansible/prowlarr-setup.yml
+```
+
+Настройка использует существующий HTTP-прокси TMS (`TELEGRAM_PROXY`), сохраняет
+обход локальных адресов, обновляет официальный каталог текущей версии Prowlarr
+и проверяет RuTor с поиском кириллицей. Перед изменениями сохраняется закрытая
+копия настроек в `/var/backups/tms-prowlarr`. Повторное применение не создаёт
+дубликатов и сохраняет остальные источники и настройки. Компонент не обновляет
+Prowlarr и не перезапускает службы. Обе опции по умолчанию выключены.
+
+For an existing installation, explicitly opt in to the variables above and run
+the component playbook. It reuses the existing TMS HTTP proxy, backs up settings,
+refreshes the installed version's official catalog and tests Russian RuTor search.
+Repeated applies preserve manual indexers and unrelated settings. Managed source
+readiness is checked during installation as well as component applies.
+
+Если подключённых включённых торрент-источников с поддержкой поиска нет, бот
+сообщает «Поиск не настроен: нет подключённых источников», REST API возвращает
+`503` с `{"error":"..."}`. При настроенном поиске настоящая пустая выдача
+сохраняет `200 []`. An empty search checks source availability; nonempty results
+need no additional request. Missing sources return HTTP `503`, while genuine
+empty results remain HTTP `200` with an empty array.
+
 ---
 
 ## Архитектура / Architecture

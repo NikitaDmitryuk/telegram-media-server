@@ -2,6 +2,7 @@ package prowlarr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -10,6 +11,10 @@ import (
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 	"github.com/go-resty/resty/v2"
 )
+
+// ErrNoUsableIndexers reports that Prowlarr has no enabled torrent indexer
+// capable of searching. It is returned only after a successful empty search.
+var ErrNoUsableIndexers = errors.New("no usable torrent indexers configured")
 
 type Prowlarr struct {
 	Client  *resty.Client
@@ -112,6 +117,21 @@ func (p *Prowlarr) searchTorrents(
 	} else {
 		return TorrentSearchPage{}, fmt.Errorf("failed to parse search response")
 	}
+	if len(rawResults) == 0 {
+		if err := p.requireUsableIndexers(ctx, indexerIDs); err != nil {
+			return TorrentSearchPage{}, err
+		}
+	}
+	results := parseSearchResults(rawResults)
+	return TorrentSearchPage{
+		Results: results,
+		Total:   len(results),
+		Offset:  offset,
+		Limit:   limit,
+	}, nil
+}
+
+func parseSearchResults(rawResults []map[string]any) []TorrentSearchResult {
 	results := make([]TorrentSearchResult, 0, len(rawResults))
 	for _, r := range rawResults {
 		title, _ := r["title"].(string)
@@ -140,12 +160,53 @@ func (p *Prowlarr) searchTorrents(
 			Peers:       peers,
 		})
 	}
-	return TorrentSearchPage{
-		Results: results,
-		Total:   len(results),
-		Offset:  offset,
-		Limit:   limit,
-	}, nil
+	return results
+}
+
+func (p *Prowlarr) requireUsableIndexers(ctx context.Context, indexerIDs []int) error {
+	resp, err := p.Client.R().SetContext(ctx).SetHeader("X-Api-Key", p.ApiKey).
+		SetResult(&[]map[string]any{}).Get("/api/v1/indexer")
+	if err != nil {
+		return fmt.Errorf("failed to request indexers: %w", err)
+	}
+	if resp.IsError() {
+		return fmt.Errorf("prowlarr indexer error: %s", resp.Status())
+	}
+	raw, ok := resp.Result().(*[]map[string]any)
+	if !ok || raw == nil {
+		return fmt.Errorf("failed to parse indexer response")
+	}
+
+	selected := make(map[int]struct{}, len(indexerIDs))
+	for _, id := range indexerIDs {
+		selected[id] = struct{}{}
+	}
+	for i, indexer := range *raw {
+		id, usable, err := parseIndexer(indexer)
+		if err != nil {
+			return fmt.Errorf("failed to parse indexer response at position %d: %w", i, err)
+		}
+		if len(selected) > 0 {
+			if _, ok := selected[id]; !ok {
+				continue
+			}
+		}
+		if usable {
+			return nil
+		}
+	}
+	return ErrNoUsableIndexers
+}
+
+func parseIndexer(indexer map[string]any) (indexerID int, usable bool, err error) {
+	id, idOK := indexer["id"].(float64)
+	enabled, enabledOK := indexer["enable"].(bool)
+	protocol, protocolOK := indexer["protocol"].(string)
+	supportsSearch, supportsSearchOK := indexer["supportsSearch"].(bool)
+	if !idOK || !enabledOK || !protocolOK || !supportsSearchOK {
+		return 0, false, errors.New("invalid indexer fields")
+	}
+	return int(id), enabled && strings.EqualFold(protocol, "torrent") && supportsSearch, nil
 }
 
 type Indexer struct {

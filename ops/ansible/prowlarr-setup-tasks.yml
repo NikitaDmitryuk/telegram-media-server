@@ -1,0 +1,30 @@
+---
+- name: Install optional Prowlarr setup helper
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/setup_prowlarr.py"
+    dest: /usr/local/lib/setup-tms-prowlarr.py
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Configure and verify explicitly managed Prowlarr settings
+  ansible.builtin.command:
+    argv: [python3, /usr/local/lib/setup-tms-prowlarr.py]
+    stdin: "{{ {'url': prowlarr_url, 'api_key': prowlarr_api_key, 'manage_proxy': prowlarr_manage_proxy | default(false) | bool, 'proxy_url': telegram_proxy_effective | default(''), 'managed_indexers': prowlarr_managed_indexers | default([]), 'snapshot_dir': prowlarr_setup_snapshot_dir | default('/var/backups/tms-prowlarr')} | to_json }}"
+    stdin_add_newline: true
+  register: prowlarr_setup_result
+  changed_when: prowlarr_setup_result.rc == 0 and (prowlarr_setup_result.stdout | from_json).changed
+  failed_when: false
+  no_log: true
+  diff: false
+
+- name: Require managed Prowlarr readiness
+  ansible.builtin.assert:
+    that: prowlarr_setup_result.rc == 0
+    # The helper emits sanitized errors only; never include stdin or API responses.
+    fail_msg: "{{ (prowlarr_setup_result.stderr | from_json).error if (prowlarr_setup_result.stderr | default('')).startswith('{') else 'Prowlarr setup helper failed; inspect locally' }}"
+    success_msg: Managed Prowlarr settings and indexers are ready.
+
+- name: Report managed Prowlarr setup result
+  ansible.builtin.debug:
+    msg: "{{ prowlarr_setup_result.stdout | from_json }}"

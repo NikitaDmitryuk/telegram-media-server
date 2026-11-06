@@ -53,6 +53,7 @@
             "enter_query": "Please enter the movie name to search for torrents",
             "empty_query": "Query cannot be empty",
             "not_configured": "Prowlarr integration is not configured",
+            "no_indexers": "Torrent search is not configured: no indexers are enabled",
             "failed": "Prowlarr is not available. Please check the settings",
             "not_found": "No torrents found for your query",
             "download": "Download",
