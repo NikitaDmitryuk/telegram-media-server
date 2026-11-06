@@ -4,7 +4,7 @@ status: completed
 date: 2026-11-06
 last-verified: 2026-11-06
 agent: codex
-evidence: internal/tvcompat/tvcompat.go, internal/downloader/manager/manager.go, internal/downloader/manager/monitor.go, internal/downloader/video/ytdlp.go, internal/database/files.go, 8716613
+evidence: internal/tvcompat/tvcompat.go, internal/downloader/manager/manager.go, internal/downloader/manager/monitor.go, internal/downloader/video/ytdlp.go, internal/database/files.go
 ---
 
 # Verified video preparation for older LG TVs
