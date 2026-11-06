@@ -19,6 +19,9 @@ Load only the topics needed for the current task:
 - [qBittorrent lifecycle](qbittorrent.md): authenticated API recovery, indefinite
   stall handling, persistent warning deduplication, and restart monitoring.
 
+- [Prowlarr search readiness](prowlarr.md): empty-result diagnostics, opt-in
+  proxy/source provisioning, private snapshots and live readiness boundaries.
+
 - [Legacy LG video preparation](tvcompat.md): selective stream processing, full-file
   container acceptance, original retention and cancellation/publication boundaries.
 

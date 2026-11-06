@@ -1,6 +1,6 @@
 ---
 kind: plan
-status: active
+status: completed
 date: 2026-11-06
 last-verified: 2026-11-06
 agent: codex
@@ -44,7 +44,7 @@ selected. No credentials or raw production data belong in this record.
 
 ## Progress
 
-Application and provisioning changes are implemented. Built-in Prowlarr backup
+All implementation, live deployment and acceptance work is complete. Built-in Prowlarr backup
 was verified before enabling the existing HTTP proxy. The catalog became
 available; first component apply created and tested RuTor successfully.
 Independent cohesive review found no actionable blocker.
@@ -62,11 +62,21 @@ network-route change is part of this work.
 
 Go 1.26 make check, integration tests, focused race tests for Prowlarr/session/API,
 16 Python provisioning tests, whitespace and both Ansible syntax checks pass.
-Repeated live apply, deployment, live search acceptance and CI remain pending.
+Live repeated component apply changed=0 with one searchable RuTor. Deployed
+binary and translations match local artifacts; Prowlarr/API return 100 results
+for Матрица and Дюна and zero for a random negative query. Captured real bot
+handler returns cards or localized not-found without downloads/Telegram sends.
+Telegram getMe passed; the user confirmed that results appeared in the bot.
+Environment/routes/qBittorrent configuration and Prowlarr version are unchanged;
+TMS and DLNA are active and the working Full HD TS remains present. All nine
+GitHub checks passed on runtime revision 1b1bc46 in PR #177, including Docker,
+CodeQL and coverage. Completion documentation receives its own final CI run.
 Catalog command completion alone is not proof of a fresh download because
 upstream catches download errors; verify live results and catalog access separately.
 
 ## Handoff
 
-Continue from current deployed compatibility branch; do not roll back the LG fix.
-Keep backup credentials and live receipts outside version-controlled context.
+Runtime revision 1b1bc46 is deployed together with LG compatibility fixes.
+Use the Prowlarr component playbook for future source setup; full installation
+is unnecessary for an existing host. Backups remain private for recovery.
+Keep credentials and raw live receipts outside version-controlled context.
