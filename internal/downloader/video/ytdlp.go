@@ -270,24 +270,22 @@ func (d *YTDLPDownloader) waitForDownloadAttempt(
 		}
 	}
 
-	waitDone := make(chan error, 1)
-	go func() {
-		waitDone <- d.cmd.Wait()
-	}()
-
+	// Wait closes StderrPipe, so finish reading diagnostics before reaping the
+	// process. Otherwise a fast exit can lose the cookie rejection that triggers
+	// an anonymous retry. A descendant may inherit stderr, so cancellation must
+	// close our reader instead of waiting indefinitely for EOF from that child.
 	select {
-	case processErr = <-waitDone:
+	case stderrOutput = <-errorOutput:
 	case <-ctx.Done():
-		logutils.Log.Info("yt-dlp process canceled due to context cancellation")
-		if d.cmd.Process != nil {
-			if killErr := d.cmd.Process.Kill(); killErr != nil {
-				logutils.Log.WithError(killErr).Warn("Failed to kill yt-dlp process")
-			}
-		}
+		_ = stderr.Close()
+		stderrOutput = <-errorOutput
+	}
+	// CommandContext kills the direct process on cancellation. Always reap it
+	// before releasing the execution guard, including when stderr was inherited.
+	processErr = d.cmd.Wait()
+	if ctx.Err() != nil {
 		processErr = ctx.Err()
 	}
-
-	stderrOutput = <-errorOutput
 
 	return stderrOutput, processErr
 }
@@ -563,11 +561,7 @@ func appendFormatSortArgs(args []string, videoSettings *tmsconfig.VideoConfig) [
 	}
 
 	if videoSettings.CompatibilityMode {
-		formatSortParts = append(formatSortParts, "vcodec:h264", "acodec:mp3")
-		videoSettings.EnableReencoding = true
-		videoSettings.VideoCodec = "h264"
-		videoSettings.AudioCodec = "mp3"
-		videoSettings.OutputFormat = "mp4"
+		formatSortParts = append(formatSortParts, "vcodec:h264", "acodec:aac")
 	}
 
 	if len(formatSortParts) > 0 {
@@ -579,7 +573,7 @@ func appendFormatSortArgs(args []string, videoSettings *tmsconfig.VideoConfig) [
 
 // appendReencodingArgs adds video reencoding options if enabled.
 func appendReencodingArgs(args []string, videoSettings *tmsconfig.VideoConfig) []string {
-	if !videoSettings.EnableReencoding {
+	if videoSettings.CompatibilityMode || !videoSettings.EnableReencoding {
 		return args
 	}
 

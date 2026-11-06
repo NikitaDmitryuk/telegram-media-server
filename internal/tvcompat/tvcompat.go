@@ -2,20 +2,18 @@ package tvcompat
 
 import (
 	"context"
-	"os"
-	"os/exec"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	tmsconfig "github.com/NikitaDmitryuk/telegram-media-server/internal/config"
 	tmsdb "github.com/NikitaDmitryuk/telegram-media-server/internal/database"
-	"github.com/NikitaDmitryuk/telegram-media-server/internal/logutils"
 )
 
 // Video extensions that may be processed for TV compatibility.
 var videoExtensions = map[string]struct{}{
-	".mkv": {}, ".mp4": {}, ".avi": {}, ".mov": {}, ".webm": {}, ".m4v": {},
+	".ts": {}, ".mkv": {}, ".mp4": {}, ".avi": {}, ".mov": {}, ".webm": {}, ".m4v": {},
 }
 
 // Extensions that almost always contain a non-H.264 codec (VP9 / AV1).
@@ -51,7 +49,7 @@ func CompatFromTorrentFileNames(filePaths []string) string {
 
 // CompatFromVcodec returns a preliminary TV compatibility from a codec string
 // (e.g. from yt-dlp JSON: "avc1.64001f", "vp9", "hevc").
-// Returns green for H.264/AVC, red for VP9/AV1/HEVC, "" if unknown or empty.
+// Returns yellow for H.264/AVC, red for VP9/AV1/HEVC, "" if unknown or empty.
 func CompatFromVcodec(vcodec string) string {
 	v := strings.ToLower(strings.TrimSpace(vcodec))
 	if v == "" || v == "none" {
@@ -64,15 +62,15 @@ func CompatFromVcodec(vcodec string) string {
 	if strings.Contains(v, "h265") || strings.Contains(v, "hevc") {
 		return TvCompatRed
 	}
-	// H.264/AVC → green (even if level is high, quick remux is enough).
+	// H.264 metadata alone cannot establish the complete TV profile.
 	if strings.Contains(v, "h264") || strings.Contains(v, "avc") {
-		return TvCompatGreen
+		return TvCompatYellow
 	}
 	return ""
 }
 
-// TvCompatGreen means H.264 confirmed — video will play on old TV (possibly after quick remux).
-// TvCompatYellow means codec is unknown / not yet determined.
+// TvCompatGreen means the complete TV output profile was verified.
+// TvCompatYellow means unknown or requiring preparation.
 // TvCompatRed means confirmed incompatible codec (HEVC, VP9, AV1, etc.) — full re-encoding needed.
 const (
 	TvCompatGreen  = "green"
@@ -80,141 +78,101 @@ const (
 	TvCompatRed    = "red"
 )
 
-// ProbeTvCompatibility probes video files of the movie with ffprobe and returns:
-//   - green: H.264 confirmed (any level — quick remux is enough for old TVs);
-//   - red: confirmed non-H.264 codec (HEVC, VP9, AV1, etc.);
-//   - "": probe could not determine (ffprobe unavailable, files not yet on disk, etc.).
-//
-// Returning "" allows callers to keep the previous (early) estimate.
-func ProbeTvCompatibility(
-	ctx context.Context,
-	movieID uint,
-	moviePath string,
-	db tmsdb.Database,
-	_ int, // targetLevel kept for API compatibility; any H.264 level is considered green now.
-) string {
+// ProbeTvCompatibility returns green only for the prepared TV profile. H.264
+// needing preparation is yellow, so RejectIncompatible does not reject it.
+func ProbeTvCompatibility(ctx context.Context, movieID uint, moviePath string, db tmsdb.Database, requestedLevel int) string {
+	if requestedLevel <= 0 || requestedLevel > tvLevel {
+		requestedLevel = tvLevel
+	}
 	files, err := db.GetFilesByMovieID(ctx, movieID)
 	if err != nil {
-		logutils.Log.WithError(err).WithField("movie_id", movieID).Debug("TV compatibility probe: failed to get files")
 		return ""
 	}
-	probeAttempted := false
+	result := ""
 	for i := range files {
-		rel := files[i].FilePath
-		ext := strings.ToLower(filepath.Ext(rel))
-		if _, ok := videoExtensions[ext]; !ok {
+		if !IsVideoFilePath(files[i].FilePath) {
 			continue
 		}
-		absPath := filepath.Join(moviePath, rel)
-		if _, err := os.Stat(absPath); err != nil {
-			continue
+		path := filepath.Join(moviePath, files[i].FilePath)
+		compat := probeFileCompatibility(ctx, path, requestedLevel)
+		if compat != TvCompatGreen {
+			return compat
 		}
-		probeAttempted = true
-		codec, _ := probeCodecAndLevel(ctx, absPath)
-		if codec == "" {
-			// Probe failed (ffprobe missing, file incomplete, etc.) — try next file.
-			logutils.Log.WithFields(map[string]any{
-				"movie_id": movieID,
-				"path":     absPath,
-			}).Debug("TV compatibility probe: ffprobe returned empty codec, trying next file")
-			continue
-		}
-		if codec != "h264" {
-			// Confirmed non-H.264 codec — this truly needs re-encoding.
-			return TvCompatRed
-		}
-		// H.264 at any level → green.
-		// Even if the level is above the target, a quick metadata remux is enough.
-		return TvCompatGreen
+		result = TvCompatGreen
 	}
-	if !probeAttempted {
-		// No video files found on disk yet (still downloading) or no video extensions in DB.
-		logutils.Log.WithField("movie_id", movieID).Debug("TV compatibility probe: no video files available on disk")
-	}
-	// Could not determine — return "" so callers keep the existing (early) estimate.
-	return ""
+	return result
 }
 
-// probeCodecAndLevel returns codec name and level (e.g. 41 for 4.1). level is 0 if unknown or error.
-func probeCodecAndLevel(ctx context.Context, absPath string) (codec string, level int) {
-	cmd := exec.CommandContext(ctx, "ffprobe",
-		"-v", "error",
-		"-select_streams", "v:0",
-		"-show_entries", "stream=codec_name,level",
-		"-of", "csv=p=0",
-		absPath,
-	)
-	out, err := cmd.Output()
+func probeFileCompatibility(ctx context.Context, path string, requestedLevel int) string {
+	media, err := probeMedia(ctx, path)
 	if err != nil {
-		return "", 0
+		return ""
 	}
-	line := strings.TrimSpace(string(out))
-	if line == "" {
-		return "", 0
+	video, _ := media.videoAudio()
+	if video.CodecName == "" {
+		return ""
 	}
-	parts := strings.SplitN(line, ",", 2)
-	codec = strings.TrimSpace(strings.ToLower(parts[0]))
-	if len(parts) == 2 {
-		levelStr := strings.TrimSpace(parts[1])
-		if levelStr != "" {
-			level, _ = strconv.Atoi(levelStr)
+	if video.CodecName != h264Codec {
+		return TvCompatRed
+	}
+	if strings.EqualFold(filepath.Ext(path), ".ts") {
+		if validateExistingTransport(ctx, path, defaultTVHeight, requestedLevel) == nil {
+			return TvCompatGreen
 		}
+		return TvCompatYellow
 	}
-	return codec, level
+	transport, transportErr := needsTransportStream(path)
+	if transportErr != nil || transport {
+		return TvCompatYellow
+	}
+	if !strings.EqualFold(filepath.Ext(path), ".mp4") ||
+		validateProfile(media, defaultTVHeight, requestedLevel) != nil || !hasFastStart(path) {
+		return TvCompatYellow
+	}
+	duration, err := strconv.ParseFloat(media.Format.Duration, 64)
+	if err != nil || duration <= 0 {
+		return TvCompatYellow
+	}
+	timing, err := samplePacketTiming(ctx, path, duration)
+	if err != nil || timing != timingSupported {
+		return TvCompatYellow
+	}
+	return TvCompatGreen
 }
 
-// RunTvCompatibility runs a light remux on main video files for the given movie:
-// copies video/audio streams and sets H.264 level metadata (e.g. 4.1 for old LG Smart TVs)
-// without re-encoding. Only H.264 streams with level above the target are processed.
-// Call this from the conversion worker when CompatibilityMode is on.
-func RunTvCompatibility(
-	ctx context.Context,
-	movieID uint,
-	moviePath string,
-	db tmsdb.Database,
-	videoConfig *tmsconfig.VideoConfig,
-) {
+// RunTvCompatibility prepares every video and returns errors to the worker.
+// Original MP4s are retained in a hidden sibling backup directory.
+func RunTvCompatibility(ctx context.Context, movieID uint, moviePath string, db tmsdb.Database,
+	videoConfig *tmsconfig.VideoConfig) error {
 	if videoConfig == nil || !videoConfig.CompatibilityMode {
-		return
+		return nil
 	}
-
+	level, err := configuredTVLevel(videoConfig.TvH264Level)
+	if err != nil {
+		return err
+	}
 	files, err := db.GetFilesByMovieID(ctx, movieID)
 	if err != nil {
-		logutils.Log.WithError(err).WithField("movie_id", movieID).Error("TV compatibility: failed to get files")
-		return
+		return fmt.Errorf("list TV input files: %w", err)
 	}
-
-	targetLevel := ParseH264Level(videoConfig.TvH264Level)
-	if targetLevel <= 0 {
-		logutils.Log.WithField("level", videoConfig.TvH264Level).Warn("TV compatibility: invalid H.264 level, using 41")
-		targetLevel = 41
-	}
-
+	count := 0
 	for i := range files {
 		rel := files[i].FilePath
-		ext := strings.ToLower(filepath.Ext(rel))
-		if _, ok := videoExtensions[ext]; !ok {
+		if !IsVideoFilePath(rel) {
 			continue
 		}
-		absPath := filepath.Join(moviePath, rel)
-		if _, err := os.Stat(absPath); err != nil {
-			logutils.Log.WithError(err).WithField("path", absPath).Debug("TV compatibility: skip missing file")
-			continue
+		if filepath.IsAbs(rel) || !filepath.IsLocal(rel) {
+			return fmt.Errorf("invalid TV input path")
 		}
-		needs, err := needsTvRemux(ctx, absPath, targetLevel)
-		if err != nil {
-			logutils.Log.WithError(err).WithField("path", absPath).Debug("TV compatibility: skip (probe failed)")
-			continue
+		if err := prepareMovieFile(ctx, movieID, &files[i], moviePath, db, videoConfig.MaxHeight, level); err != nil {
+			return fmt.Errorf("prepare TV video: %w", err)
 		}
-		if !needs {
-			continue
-		}
-		if err := remuxForTv(ctx, absPath, targetLevel); err != nil {
-			logutils.Log.WithError(err).WithField("path", absPath).Warn("TV compatibility: remux failed")
-		} else {
-			logutils.Log.WithField("path", absPath).Info("TV compatibility: remux done")
-		}
+		count++
 	}
+	if count == 0 {
+		return fmt.Errorf("no video files available for TV preparation")
+	}
+	return nil
 }
 
 // ParseH264Level converts "4.0" -> 40, "4.1" -> 41. Returns 0 on parse error.
@@ -238,71 +196,13 @@ func ParseH264Level(s string) int {
 	return maj*10 + minor
 }
 
-// needsTvRemux runs ffprobe and returns true if the file is H.264 and level is above target or missing.
-func needsTvRemux(ctx context.Context, absPath string, targetLevel int) (bool, error) {
-	// ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,level -of csv=p=0
-	cmd := exec.CommandContext(ctx, "ffprobe",
-		"-v", "error",
-		"-select_streams", "v:0",
-		"-show_entries", "stream=codec_name,level",
-		"-of", "csv=p=0",
-		absPath,
-	)
-	out, err := cmd.Output()
-	if err != nil {
-		return false, err
+func configuredTVLevel(setting string) (int, error) {
+	switch strings.TrimSpace(setting) {
+	case "", "4.1":
+		return tvLevel, nil
+	case "4", "4.0":
+		return tvLevel40, nil
+	default:
+		return 0, fmt.Errorf("VIDEO_TV_H264_LEVEL supports only 4.0 or 4.1 for the 1080p TV profile; original preserved")
 	}
-	line := strings.TrimSpace(string(out))
-	if line == "" {
-		return false, nil
-	}
-	parts := strings.SplitN(line, ",", 2)
-	codec := strings.TrimSpace(strings.ToLower(parts[0]))
-	if codec != "h264" {
-		return false, nil
-	}
-	levelStr := ""
-	if len(parts) == 2 {
-		levelStr = strings.TrimSpace(parts[1])
-	}
-	if levelStr == "" {
-		return true, nil // unknown level, apply cap
-	}
-	level, err := strconv.Atoi(levelStr)
-	if err != nil {
-		return true, nil
-	}
-	return level > targetLevel, nil
-}
-
-// remuxForTv runs ffmpeg with -c:v copy -bsf:v h264_metadata=level=X.Y -c:a copy, then replaces original.
-func remuxForTv(ctx context.Context, absPath string, targetLevel int) error {
-	levelStr := formatH264Level(targetLevel)
-	dir := filepath.Dir(absPath)
-	tmpPath := filepath.Join(dir, ".tvcompat_"+filepath.Base(absPath)+".tmp")
-	defer os.Remove(tmpPath) // best-effort cleanup
-
-	// ffmpeg -i input -c:v copy -bsf:v h264_metadata=level=4.1 -c:a copy -y output
-	// #nosec G204 -- absPath/tmpPath from filepath, levelStr from formatH264Level(level)
-	cmd := exec.CommandContext(ctx, "ffmpeg",
-		"-i", absPath,
-		"-c:v", "copy",
-		"-bsf:v", "h264_metadata=level="+levelStr,
-		"-c:a", "copy",
-		"-y",
-		tmpPath,
-	)
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, absPath)
-}
-
-func formatH264Level(level int) string {
-	maj := level / 10
-	minor := level % 10
-	if minor == 0 {
-		return strconv.Itoa(maj)
-	}
-	return strconv.Itoa(maj) + "." + strconv.Itoa(minor)
 }

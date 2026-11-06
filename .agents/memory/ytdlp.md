@@ -2,7 +2,7 @@
 kind: memory
 status: active
 date: 2026-08-29
-last-verified: 2026-10-18
+last-verified: 2026-11-06
 agent: codex
 evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.go, internal/downloader/video/cookies_test.go, internal/downloader/video/execution.go, internal/downloader/video/updater.go, internal/config/config.go, ops/ansible/site.yml, ops/ansible/templates/youtube-cookies-export.sh.j2, scripts/ytdlp-cookies-login.sh
 ---
@@ -38,6 +38,11 @@ evidence: internal/downloader/video/ytdlp.go, internal/downloader/video/cookies.
 - Ansible emits an empty `YTDLP_COOKIES_PATH` when neither managed mode nor a
   controller-provided cookie file is configured. This keeps disabled deployments
   strictly anonymous instead of inheriting a stale server-side path.
+- Download monitoring drains stderr before `Cmd.Wait`: Wait closes StderrPipe and
+  can discard a fast cookie rejection, preventing the anonymous retry. Cancellation
+  closes the reader and joins the scanner before reaping the direct process, so a
+  descendant inheriting stderr cannot hold the execution guard indefinitely.
+  Delayed-reader and inherited-stderr cancellation tests cover both boundaries.
 - A process-wide read/write guard prevents yt-dlp updates from overlapping active
   metadata probes, downloads, or cookie refresh. Startup update is synchronous; a busy
   periodic update or cookie check is skipped until its next scheduled interval.

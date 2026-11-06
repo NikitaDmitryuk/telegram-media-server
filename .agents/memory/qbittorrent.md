@@ -2,9 +2,9 @@
 kind: memory
 status: active
 date: 2026-08-29
-last-verified: 2026-08-29
+last-verified: 2026-11-06
 agent: codex
-evidence: internal/downloader/qbittorrent/client.go, internal/downloader/qbittorrent/downloader.go, internal/downloader/manager/monitor.go, internal/app/resume.go
+evidence: internal/downloader/qbittorrent/client.go, internal/downloader/qbittorrent/downloader.go, internal/downloader/manager/monitor.go, internal/app/resume.go, internal/downloader/factory/factory.go, internal/downloader/torrent/aria2.go
 ---
 
 # qBittorrent lifecycle
@@ -26,6 +26,16 @@ evidence: internal/downloader/qbittorrent/client.go, internal/downloader/qbittor
 - Restart attachment uses capped exponential backoff and does not reset it merely
   because a monitor was attached. Successful completion and manual deletion keep
   their existing cleanup behavior.
+- Configured qBittorrent is preferred by the factory; aria2 is the other backend.
+  Repository history does not contain an earlier native anacrolix torrent engine:
+  the previous downloader launched the external `aria2c` process.
+- Series already enable sequential and first/last-piece flags plus per-file
+  priority: the first sorted video gets priority 7, the second 6, the rest 1.
+  Strict piece sequencing and episode-file priority are separate controls; an
+  experiment may disable sequencing while retaining the episode priorities.
+- The current aria2 series path uses one process for all files, replacing the
+  earlier per-file series loop. More simultaneous jobs are not evidence of higher
+  throughput for one swarm; compare matched torrents and time-to-first-episode.
 
 Verification is covered by qBittorrent client/downloader tests, manager stall tests,
 resume notifier tests, and the full repository pre-commit target.

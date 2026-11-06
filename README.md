@@ -176,7 +176,10 @@ yt-dlp — только для сайтов из существующего `CON
 существующую общую настройку Telegram-прокси.
 
 Подписка загружается напрямую с проверкой TLS при установке, спустя минуту после
-загрузки сервера и затем каждый час. Поддерживаются plain text/base64 и профили
+загрузки сервера и затем каждый час. Неудачная попытка повторяется через 30 секунд
+до успешного обновления, в том числе если сеть или DNS ещё не готовы после загрузки.
+При недоступной подписке свежий конфиг получить нельзя; сохранённый конфиг не удаляется.
+Поддерживаются plain text/base64 и профили
 TCP/REALITY/Vision, XHTTP/REALITY с `path`, `mode`, `extra`. Первый профиль с ошибкой
 останавливает обновление; другие профили не выбираются. Заголовки управления Happ
 не применяются: интервал таймера фиксирован.
@@ -201,7 +204,8 @@ curl --proxy http://127.0.0.1:10809 https://api.ipify.org
 только бинарник TMS. Для отключения удалите или очистите `TMS_VPN_SUBSCRIPTION_URL`
 в локальном `.env`, задайте `tms_vpn_enabled: false`, восстановите желаемые
 `TELEGRAM_PROXY`/`CONTENT_PROXY` в локальных настройках и выполните установку:
-управляемая служба и таймер остановятся, закрытый кеш сохранится.
+управляемый клиент, таймер и повторные попытки обновления остановятся, закрытый кеш
+сохранится.
 
 Локальная проверка: `make test-proxy` и `make ansible-check`. При установленном Xray
 тесты также проверяют синтетические TCP/XHTTP-конфиги реальным ядром. Эксплуатационная
@@ -331,8 +335,13 @@ Create a `.env` file based on `.env.example` and configure the required paramete
 
 When `QBITTORRENT_URL` is set, TMS reauthenticates after `401/403` and waits through temporary Web API outages with capped backoff without deleting the torrent. Set `TORRENT_FALLBACK_TO_ARIA2=true` only for intentional fallback after an initial start failure. After reboot, monitoring resumes by the stored hash and keeps waiting if the torrent is absent. A torrent with no progress is retained; `TORRENT_STALL_WARNING_AFTER` (default `30m`, `0` disables it) controls one warning per stall episode.
 
-Совместимость с ТВ: если видео не воспроизводится — `VIDEO_COMPATIBILITY_MODE=true`. Файлы при необходимости пройдут remux. Опции: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — отклонять несовместимое видео.  
-TV compatibility: if video won't play on your TV, set `VIDEO_COMPATIBILITY_MODE=true`. Files may be remuxed. Options: `VIDEO_TV_H264_LEVEL=4.0`/`4.1`, `VIDEO_REJECT_INCOMPATIBLE=true` — reject incompatible video.
+Совместимость с ТВ: `VIDEO_COMPATIBILITY_MODE=true` включает проверку видео, звука и контейнера MP4/MPEG-TS. Совместимый файл остаётся без изменений; переупаковка копирует потоки, исправление звука сохраняет видео, а видеопоток перекодируется только при выявленном несовместимом параметре. Поддерживаются H.264 Baseline/Main/High до уровня 4.1, прогрессивное 8-битное видео до Full HD/30 кадров в секунду и AAC-LC stereo 44,1/48 кГц. При необходимости кодирования используются H.264 Main и AAC-LC stereo 48 кГц; `VIDEO_MAX_HEIGHT` может уменьшить разрешение, `VIDEO_TV_H264_LEVEL=4.0`/`4.1` задаёт предел уровня; другие уровни не поддерживаются этим профилем. Большое номинальное FPS из метаданных само по себе не вызывает перекодировку: дополнительно проверяются временные метки в нескольких участках файла.
+
+Перед заменой проверяется результат и сохраняется уникальная резервная копия исходника в скрытом каталоге `.tvcompat-originals` рядом с файлом. Ошибка обработки или недостаточные данные проверки сохраняют исходник и не отмечают подготовку успешной. Для старого LG большой MP4 (свыше 4 ГиБ с таблицами `co64`) автоматически переупаковывается в настоящий `.ts`: проверенная на полном видео мера совместимости, без перекодирования поддерживаемых потоков. Путь в базе меняется только для подготовленного файла. Совместимый `.ts` повторно не обрабатывается. Другие контейнеры пока сохраняются с явной ошибкой проверки. `VIDEO_REJECT_INCOMPATIBLE=true` сохраняет отдельную политику отклонения неподходящих видеокодеков. Проверка формата не гарантирует поддержку конкретной модели ТВ; ограничения DLNA могут отличаться от USB.
+
+TV compatibility: `VIDEO_COMPATIBILITY_MODE=true` checks MP4/MPEG-TS video, audio and container details. Compatible files remain unchanged. Remuxing copies streams; audio repair preserves video; video is encoded only for an identified incompatible parameter. Supported streams are progressive 8-bit H.264 Baseline/Main/High up to level 4.1 and Full HD/30 FPS, with AAC-LC stereo at 44.1/48 kHz. Encoding uses H.264 Main and AAC-LC stereo 48 kHz. `VIDEO_MAX_HEIGHT` can lower resolution; `VIDEO_TV_H264_LEVEL=4.0`/`4.1` sets the level ceiling; other levels are unsupported by this profile. A large nominal FPS alone does not trigger encoding: packet timestamps are also sampled at several positions.
+
+Outputs are validated before replacement and unique originals are retained under the hidden sibling `.tvcompat-originals` directory. Failure or inconclusive verification preserves the source and never reports successful preparation. For the legacy LG profile, large MP4s (above 4 GiB with `co64` tables) are remuxed to a real `.ts` file, a full-video-tested workaround that copies supported streams. Only the prepared file path is changed in the database. A compatible `.ts` is unchanged on subsequent passes. Other containers are currently preserved with an explicit verification error. `VIDEO_REJECT_INCOMPATIBLE=true` retains its separate video-codec rejection policy. A format check cannot establish support on every TV model; DLNA and USB restrictions can differ.
 
 ---
 
@@ -441,6 +450,74 @@ See the full list in the [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp
    PROWLARR_API_KEY=your_prowlarr_api_key
    ```
    If variables are not set, integration will be disabled.
+
+### Управляемые источники / Managed indexers
+
+Для публичного RuTor без аккаунта явно включите управление в локальном
+`ops/ansible/group_vars/telegram_server.yml`:
+
+```yaml
+prowlarr_manage_proxy: true
+prowlarr_managed_indexers: [rutor]
+```
+
+На уже установленном сервере применяйте только компонент:
+
+```bash
+ansible-playbook -i ops/ansible/inventory.ini ops/ansible/prowlarr-setup.yml
+```
+
+Настройка использует существующий HTTP-прокси TMS (`TELEGRAM_PROXY`), сохраняет
+обход локальных адресов, обновляет официальный каталог текущей версии Prowlarr
+и проверяет RuTor с поиском кириллицей. Перед изменениями сохраняется закрытая
+копия настроек в `/var/backups/tms-prowlarr`. Повторное применение не создаёт
+дубликатов и сохраняет остальные источники и настройки. Компонент не обновляет
+Prowlarr и не перезапускает службы. Обе опции по умолчанию выключены.
+
+For an existing installation, explicitly opt in to the variables above and run
+the component playbook. It reuses the existing TMS HTTP proxy, backs up settings,
+refreshes the installed version's official catalog and tests Russian RuTor search.
+Repeated applies preserve manual indexers and unrelated settings. Managed source
+readiness is checked during installation as well as component applies.
+
+Если подключённых включённых торрент-источников с поддержкой поиска нет, бот
+сообщает «Поиск не настроен: нет подключённых источников», REST API возвращает
+`503` с `{"error":"..."}`. При настроенном поиске настоящая пустая выдача
+сохраняет `200 []`. An empty search checks source availability; nonempty results
+need no additional request. Missing sources return HTTP `503`, while genuine
+empty results remain HTTP `200` with an empty array.
+
+### RuTracker и Cloudflare / RuTracker and Cloudflare
+
+RuTracker добавляется отдельно через интерфейс Prowlarr с личным аккаунтом.
+Учётные данные не задаются в репозитории. При блокировке Cloudflare можно явно
+включить `prowlarr_manage_flaresolverr: true` и применить компонент:
+
+```bash
+ansible-playbook -i ops/ansible/inventory.ini ops/ansible/flaresolverr.yml
+```
+
+Компонент использует уже установленный Docker и закреплённый официальный образ
+FlareSolverr 3.5.2, слушает только `127.0.0.1:8191`, ограничивает ресурсы и включает
+автоматический запуск контейнера. Повторное применение не заменяет посторонний
+контейнер. Значение `false` оставляет существующую настройку без управления.
+
+В Prowlarr добавьте Indexer Proxy типа FlareSolverr с адресом
+`http://127.0.0.1:8191/`, тайм-аутом **120 секунд** и тегом `rutracker`.
+У источника RuTracker выберите `https://rutracker.net/`, тот же тег и оставьте
+Strip Russian letters выключенным. Источник использует существующий VPN-прокси;
+другие источники не получают тег. Обязательно проверяйте поиск после сохранения:
+тест ещё не сохранённого источника может использовать помощник без тега.
+
+RuTracker requires an account entered directly in Prowlarr. The opt-in component
+provides a pinned local browser helper; configure a tagged FlareSolverr indexer
+proxy with a 120-second timeout and the same tag on the saved RuTracker source.
+Prowlarr forwards its existing global VPN proxy. Cloudflare checks can take over
+a minute; a successful anonymous login-page check does not prove account access.
+
+Поиск использует слова из названий раздач: например, `Пацаны S02 кубик` находит
+нужный сезон и озвучку на RuTor, тогда как `Пацаны 2 сезон кубик в кубе` может
+дать пустую выдачу. Запросы пока не преобразуются автоматически.
 
 ---
 

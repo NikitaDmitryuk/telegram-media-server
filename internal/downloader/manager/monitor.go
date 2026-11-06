@@ -117,12 +117,12 @@ func (dm *DownloadManager) monitorDownload(
 				// errChan delivers ErrStoppedByUser. Don't treat this as successful completion:
 				// skip SetLoaded / conversion and propagate the correct signal.
 				if job.downloader.StoppedManually() {
-					if job.silentStop {
+					if job.silentStop.Load() {
 						logutils.Log.WithField("movie_id", movieID).Info("Download stopped by deletion (progressChan closed first)")
 						outerErrChan <- downloader.ErrStoppedByDeletion
 					} else {
 						logutils.Log.WithField("movie_id", movieID).Info("Download stopped by user (progressChan closed first)")
-						outerErrChan <- nil
+						outerErrChan <- downloader.ErrStoppedByUser
 					}
 					return
 				}
@@ -149,14 +149,15 @@ func (dm *DownloadManager) monitorDownload(
 					"duration": time.Since(downloadStartTime),
 				}).Info("Download completed successfully")
 
-				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.title)
+				needWait, done, compatRed := dm.enqueueConversionIfNeeded(job.ctx, movieID, job.title)
 				if compatRed && dm.cfg.VideoSettings.RejectIncompatible {
 					job.queueNotifier.OnVideoNotSupported(movieID, job.title)
 					outerErrChan <- nil
 					return
 				}
-				if needWait && done != nil {
-					<-done
+				if err := dm.waitTVPreparation(job, movieID, needWait, done); err != nil {
+					outerErrChan <- err
+					return
 				}
 				if err := dm.db.SetLoaded(context.Background(), movieID, dm.cfg.MoviePath); err != nil {
 					logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
@@ -226,7 +227,7 @@ func (dm *DownloadManager) monitorDownload(
 
 			if errors.Is(err, downloader.ErrStoppedByUser) {
 				logutils.Log.WithField("movie_id", movieID).Info("Download stopped by user")
-				if job.silentStop {
+				if job.silentStop.Load() {
 					outerErrChan <- downloader.ErrStoppedByDeletion
 				} else {
 					outerErrChan <- nil
@@ -241,14 +242,15 @@ func (dm *DownloadManager) monitorDownload(
 			} else {
 				logutils.Log.WithField("movie_id", movieID).Info("Download completed successfully")
 
-				needWait, done, compatRed := dm.enqueueConversionIfNeeded(context.Background(), movieID, job.title)
+				needWait, done, compatRed := dm.enqueueConversionIfNeeded(job.ctx, movieID, job.title)
 				if compatRed && dm.cfg.VideoSettings.RejectIncompatible {
 					job.queueNotifier.OnVideoNotSupported(movieID, job.title)
 					outerErrChan <- nil
 					return
 				}
-				if needWait && done != nil {
-					<-done
+				if err := dm.waitTVPreparation(job, movieID, needWait, done); err != nil {
+					outerErrChan <- err
+					return
 				}
 				if err := dm.db.SetLoaded(context.Background(), movieID, dm.cfg.MoviePath); err != nil {
 					logutils.Log.WithError(err).WithField("movie_id", movieID).Error("Failed to mark movie as loaded")
@@ -296,7 +298,7 @@ func (dm *DownloadManager) monitorDownload(
 				outerErrChan <- nil
 			} else {
 				logutils.Log.WithField("movie_id", movieID).Info("Download canceled")
-				outerErrChan <- job.ctx.Err()
+				outerErrChan <- stoppedDownloadError(job)
 			}
 			return
 		}
@@ -359,4 +361,43 @@ func (dm *DownloadManager) GetDownloadCount() int {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
 	return len(dm.jobs)
+}
+
+// tvPreparationResult prevents the download completion path from announcing an
+// unprepared file as ready after the worker closes its completion channel.
+func (dm *DownloadManager) tvPreparationResult(ctx context.Context, movieID uint) error {
+	if !dm.cfg.VideoSettings.CompatibilityMode {
+		return nil
+	}
+	movie, err := dm.db.GetMovieByID(ctx, movieID)
+	if err != nil {
+		return fmt.Errorf("%w: check status: %w", downloader.ErrTVPreparation, err)
+	}
+	if movie.ConversionStatus != "done" || movie.ConversionPercentage < 100 {
+		return fmt.Errorf("%w: preparation did not complete", downloader.ErrTVPreparation)
+	}
+	return nil
+}
+
+func stoppedDownloadError(job *downloadJob) error {
+	if job.silentStop.Load() {
+		return downloader.ErrStoppedByDeletion
+	}
+	return downloader.ErrStoppedByUser
+}
+
+func (dm *DownloadManager) waitTVPreparation(job *downloadJob, movieID uint, needWait bool, done <-chan struct{}) error {
+	if needWait && done != nil {
+		select {
+		case <-done:
+		case <-job.ctx.Done():
+			// Cancellation kills ffmpeg; joining makes stop/delete safe before release.
+			dm.cancelConversionAndWait(movieID)
+			<-done
+		}
+	}
+	if job.ctx.Err() != nil {
+		return stoppedDownloadError(job)
+	}
+	return dm.tvPreparationResult(job.ctx, movieID)
 }

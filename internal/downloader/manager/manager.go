@@ -89,6 +89,7 @@ func (dm *DownloadManager) resumeDownloadImmediately(
 		totalEpisodes: totalEpisodes,
 	}
 
+	dm.allowConversion(movieID)
 	dm.mu.Lock()
 	dm.jobs[movieID] = job
 	dm.mu.Unlock()
@@ -217,6 +218,7 @@ func (dm *DownloadManager) startDownloadImmediately(
 		totalEpisodes: dl.TotalEpisodes(),
 	}
 
+	dm.allowConversion(movieID)
 	dm.mu.Lock()
 	dm.jobs[movieID] = job
 	dm.mu.Unlock()
@@ -226,38 +228,29 @@ func (dm *DownloadManager) startDownloadImmediately(
 	return movieID, progressChan, outerErrChan, nil
 }
 
-func (dm *DownloadManager) StopDownload(movieID uint) error {
-	dm.mu.Lock()
-	job, exists := dm.jobs[movieID]
-	dm.mu.Unlock()
-
-	if exists {
-		logutils.Log.WithField("movie_id", movieID).Info("Stopping active download")
-		if err := job.downloader.StopDownload(); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader (may have stopped anyway)")
-		}
-		job.cancel()
-		return nil
-	}
-
-	return dm.stopDownloadNotFound(movieID)
-}
+func (dm *DownloadManager) StopDownload(movieID uint) error { return dm.stopDownload(movieID, false) }
 
 func (dm *DownloadManager) StopDownloadSilent(movieID uint) error {
+	return dm.stopDownload(movieID, true)
+}
+
+func (dm *DownloadManager) stopDownload(movieID uint, silent bool) error {
 	dm.mu.Lock()
 	job, exists := dm.jobs[movieID]
-	dm.mu.Unlock()
-
+	if exists && silent {
+		job.silentStop.Store(true)
+	}
 	if exists {
-		job.silentStop = true
-		logutils.Log.WithField("movie_id", movieID).Info("Stopping active download")
-		if err := job.downloader.StopDownload(); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader (may have stopped anyway)")
-		}
 		job.cancel()
+	}
+	dm.mu.Unlock()
+	dm.cancelConversionAndWait(movieID)
+	if exists {
+		if err := job.downloader.StopDownload(); err != nil {
+			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader")
+		}
 		return nil
 	}
-
 	return dm.stopDownloadNotFound(movieID)
 }
 
@@ -298,13 +291,13 @@ func (dm *DownloadManager) ResumePendingTVConversions(ctx context.Context) {
 		default:
 			continue
 		}
-		if m.TvCompatibility == tvcompat.TvCompatRed {
+		if m.TvCompatibility == tvcompat.TvCompatRed && dm.cfg.VideoSettings.RejectIncompatible {
 			if err := dm.db.UpdateConversionStatus(ctx, m.ID, "skipped"); err != nil {
 				logutils.Log.WithError(err).WithField("movie_id", m.ID).Warn("ResumePendingTVConversions: set skipped failed")
 			}
 			continue
 		}
-		enqueued, _ := dm.EnqueueConversion(m.ID, m.Name)
+		enqueued, _ := dm.enqueueConversion(ctx, m.ID, m.Name)
 		if enqueued {
 			logutils.Log.WithField("movie_id", m.ID).Info("Re-enqueued TV compatibility conversion after startup")
 		}
@@ -351,19 +344,20 @@ func (dm *DownloadManager) RemoveQBittorrentTorrent(ctx context.Context, movieID
 
 func (dm *DownloadManager) StopAllDownloads() {
 	dm.mu.Lock()
-	jobs := make(map[uint]*downloadJob)
-	for k := range dm.jobs {
-		jobs[k] = dm.jobs[k]
+	ids := make(map[uint]struct{}, len(dm.jobs))
+	for id, job := range dm.jobs {
+		ids[id] = struct{}{}
+		job.cancel()
 	}
 	dm.mu.Unlock()
-
-	for movieID := range jobs {
-		job := jobs[movieID]
-		logutils.Log.WithField("movie_id", movieID).Info("Stopping download")
-		if err := job.downloader.StopDownload(); err != nil {
-			logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Issue stopping downloader (may have stopped anyway)")
-		}
-		job.cancel()
+	dm.conversionMu.Lock()
+	dm.conversionsStopped = true
+	for id := range dm.conversions {
+		ids[id] = struct{}{}
+	}
+	dm.conversionMu.Unlock()
+	for id := range ids {
+		_ = dm.StopDownload(id)
 	}
 }
 
@@ -455,7 +449,7 @@ func (dm *DownloadManager) removeMovieRollback(ctx context.Context, movieID uint
 }
 
 // enqueueConversionIfNeeded runs after download completes: probes TV compatibility, sets tv_compatibility,
-// and either marks as skipped (red) or enqueues for light conversion (green/yellow).
+// and enqueues real preparation unless the explicit reject policy applies.
 // Returns needWait, done channel, and compatRed (true if video is red / not playable on TV).
 func (dm *DownloadManager) enqueueConversionIfNeeded(
 	ctx context.Context,
@@ -472,39 +466,23 @@ func (dm *DownloadManager) enqueueConversionIfNeeded(
 	probeCtx, cancelProbe := context.WithTimeout(ctx, compatibilityProbeTimeout)
 	defer cancelProbe()
 	compat := tvcompat.ProbeTvCompatibility(probeCtx, movieID, dm.cfg.MoviePath, dm.db, targetLevel)
-	if compat == "" {
-		// Probe could not determine compatibility (ffprobe missing, etc.)
-		// Keep the early estimate and skip conversion (we can't convert without ffprobe anyway).
-		logutils.Log.WithField("movie_id", movieID).Debug("TV compatibility probe returned unknown, keeping early estimate")
-		return false, nil, false
-	}
-	_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
-	if compat == tvcompat.TvCompatRed {
+	if compat == tvcompat.TvCompatRed && dm.cfg.VideoSettings.RejectIncompatible {
+		_ = dm.db.SetTvCompatibility(ctx, movieID, compat)
 		_ = dm.db.UpdateConversionStatus(ctx, movieID, "skipped")
 		return false, nil, true
 	}
+	// Metadata is preliminary until preparation and output verification succeed.
+	_ = dm.db.SetTvCompatibility(ctx, movieID, tvcompat.TvCompatYellow)
 	_ = dm.db.UpdateConversionStatus(ctx, movieID, "pending")
 	_ = dm.db.UpdateConversionPercentage(ctx, movieID, 0)
-	needWait, ch := dm.EnqueueConversion(movieID, title)
+	needWait, ch := dm.enqueueConversion(ctx, movieID, title)
 	return needWait, ch, false
 }
 
 // EnqueueConversion adds movieID to the conversion queue (no-op if compatibility mode is off).
 // Returns (enqueued, done). If enqueued, caller must <-done before signaling "download completed" to the user.
 func (dm *DownloadManager) EnqueueConversion(movieID uint, title string) (enqueued bool, done <-chan struct{}) {
-	if !dm.cfg.VideoSettings.CompatibilityMode {
-		return false, nil
-	}
-	jobDone := make(chan struct{}, 1)
-	job := conversionJob{MovieID: movieID, Title: title, Done: jobDone}
-	select {
-	case dm.conversionQueue <- job:
-		logutils.Log.WithField("movie_id", movieID).Info("Movie enqueued for TV compatibility conversion")
-		return true, jobDone
-	default:
-		logutils.Log.WithField("movie_id", movieID).Warn("Conversion queue full, movie not enqueued")
-		return false, nil
-	}
+	return dm.enqueueConversion(context.Background(), movieID, title)
 }
 
 func (dm *DownloadManager) runConversionWorker() {
@@ -512,9 +490,17 @@ func (dm *DownloadManager) runConversionWorker() {
 	for job := range dm.conversionQueue {
 		j := job
 		func() {
-			defer close(j.Done)
+			if j.control != nil {
+				defer dm.finishConversion(j.MovieID, j.control)
+				if !dm.beginConversion(j.MovieID, j.control) {
+					return
+				}
+			} else {
+				defer close(j.Done)
+			}
 			defer func() {
 				if r := recover(); r != nil {
+					_ = dm.db.UpdateConversionStatus(context.Background(), j.MovieID, "failed")
 					logutils.Log.WithFields(map[string]any{
 						"movie_id": j.MovieID,
 						"panic":    r,
@@ -522,16 +508,24 @@ func (dm *DownloadManager) runConversionWorker() {
 				}
 			}()
 
-			jobCtx, cancelJob := context.WithTimeout(context.Background(), conversionJobTimeout)
+			parentCtx := context.Background()
+			if j.control != nil {
+				parentCtx = j.control.ctx
+			}
+			jobCtx, cancelJob := context.WithTimeout(parentCtx, conversionJobTimeout)
 			defer cancelJob()
 
 			movieID := j.MovieID
+			_ = dm.db.SetTvCompatibility(jobCtx, movieID, tvcompat.TvCompatYellow)
+			_ = dm.db.UpdateConversionPercentage(jobCtx, movieID, 0)
 			if err := dm.db.UpdateConversionStatus(jobCtx, movieID, "in_progress"); err != nil {
 				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status")
 			}
-			movie, _ := dm.db.GetMovieByID(jobCtx, movieID)
-			if movie.TvCompatibility != tvcompat.TvCompatGreen {
-				tvcompat.RunTvCompatibility(jobCtx, movieID, dm.cfg.MoviePath, dm.db, vs)
+			if err := tvcompat.RunTvCompatibility(jobCtx, movieID, dm.cfg.MoviePath, dm.db, vs); err != nil {
+				_ = dm.db.UpdateConversionStatus(context.Background(), movieID, "failed")
+				_ = dm.db.SetTvCompatibility(context.Background(), movieID, tvcompat.TvCompatYellow)
+				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("TV preparation failed; source preserved")
+				return
 			}
 			const completeConversionPct = 100
 			if jobCtx.Err() != nil {
@@ -541,11 +535,18 @@ func (dm *DownloadManager) runConversionWorker() {
 				logutils.Log.WithField("movie_id", movieID).Warn("TV compatibility conversion timed out or canceled")
 				return
 			}
+			if err := dm.db.SetTvCompatibility(jobCtx, movieID, tvcompat.TvCompatGreen); err != nil {
+				_ = dm.db.UpdateConversionStatus(context.Background(), movieID, "failed")
+				return
+			}
 			if err := dm.db.UpdateConversionPercentage(jobCtx, movieID, completeConversionPct); err != nil {
-				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion percentage")
+				_ = dm.db.UpdateConversionStatus(context.Background(), movieID, "failed")
+				return
 			}
 			if err := dm.db.UpdateConversionStatus(jobCtx, movieID, "done"); err != nil {
+				_ = dm.db.UpdateConversionStatus(context.Background(), movieID, "failed")
 				logutils.Log.WithError(err).WithField("movie_id", movieID).Warn("Failed to set conversion status done")
+				return
 			}
 			logutils.Log.WithField("movie_id", movieID).Info("TV compatibility conversion completed")
 		}()

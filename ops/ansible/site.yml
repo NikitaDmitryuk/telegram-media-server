@@ -846,6 +846,13 @@
       no_log: true
       tags: smoke
 
+    - name: Configure explicitly managed Prowlarr proxy and indexers
+      ansible.builtin.import_tasks: prowlarr-setup-tasks.yml
+      when:
+        - tms_enable_prowlarr
+        - (prowlarr_manage_proxy | default(false) | bool) or (prowlarr_managed_indexers | default([]) | length > 0)
+      tags: [prowlarr, smoke]
+
     - name: Check TMS health
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ tms_api_listen.split(':')[-1] }}/api/v1/health"

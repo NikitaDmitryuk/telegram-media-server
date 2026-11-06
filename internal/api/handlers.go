@@ -342,6 +342,10 @@ func Search(w http.ResponseWriter, r *http.Request, a *app.App) {
 	page, err := client.SearchTorrentsWithContext(ctx, q, 0, limit, nil, nil)
 	if err != nil {
 		logutils.Log.WithError(err).WithField("request_id", RequestIDFromContext(r.Context())).Error("Search: Prowlarr request failed")
+		if errors.Is(err, prowlarr.ErrNoUsableIndexers) {
+			writeError(w, http.StatusServiceUnavailable, "search not configured (no usable torrent indexers)")
+			return
+		}
 		writeError(w, http.StatusServiceUnavailable, "search unavailable")
 		return
 	}

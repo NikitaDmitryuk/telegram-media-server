@@ -2,9 +2,13 @@
 Description=Update Telegram Media Server VPN subscription
 Wants=network-online.target
 After=network-online.target
+# A boot-time network outage must not exhaust the restart budget.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+Restart=on-failure
+RestartSec=30s
 ExecStart=/usr/bin/python3 /usr/local/libexec/telegram-media-server-setup-proxy --subscription-file /etc/telegram-media-server-vpn/subscription.url --output /etc/telegram-media-server-vpn/config.json
 UMask=0077
 TimeoutStartSec=90

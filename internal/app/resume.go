@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/database"
+	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/downloader/qbittorrent"
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/filemanager"
 	tmslang "github.com/NikitaDmitryuk/telegram-media-server/internal/lang"
@@ -82,6 +84,12 @@ func resumeIncompleteQBittorrentDownload(ctx context.Context, a *App, movie *dat
 		}
 
 		err = <-completionChan
+		if errors.Is(err, downloader.ErrTVPreparation) || errors.Is(err, downloader.ErrStoppedByUser) ||
+			errors.Is(err, downloader.ErrStoppedByDeletion) {
+			logutils.Log.WithError(err).WithField("movie_id", movie.ID).
+				Warn("Download stopped or TV preparation failed; not retrying download")
+			return
+		}
 		if err == nil {
 			logutils.Log.WithField("movie_id", movie.ID).Info("Resumed qBittorrent download completed successfully")
 			if cleanupErr := filemanager.DeleteTemporaryFilesByMovieID(movie.ID, a.Config.MoviePath, a.DB, a.DownloadManager); cleanupErr != nil {

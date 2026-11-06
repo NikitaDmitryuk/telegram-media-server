@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -632,6 +633,57 @@ func TestAPI_Search_400NoQuery(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("Search without q: got status %d, want 400", rec.Code)
+	}
+}
+
+func TestAPI_SearchDistinguishesNoUsableIndexersFromEmptySearch(t *testing.T) {
+	tests := []struct {
+		name       string
+		indexers   string
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "no usable indexers",
+			indexers:   `[]`,
+			wantStatus: http.StatusServiceUnavailable,
+			wantBody:   `{"error":"search not configured (no usable torrent indexers)"}`,
+		},
+		{
+			name:       "real empty search",
+			indexers:   `[{"id":1,"enable":true,"protocol":"torrent","supportsSearch":true}]`,
+			wantStatus: http.StatusOK,
+			wantBody:   `[]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prowlarr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("X-Api-Key") != "key" {
+					t.Errorf("X-Api-Key = %q, want key", r.Header.Get("X-Api-Key"))
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/api/v1/search" {
+					_, _ = w.Write([]byte(`[]`))
+					return
+				}
+				_, _ = w.Write([]byte(tt.indexers))
+			}))
+			defer prowlarr.Close()
+
+			cfg := &config.Config{TMSAPIEnabled: true, TMSAPIKey: "secret", ProwlarrURL: prowlarr.URL, ProwlarrAPIKey: "key"}
+			srv := NewServer(&app.App{Config: cfg}, "127.0.0.1:0", "secret")
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/search?q=Matrix", http.NoBody)
+			req.Header.Set("Authorization", "Bearer secret")
+			rec := httptest.NewRecorder()
+			srv.srv.Handler.ServeHTTP(rec, req)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if got := strings.TrimSpace(rec.Body.String()); got != tt.wantBody {
+				t.Fatalf("body = %s, want %s", got, tt.wantBody)
+			}
+		})
 	}
 }
 

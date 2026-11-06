@@ -57,10 +57,8 @@ func TestListMoviesHandler_WithMovies(t *testing.T) {
 	}
 
 	for _, sub := range []string{
-		"Test Movie 1",
-		"Test Movie 2",
-		"DL 75% | CV waiting 0% | TV unknown",
-		"DL 100% | CV waiting 0% | TV unknown",
+		"Test Movie 1\n⬇️ Downloading — 75% · 1.00 GB · ID:1",
+		"Test Movie 2\n📦 Downloaded · TV compatibility unknown · 2.00 GB · ID:2",
 		"1.00",
 		"2.00",
 	} {
@@ -110,8 +108,24 @@ func TestListMoviesHandler_WithSeries(t *testing.T) {
 	if !strings.Contains(msg.Text, "2/8") {
 		t.Errorf("Expected '2/8' for series, got: %s", msg.Text)
 	}
-	if !strings.Contains(msg.Text, "Test Series S01") {
-		t.Errorf("Expected series name, got: %s", msg.Text)
+	if !strings.Contains(msg.Text, "Test Series S01\n⬇️ Downloading — 25% · 2/8 1.00 GB · ID:1") {
+		t.Errorf("Expected formatted series card preserving name, ID, size and episodes, got: %s", msg.Text)
+	}
+}
+
+func TestListMoviesHandler_FormattingHasNoTechnicalStatusOrBrackets(t *testing.T) {
+	bot := &testutils.MockBot{}
+	cfg := testutils.TestConfig(t.TempDir())
+	cfg.VideoSettings.CompatibilityMode = true
+	a := &app.App{Bot: bot, DB: &MockDatabaseWithCompatMovie{}, Config: cfg}
+	update := &tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}}
+
+	ListMoviesHandler(a, update)
+	msg := bot.SentMessages[0].Text
+	for _, technical := range []string{"[", "]", "DL ", "CV ", "TV green", "done", "pending", "in_progress", "failed"} {
+		if strings.Contains(msg, technical) {
+			t.Errorf("formatted list contains technical marker %q: %s", technical, msg)
+		}
 	}
 }
 
@@ -132,11 +146,8 @@ func TestListMoviesHandler_CompatibilityMode(t *testing.T) {
 	}
 
 	msg := bot.SentMessages[0]
-	if !strings.Contains(msg.Text, "DL 100% | CV waiting 100% | TV green") {
-		t.Errorf("Expected explicit compat status in compat mode, got: %s", msg.Text)
-	}
-	if !strings.Contains(msg.Text, "🟢") {
-		t.Errorf("Expected green sticker, got: %s", msg.Text)
+	if !strings.Contains(msg.Text, "TV Ready Movie\n✅ Ready to watch · 1.00 GB · ID:1") {
+		t.Errorf("Expected readable ready status in compat mode, got: %s", msg.Text)
 	}
 	if !strings.Contains(msg.Text, "TV Ready Movie") {
 		t.Errorf("Expected movie name, got: %s", msg.Text)
@@ -148,32 +159,98 @@ func TestFormatListProgressAndSticker_StatusVariants(t *testing.T) {
 	cases := []struct {
 		name         string
 		movie        database.Movie
+		compatMode   bool
 		wantProgress string
 		wantSticker  string
 	}{
 		{
-			name:         "unknown_waiting",
-			movie:        database.Movie{DownloadedPercentage: 50},
-			wantProgress: "DL 50% | CV waiting 0% | TV unknown",
-			wantSticker:  "⚪ ",
+			name:         "downloading_unknown_hides_compat",
+			movie:        database.Movie{DownloadedPercentage: 50, TvCompatibility: "yellow"},
+			compatMode:   true,
+			wantProgress: "Downloading — 50%",
+			wantSticker:  "⬇️ ",
 		},
 		{
-			name:         "done_forces_conversion_100",
-			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "done", TvCompatibility: "green"},
-			wantProgress: "DL 100% | CV done 100% | TV green",
-			wantSticker:  "🟢 ",
+			name:         "compat_disabled_downloaded",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "pending"},
+			wantProgress: "Downloaded",
+			wantSticker:  "✅ ",
 		},
 		{
-			name:         "skipped_forces_conversion_100",
-			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "skipped", TvCompatibility: "red"},
-			wantProgress: "DL 100% | CV skipped 100% | TV red",
-			wantSticker:  "🔴 ",
+			name:         "legacy_green_empty_conversion",
+			movie:        database.Movie{DownloadedPercentage: 100, TvCompatibility: "green"},
+			compatMode:   true,
+			wantProgress: "Ready to watch",
+			wantSticker:  "✅ ",
+		},
+		{
+			name:         "done_green_ignores_stale_conversion_percent",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "done", ConversionPercentage: 12, TvCompatibility: "green"},
+			compatMode:   true,
+			wantProgress: "Ready to watch",
+			wantSticker:  "✅ ",
+		},
+		{
+			name:         "skipped_green_is_ready",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "skipped", ConversionPercentage: 20, TvCompatibility: "green"},
+			compatMode:   true,
+			wantProgress: "Ready to watch",
+			wantSticker:  "✅ ",
+		},
+		{
+			name:         "pending_precedes_green",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "pending", TvCompatibility: "green"},
+			compatMode:   true,
+			wantProgress: "Queued for processing",
+			wantSticker:  "⏳ ",
+		},
+		{
+			name:         "in_progress_precedes_green",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "in_progress", ConversionPercentage: 35, TvCompatibility: "green"},
+			compatMode:   true,
+			wantProgress: "Preparing for TV — 35%",
+			wantSticker:  "🎞️ ",
+		},
+		{
+			name:         "failed_precedes_green",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "failed", TvCompatibility: "green"},
+			compatMode:   true,
+			wantProgress: "Failed to prepare for TV",
+			wantSticker:  "⚠️ ",
+		},
+		{
+			name:         "unknown_compatibility",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "done", TvCompatibility: "yellow"},
+			compatMode:   true,
+			wantProgress: "Downloaded · TV compatibility unknown",
+			wantSticker:  "📦 ",
+		},
+		{
+			name:         "completed_red_unsupported",
+			movie:        database.Movie{DownloadedPercentage: 100, ConversionStatus: "done", TvCompatibility: "red"},
+			compatMode:   true,
+			wantProgress: "Not supported on TV",
+			wantSticker:  "🚫 ",
+		},
+		{
+			name:         "early_green_hint",
+			movie:        database.Movie{DownloadedPercentage: 25, TvCompatibility: "green"},
+			compatMode:   true,
+			wantProgress: "Downloading — 25% · 📺 Suitable for TV",
+			wantSticker:  "⬇️ ",
+		},
+		{
+			name:         "early_red_hint",
+			movie:        database.Movie{DownloadedPercentage: 25, TvCompatibility: "red"},
+			compatMode:   true,
+			wantProgress: "Downloading — 25% · ⚠️ Not supported on TV",
+			wantSticker:  "⬇️ ",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			progress, sticker := formatListProgressAndSticker(&tc.movie, true)
+			progress, sticker := formatListProgressAndSticker(&tc.movie, tc.compatMode)
 			if progress != tc.wantProgress {
 				t.Fatalf("progress = %q, want %q", progress, tc.wantProgress)
 			}

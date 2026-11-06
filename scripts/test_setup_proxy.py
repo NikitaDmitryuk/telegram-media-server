@@ -1,5 +1,6 @@
 """Subscription conversion and transactional updates; no network/systemd mutations."""
 import base64
+import configparser
 from io import BytesIO
 import json
 import os
@@ -211,6 +212,45 @@ class UpdateTest(unittest.TestCase):
         self.assertFalse(first.is_alive() or second.is_alive())
         self.assertEqual(errors, [])
         self.assertEqual(self.run.call_count, 2)  # validate + restart, once
+
+
+class RefreshUnitsTest(unittest.TestCase):
+    templates = SCRIPT.parent.parent / "ops/ansible/templates"
+
+    def unit(self, name):
+        config = configparser.ConfigParser(interpolation=None)
+        config.read(self.templates / (name + ".j2"))
+        return config
+
+    def test_boot_refresh_retries_failures_without_restart_budget(self):
+        unit = self.unit("telegram-media-server-vpn-update.service")
+        # A oneshot must stop retrying on success, but retry errors and timeouts.
+        self.assertEqual(unit["Service"]["Type"], "oneshot")
+        self.assertEqual(unit["Service"]["Restart"], "on-failure")
+        self.assertEqual(unit["Unit"]["StartLimitIntervalSec"], "0")
+        delay = unit["Service"]["RestartSec"]
+        self.assertRegex(delay, r"^\d+s$")
+        self.assertGreater(int(delay[:-1]), 0)
+        self.assertLessEqual(int(delay[:-1]), 60)
+        self.assertNotEqual(unit["Service"].get("RemainAfterExit", "no"), "yes")
+
+    def test_timer_runs_after_boot_and_keeps_hourly_refresh(self):
+        timer = self.unit("telegram-media-server-vpn-update.timer")
+        self.assertEqual(timer["Timer"]["OnBootSec"], "1min")
+        self.assertEqual(timer["Timer"]["OnUnitActiveSec"], "1h")
+        self.assertEqual(timer["Timer"]["Unit"], "telegram-media-server-vpn-update.service")
+        self.assertEqual(timer["Install"]["WantedBy"], "timers.target")
+
+    @unittest.skipUnless(shutil.which("systemd-analyze"), "systemd-analyze not installed")
+    def test_systemd_accepts_refresh_units(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = []
+            for name in ("telegram-media-server-vpn-update.service", "telegram-media-server-vpn-update.timer"):
+                path = Path(directory) / name
+                path.write_text((self.templates / (name + ".j2")).read_text())
+                paths.append(str(path))
+            result = subprocess.run(["systemd-analyze", "verify", "--man=no", *paths], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

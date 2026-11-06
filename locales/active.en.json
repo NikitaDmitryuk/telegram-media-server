@@ -16,7 +16,19 @@
             "progress": "Downloading {{.Name}}: {{.Progress}}%"
         },
         "video_downloading": "⬇️ Downloading video: {{.Title}}",
-        "downloaded_list": "ID:{{.ID}} {{.Sticker}}[{{.Progress}}] {{.Episodes}}{{.SizeGB}}\n{{.Name}}\n",
+        "downloaded_list": "{{.Name}}\n{{.Sticker}}{{.Progress}} · {{.Episodes}}{{.SizeGB}} · ID:{{.ID}}\n",
+        "list_status": {
+            "downloading": "Downloading — {{.Progress}}%",
+            "tv_compatible_hint": " · 📺 Suitable for TV",
+            "tv_unsupported_hint": " · ⚠️ Not supported on TV",
+            "downloaded": "Downloaded",
+            "conversion_failed": "Failed to prepare for TV",
+            "conversion_progress": "Preparing for TV — {{.Progress}}%",
+            "conversion_queued": "Queued for processing",
+            "ready": "Ready to watch",
+            "tv_unsupported": "Not supported on TV",
+            "compatibility_unknown": "Downloaded · TV compatibility unknown"
+        },
         "first_episode_ready": "▶️ First episode of «{{.Title}}» is ready to watch.",
         "video_not_supported": "⚠️ Video «{{.Title}}» is not supported by your TV (codec/H.264 level). Download cancelled.",
         "torrent_stalled": "⚠️ Torrent «{{.Title}}» has made no progress for a long time. It will keep waiting for metadata or peers.",
@@ -41,6 +53,7 @@
             "enter_query": "Please enter the movie name to search for torrents",
             "empty_query": "Query cannot be empty",
             "not_configured": "Prowlarr integration is not configured",
+            "no_indexers": "Torrent search is not configured: no indexers are enabled",
             "failed": "Prowlarr is not available. Please check the settings",
             "not_found": "No torrents found for your query",
             "download": "Download",
