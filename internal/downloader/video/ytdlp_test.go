@@ -200,7 +200,7 @@ func TestAppendFormatSortArgs(t *testing.T) {
 			settings: tmsconfig.VideoConfig{
 				CompatibilityMode: true,
 			},
-			wantSort: "vcodec:h264,acodec:mp3",
+			wantSort: "vcodec:h264,acodec:aac",
 		},
 		{
 			name: "height + compatibility",
@@ -208,7 +208,7 @@ func TestAppendFormatSortArgs(t *testing.T) {
 				MaxHeight:         720,
 				CompatibilityMode: true,
 			},
-			wantSort: "res:720,vcodec:h264,acodec:mp3",
+			wantSort: "res:720,vcodec:h264,acodec:aac",
 		},
 	}
 

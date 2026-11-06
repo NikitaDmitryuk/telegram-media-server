@@ -563,11 +563,7 @@ func appendFormatSortArgs(args []string, videoSettings *tmsconfig.VideoConfig) [
 	}
 
 	if videoSettings.CompatibilityMode {
-		formatSortParts = append(formatSortParts, "vcodec:h264", "acodec:mp3")
-		videoSettings.EnableReencoding = true
-		videoSettings.VideoCodec = "h264"
-		videoSettings.AudioCodec = "mp3"
-		videoSettings.OutputFormat = "mp4"
+		formatSortParts = append(formatSortParts, "vcodec:h264", "acodec:aac")
 	}
 
 	if len(formatSortParts) > 0 {
@@ -579,7 +575,7 @@ func appendFormatSortArgs(args []string, videoSettings *tmsconfig.VideoConfig) [
 
 // appendReencodingArgs adds video reencoding options if enabled.
 func appendReencodingArgs(args []string, videoSettings *tmsconfig.VideoConfig) []string {
-	if !videoSettings.EnableReencoding {
+	if videoSettings.CompatibilityMode || !videoSettings.EnableReencoding {
 		return args
 	}
 

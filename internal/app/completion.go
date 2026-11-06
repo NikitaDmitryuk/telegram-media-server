@@ -25,13 +25,18 @@ func RunCompletionLoop(
 		logutils.Log.Info("Download stopped by deletion queue (no user notification)")
 		return
 	}
-	if dl.StoppedManually() {
+	if errors.Is(err, downloader.ErrStoppedByUser) || dl.StoppedManually() {
 		logutils.Log.Info("Download was manually stopped")
 		compl.OnStopped(movieID, title)
 		return
 	}
 	if err != nil {
 		logutils.Log.WithError(err).Error("Download failed")
+		if errors.Is(err, downloader.ErrTVPreparation) {
+			logutils.Log.WithField("movie_id", movieID).Warn("Keeping downloaded media after TV preparation failure")
+			compl.OnFailed(movieID, title, err)
+			return
+		}
 		if errors.Is(err, downloader.ErrAmbiguousControlPlane) {
 			logutils.Log.WithField("movie_id", movieID).
 				Warn("Keeping download record after ambiguous external control request")

@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NikitaDmitryuk/telegram-media-server/internal/config"
@@ -20,7 +21,7 @@ const (
 	ConversionQueueSize     = 100
 	ProgressChannelBuffSize = 100
 	// conversionJobTimeout bounds ffprobe/ffmpeg work so the download monitor cannot block on <-done forever.
-	conversionJobTimeout = 2 * time.Hour
+	conversionJobTimeout = 24 * time.Hour
 	// compatibilityProbeTimeout limits ffprobe in enqueueConversionIfNeeded (runs inside the download monitor).
 	compatibilityProbeTimeout = 5 * time.Minute
 )
@@ -56,18 +57,23 @@ type conversionJob struct {
 	MovieID uint
 	Title   string
 	Done    chan struct{}
+	control *conversionControl
 }
 
 type DownloadManager struct {
-	mu               sync.RWMutex
-	jobs             map[uint]*downloadJob
-	queue            []queuedDownload
-	semaphore        chan struct{}
-	downloadSettings config.DownloadConfig
-	queueMutex       sync.Mutex
-	db               database.Database
-	cfg              *config.Config
-	conversionQueue  chan conversionJob
+	mu                 sync.RWMutex
+	jobs               map[uint]*downloadJob
+	queue              []queuedDownload
+	semaphore          chan struct{}
+	downloadSettings   config.DownloadConfig
+	queueMutex         sync.Mutex
+	db                 database.Database
+	cfg                *config.Config
+	conversionQueue    chan conversionJob
+	conversionMu       sync.Mutex
+	conversions        map[uint]*conversionControl
+	blockedConversions map[uint]bool
+	conversionsStopped bool
 }
 
 type downloadJob struct {
@@ -80,9 +86,9 @@ type downloadJob struct {
 	cancel               context.CancelFunc
 	queueNotifier        notifier.QueueNotifier
 	title                string
-	totalEpisodes        int  // > 1 for series (multi-file); only then we send "first_episode_ready"
-	rejectedIncompatible bool // set when we cancel due to red + RejectIncompatible
-	silentStop           bool // if true, monitor sends ErrStoppedByDeletion so handler does not notify user
+	totalEpisodes        int         // > 1 for series (multi-file); only then we send "first_episode_ready"
+	rejectedIncompatible bool        // set when we cancel due to red + RejectIncompatible
+	silentStop           atomic.Bool // if true, monitor sends ErrStoppedByDeletion so handler does not notify user
 }
 
 type queuedDownload struct {

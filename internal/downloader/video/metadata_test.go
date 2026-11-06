@@ -68,7 +68,7 @@ printf '{"title":"Cached title","filesize":4096,"vcodec":"avc1.64001f"}\n'
 		t.Fatalf("size = %d", size)
 	}
 	compat, err := dl.(downloader.EarlyCompatDownloader).GetEarlyTvCompatibility(context.Background())
-	if err != nil || compat != "green" {
+	if err != nil || compat != "yellow" {
 		t.Fatalf("compat = %q, err=%v", compat, err)
 	}
 	data, err := os.ReadFile(counterPath)

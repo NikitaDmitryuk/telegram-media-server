@@ -16,7 +16,7 @@ The Makefile and CI define the supported verification surface.
 | `make agent-context-check` | Unit-test and run the repository-context validator. |
 | `make lint` | Run golangci-lint. |
 | `make vet` | Run `go vet` across all packages. |
-| `make test-unit` | Run unit tests with race detection and coverage. |
+| `make test-unit` | Run unit tests with `go test -v -short ./...`; race checks are separate. |
 | `make test-proxy` | Verify VPN subscription conversion, update serialization, rollback, and real Xray config validation when installed. |
 | `make ansible-check` | Syntax-check install, deploy, and remote-test playbooks; does not deploy. |
 | `make test-integration` | Run integration-tagged Go tests. |
@@ -27,7 +27,11 @@ The Makefile and CI define the supported verification surface.
 | `make pre-commit-run` | Execute every configured pre-commit hook. |
 
 For documentation-only changes, the context validator and relevant formatting or
-link checks are sufficient. For Go behavior changes, run `make check` at minimum;
+link checks are sufficient. Use Go 1.26 as pinned in CI (`GOTOOLCHAIN=go1.26.0 make check` when the local
+Go version is newer). The pinned golangci-lint 2.11.4 cannot read Go 1.27 export
+data in this checkout.
+
+For Go behavior changes, run `make check` at minimum;
 add integration, Docker, build, or targeted tests according to the affected path.
 
 For VPN installer changes, run `make test-proxy` and `make ansible-check`. On an
@@ -56,3 +60,7 @@ refresh, unchanged-refresh restart avoidance, and an idempotent repeated deploy
 (`changed=0`). A full host reboot restored the VPN, timer, TMS and the existing
 media services; the boot refresh succeeded, and post-reboot Telegram and TMS
 health checks passed.
+
+The broad manager `-race` suite has a verified baseline logger/test-lifecycle
+issue (TD-002 in [technical debt](../tech-debt.md)). Keep targeted race coverage
+for changed cancellation paths and report the baseline failure separately.

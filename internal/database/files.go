@@ -2,9 +2,64 @@ package database
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 )
+
+var errMainMovieFilePathConflict = errors.New("main movie file path changed or no longer exists")
+
+const sqlitePragmaCleanupTimeout = 5 * time.Second
+
+// ReplaceMainMovieFilePath updates one main file path only if it still matches
+// the caller's expected path. It never creates or replaces file records.
+func (s *SQLiteDatabase) ReplaceMainMovieFilePath(ctx context.Context, movieID, fileID uint, expectedPath, preparedPath string) error {
+	if expectedPath == "" || preparedPath == "" {
+		return errors.New("expected and prepared movie file paths must be non-empty")
+	}
+
+	return s.withRetry(ctx, "ReplaceMainMovieFilePath", func() error {
+		return s.db.WithContext(ctx).Connection(func(connDB *gorm.DB) (operationErr error) {
+			var previousSynchronous int
+			if err := connDB.WithContext(ctx).Raw("PRAGMA synchronous").Row().Scan(&previousSynchronous); err != nil {
+				return fmt.Errorf("read SQLite synchronous setting: %w", err)
+			}
+			if err := connDB.WithContext(ctx).Exec("PRAGMA synchronous = FULL").Error; err != nil {
+				return fmt.Errorf("enable SQLite full synchronous mode: %w", err)
+			}
+
+			defer func() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), sqlitePragmaCleanupTimeout)
+				defer cancel()
+				restoreErr := connDB.WithContext(cleanupCtx).Exec(fmt.Sprintf("PRAGMA synchronous = %d", previousSynchronous)).Error
+				if restoreErr != nil {
+					restoreErr = fmt.Errorf("restore SQLite synchronous setting: %w", restoreErr)
+					if operationErr == nil {
+						operationErr = restoreErr
+					} else {
+						operationErr = errors.Join(operationErr, restoreErr)
+					}
+				}
+			}()
+
+			operationErr = connDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+				result := tx.Model(&MovieFile{}).
+					Where("id = ? AND movie_id = ? AND file_path = ? AND temp_file = ?", fileID, movieID, expectedPath, false).
+					Update("file_path", preparedPath)
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected != 1 {
+					return errMainMovieFilePathConflict
+				}
+				return nil
+			})
+			return operationErr
+		})
+	})
+}
 
 func addFilesWithDB(db *gorm.DB, movieID uint, files []string, isTemp bool) error {
 	if len(files) == 0 {
