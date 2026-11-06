@@ -16,7 +16,19 @@
             "progress": "Загрузка {{.Name}}: {{.Progress}}%"
         },
         "video_downloading": "⬇️ Загрузка видео: {{.Title}}",
-        "downloaded_list": "ID:{{.ID}} {{.Sticker}}[{{.Progress}}] {{.Episodes}}{{.SizeGB}}\n{{.Name}}\n",
+        "downloaded_list": "{{.Name}}\n{{.Sticker}}{{.Progress}} · {{.Episodes}}{{.SizeGB}} · ID:{{.ID}}\n",
+        "list_status": {
+            "downloading": "Загрузка — {{.Progress}}%",
+            "tv_compatible_hint": " · 📺 Подходит для ТВ",
+            "tv_unsupported_hint": " · ⚠️ Не поддерживается на ТВ",
+            "downloaded": "Загружено",
+            "conversion_failed": "Не удалось подготовить для ТВ",
+            "conversion_progress": "Подготовка для ТВ — {{.Progress}}%",
+            "conversion_queued": "В очереди на обработку",
+            "ready": "Готово к просмотру",
+            "tv_unsupported": "Не поддерживается на ТВ",
+            "compatibility_unknown": "Загружено · совместимость с ТВ не определена"
+        },
         "first_episode_ready": "▶️ Первая серия «{{.Title}}» готова к просмотру.",
         "video_not_supported": "⚠️ Видео «{{.Title}}» не поддерживается вашим ТВ (кодек/уровень H.264). Загрузка отменена.",
         "torrent_stalled": "⚠️ Торрент «{{.Title}}» долго не продвигается. Он продолжит ждать метаданные или доступных пиров.",

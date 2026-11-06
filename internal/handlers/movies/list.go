@@ -14,6 +14,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+const listDownloadCompletePercent = 100
+
 func ListMoviesHandler(a *app.App, update *tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 
@@ -85,32 +87,35 @@ func formatListEpisodesPrefix(movie *database.Movie) string {
 }
 
 func formatListProgressAndSticker(movie *database.Movie, compatMode bool) (progressStr, sticker string) {
+	if movie.DownloadedPercentage < listDownloadCompletePercent {
+		progressStr = lang.Translate("general.list_status.downloading", map[string]any{"Progress": movie.DownloadedPercentage})
+		if compatMode {
+			switch movie.TvCompatibility {
+			case "green":
+				progressStr += lang.Translate("general.list_status.tv_compatible_hint", nil)
+			case "red":
+				progressStr += lang.Translate("general.list_status.tv_unsupported_hint", nil)
+			}
+		}
+		return progressStr, "⬇️ "
+	}
 	if !compatMode {
-		return fmt.Sprintf("DL %d%%", movie.DownloadedPercentage), ""
+		return lang.Translate("general.list_status.downloaded", nil), "✅ "
 	}
-	convPct := movie.ConversionPercentage
-	if movie.DownloadedPercentage >= 100 && (movie.ConversionStatus == "done" || movie.ConversionStatus == "skipped") &&
-		convPct < 100 {
-		convPct = 100
+	switch movie.ConversionStatus {
+	case "failed":
+		return lang.Translate("general.list_status.conversion_failed", nil), "⚠️ "
+	case "in_progress":
+		return lang.Translate("general.list_status.conversion_progress", map[string]any{"Progress": movie.ConversionPercentage}), "🎞️ "
+	case "pending":
+		return lang.Translate("general.list_status.conversion_queued", nil), "⏳ "
 	}
-	convStatus := movie.ConversionStatus
-	if convStatus == "" {
-		convStatus = "waiting"
-	}
-	tvStatus := movie.TvCompatibility
-	if tvStatus == "" {
-		tvStatus = "unknown"
-	}
-	progressStr = fmt.Sprintf("DL %d%% | CV %s %d%% | TV %s", movie.DownloadedPercentage, convStatus, convPct, tvStatus)
 	switch movie.TvCompatibility {
 	case "green":
-		sticker = "🟢 "
-	case "yellow":
-		sticker = "🟡 "
+		return lang.Translate("general.list_status.ready", nil), "✅ "
 	case "red":
-		sticker = "🔴 "
+		return lang.Translate("general.list_status.tv_unsupported", nil), "🚫 "
 	default:
-		sticker = "⚪ "
+		return lang.Translate("general.list_status.compatibility_unknown", nil), "📦 "
 	}
-	return progressStr, sticker
 }
