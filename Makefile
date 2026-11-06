@@ -154,6 +154,7 @@ ansible-check:
 	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/site.yml
 	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/deploy.yml
 	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/prowlarr-setup.yml
+	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/flaresolverr.yml
 	ansible-playbook --syntax-check -i $(ANSIBLE_INVENTORY) $(ANSIBLE_VAULT_ARGS) ops/ansible/test.yml
 
 .PHONY: test-remote

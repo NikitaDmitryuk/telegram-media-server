@@ -4,7 +4,7 @@ status: active
 date: 2026-08-29
 last-verified: 2026-11-06
 agent: codex
-evidence: Makefile, .pre-commit-config.yaml, .github/workflows/ci.yml, scripts/test_setup_proxy.py, scripts/test_setup_prowlarr.py, ops/ansible/prowlarr-setup.yml, ops/ansible/site.yml, ops/ansible/vpn.yml, ops/ansible/templates/telegram-media-server-vpn-update.service.j2, internal/bot/bot_test.go
+evidence: Makefile, .pre-commit-config.yaml, .github/workflows/ci.yml, scripts/test_setup_proxy.py, scripts/test_setup_prowlarr.py, ops/ansible/prowlarr-setup.yml, ops/ansible/flaresolverr.yml, ops/ansible/site.yml, ops/ansible/vpn.yml, ops/ansible/templates/telegram-media-server-vpn-update.service.j2, internal/bot/bot_test.go
 ---
 
 # Verification commands
@@ -19,7 +19,7 @@ The Makefile and CI define the supported verification surface.
 | `make test-unit` | Run unit tests with `go test -v -short ./...`; race checks are separate. |
 | `make test-proxy` | Verify VPN subscription conversion, update serialization, rollback, and real Xray config validation when installed. |
 | `make test-prowlarr` | Verify optional Prowlarr proxy/source setup, private backups, idempotence and readiness failures. |
-| `make ansible-check` | Syntax-check install, deploy, Prowlarr component, and remote-test playbooks; does not deploy. |
+| `make ansible-check` | Syntax-check install, deploy, Prowlarr/FlareSolverr components, and remote-test playbooks; does not deploy. |
 | `make test-integration` | Run integration-tagged Go tests. |
 | `make test-docker` | Run Docker-tagged tests. |
 | `make test-coverage` | Generate the HTML coverage report. |
@@ -73,3 +73,9 @@ Prowlarr and TMS. Bot-handler acceptance may capture the transport locally to
 avoid sending messages or starting downloads; that does not prove Telegram
 delivery. A healthy process, empty HTTP 200 response or completed catalog-update
 command alone is insufficient evidence of working search.
+
+For the optional browser helper, syntax-check its component and apply twice on
+an opted-in Docker host. Verify exact pinned version, only the image-declared
+/config volume, loopback listeners, disabled metrics, resource/restart settings
+and unchanged repeat apply. Test a saved tagged source separately: anonymous
+challenge solving and unsaved-provider tests do not prove authenticated search.

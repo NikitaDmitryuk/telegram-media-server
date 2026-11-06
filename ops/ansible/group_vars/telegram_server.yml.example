@@ -100,3 +100,6 @@ minidlna_friendly_name: Telegram Media Server
 minidlna_port: 8200
 
 aur_build_user: "{{ ansible_user }}"
+
+# Optional pinned, loopback-only FlareSolverr container; false leaves it unmanaged.
+prowlarr_manage_flaresolverr: false

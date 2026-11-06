@@ -4,7 +4,7 @@ status: active
 date: 2026-11-06
 last-verified: 2026-11-06
 agent: codex
-evidence: internal/prowlarr/api.go, internal/prowlarr/api_test.go, internal/handlers/session/torrent_search_test.go, internal/api/server_test.go, scripts/setup_prowlarr.py, scripts/test_setup_prowlarr.py, ops/ansible/prowlarr-setup.yml, ops/ansible/prowlarr-setup-tasks.yml, ops/ansible/site.yml
+evidence: internal/prowlarr/api.go, internal/prowlarr/api_test.go, internal/handlers/session/torrent_search_test.go, internal/api/server_test.go, scripts/setup_prowlarr.py, scripts/test_setup_prowlarr.py, ops/ansible/prowlarr-setup.yml, ops/ansible/prowlarr-setup-tasks.yml, ops/ansible/site.yml, ops/ansible/flaresolverr.yml
 ---
 
 # Prowlarr search readiness
@@ -55,3 +55,35 @@ the user subsequently confirmed that search results appeared in Telegram. Binary
 local build; server env, routes and qBittorrent config fingerprints and installed
 Prowlarr version were unchanged. TMS/DLNA remained active and the accepted
 Full HD TS test file remained present.
+
+
+## Authenticated RuTracker and Cloudflare
+
+Native RuTracker requires account credentials entered directly in Prowlarr, not
+repository variables. For this VPN exit, .org/.net native login requests returned
+Cloudflare HTTP 403 and direct mirrors timed out. Official FlareSolverr 3.5.2
+opened the .net login form through the same proxy in 80 seconds; a 60-second probe
+failed, while a 120-second probe and cookie/User-Agent replay passed. Anonymous
+form access is not account authentication, and challenge success can change.
+
+The optional flaresolverr.yml component is explicitly managed with
+prowlarr_manage_flaresolverr. It pins the image digest, uses host networking to
+reach the existing loopback VPN proxy, binds HTTP only to 127.0.0.1:8191 and
+disables Prometheus (otherwise it can listen publicly on 8192). No host binds or
+privileged mode are used. The image itself declares one anonymous /config volume;
+rejecting all mounts would break repeat applies. The actual root health version
+is 3.5.2 without a v prefix. First live creation and repeat apply passed with
+changed=1 and changed=0, respectively. Docker is enabled and restart policy is
+unless-stopped; a full host reboot is a separate check.
+
+Configure a FlareSolverr indexer proxy with a 120-second timeout and the same
+rutracker tag on the saved native source, .net base URL and Cyrillic stripping
+disabled. Prowlarr forwards the global VPN proxy. Saved sources without a matching
+tag skip the solver even if an unsaved test succeeded. IndexerProxy API resources
+have no enable field: validate persisted tags/host/timeout and the proxy test.
+Keep authenticated RuTracker manual; managed RuTor setup preserves it.
+
+Queries are forwarded literally. A natural phrase with 2 сезон returned zero
+RuTor results while Пацаны S02 кубик returned nine releases, including the requested
+season and voice translation. This is independent of source readiness; automatic
+season-query normalization is not implemented.

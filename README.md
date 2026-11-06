@@ -487,6 +487,38 @@ readiness is checked during installation as well as component applies.
 need no additional request. Missing sources return HTTP `503`, while genuine
 empty results remain HTTP `200` with an empty array.
 
+### RuTracker и Cloudflare / RuTracker and Cloudflare
+
+RuTracker добавляется отдельно через интерфейс Prowlarr с личным аккаунтом.
+Учётные данные не задаются в репозитории. При блокировке Cloudflare можно явно
+включить `prowlarr_manage_flaresolverr: true` и применить компонент:
+
+```bash
+ansible-playbook -i ops/ansible/inventory.ini ops/ansible/flaresolverr.yml
+```
+
+Компонент использует уже установленный Docker и закреплённый официальный образ
+FlareSolverr 3.5.2, слушает только `127.0.0.1:8191`, ограничивает ресурсы и включает
+автоматический запуск контейнера. Повторное применение не заменяет посторонний
+контейнер. Значение `false` оставляет существующую настройку без управления.
+
+В Prowlarr добавьте Indexer Proxy типа FlareSolverr с адресом
+`http://127.0.0.1:8191/`, тайм-аутом **120 секунд** и тегом `rutracker`.
+У источника RuTracker выберите `https://rutracker.net/`, тот же тег и оставьте
+Strip Russian letters выключенным. Источник использует существующий VPN-прокси;
+другие источники не получают тег. Обязательно проверяйте поиск после сохранения:
+тест ещё не сохранённого источника может использовать помощник без тега.
+
+RuTracker requires an account entered directly in Prowlarr. The opt-in component
+provides a pinned local browser helper; configure a tagged FlareSolverr indexer
+proxy with a 120-second timeout and the same tag on the saved RuTracker source.
+Prowlarr forwards its existing global VPN proxy. Cloudflare checks can take over
+a minute; a successful anonymous login-page check does not prove account access.
+
+Поиск использует слова из названий раздач: например, `Пацаны S02 кубик` находит
+нужный сезон и озвучку на RuTor, тогда как `Пацаны 2 сезон кубик в кубе` может
+дать пустую выдачу. Запросы пока не преобразуются автоматически.
+
 ---
 
 ## Архитектура / Architecture

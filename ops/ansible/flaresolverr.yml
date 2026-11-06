@@ -1,0 +1,176 @@
+---
+# Persistent, opt-in FlareSolverr component for an existing Docker host.
+- name: Manage optional Prowlarr FlareSolverr component
+  hosts: telegram_server
+  become: true
+  gather_facts: false
+  vars_files:
+    - group_vars/telegram_server.yml
+  vars:
+    flaresolverr_image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
+    flaresolverr_container: tms-flaresolverr
+    flaresolverr_component_label: prowlarr-flaresolverr
+  tasks:
+    - name: Load optional vault vars
+      ansible.builtin.include_vars:
+        file: group_vars/telegram_server.vault.yml
+      failed_when: false
+      no_log: true
+
+    - name: Manage FlareSolverr only when explicitly opted in
+      when: prowlarr_manage_flaresolverr | default(false) | bool
+      block:
+        - name: Ensure existing Docker service is enabled and running
+          ansible.builtin.service:
+            name: docker
+            enabled: true
+            state: started
+
+        - name: Check whether the pinned FlareSolverr image is present
+          ansible.builtin.command:
+            argv: [docker, image, inspect, "{{ flaresolverr_image }}"]
+          register: flaresolverr_image_inspect
+          changed_when: false
+          failed_when: false
+          no_log: true
+
+        - name: Pull the pinned FlareSolverr image only when absent
+          ansible.builtin.command:
+            argv: [docker, pull, "{{ flaresolverr_image }}"]
+          when: flaresolverr_image_inspect.rc != 0
+
+        - name: Read the pinned image ID
+          ansible.builtin.command:
+            argv: [docker, image, inspect, --format, "{{ '{{' }}.Id{{ '}}' }}", "{{ flaresolverr_image }}"]
+          register: flaresolverr_image_id
+          changed_when: false
+          no_log: true
+
+        - name: Check whether the named container exists
+          ansible.builtin.command:
+            argv: [docker, container, inspect, "{{ flaresolverr_container }}"]
+          register: flaresolverr_container_presence
+          changed_when: false
+          failed_when: false
+          no_log: true
+
+        - name: Read existing container properties privately
+          ansible.builtin.set_fact:
+            flaresolverr_existing: "{{ flaresolverr_container_presence.stdout | from_json | first }}"
+          when: flaresolverr_container_presence.rc == 0
+          no_log: true
+
+        - name: Refuse a name collision or drifted FlareSolverr container
+          ansible.builtin.assert:
+            that:
+              - flaresolverr_existing.Image == flaresolverr_image_id.stdout
+              - flaresolverr_existing.Config.Labels.get('io.tms.component', '') == flaresolverr_component_label
+              - flaresolverr_existing.HostConfig.NetworkMode == 'host'
+              - "'HOST=127.0.0.1' in flaresolverr_existing.Config.Env"
+              - "'PORT=8191' in flaresolverr_existing.Config.Env"
+              - "'LOG_LEVEL=warn' in flaresolverr_existing.Config.Env"
+              - "'LOG_HTML=false' in flaresolverr_existing.Config.Env"
+              - "'PROMETHEUS_ENABLED=false' in flaresolverr_existing.Config.Env"
+              # The pinned image declares its own anonymous /config volume.
+              - flaresolverr_existing.Mounts | length == 1
+              - flaresolverr_existing.Mounts[0].Type == 'volume'
+              - flaresolverr_existing.Mounts[0].Destination == '/config'
+              - not flaresolverr_existing.HostConfig.Privileged
+              - flaresolverr_existing.HostConfig.RestartPolicy.Name == 'unless-stopped'
+              - flaresolverr_existing.HostConfig.Memory == 1073741824
+              - flaresolverr_existing.HostConfig.NanoCpus == 1000000000
+              - flaresolverr_existing.HostConfig.PidsLimit == 256
+              - flaresolverr_existing.HostConfig.ShmSize == 268435456
+            fail_msg: >-
+              Container name tms-flaresolverr is occupied by an unowned or drifted
+              container; inspect it manually. This playbook will not replace it.
+          when: flaresolverr_container_presence.rc == 0
+          no_log: true
+
+        - name: Check port availability before creating a container
+          ansible.builtin.command:
+            argv: [ss, -H, -ltn, "sport = :8191"]
+          register: flaresolverr_port_before
+          changed_when: false
+          when: flaresolverr_container_presence.rc != 0
+
+        - name: Refuse an occupied port before creating a container
+          ansible.builtin.assert:
+            that: flaresolverr_port_before.stdout | length == 0
+            fail_msg: Port 8191 is already occupied; no container will be created.
+          when: flaresolverr_container_presence.rc != 0
+
+        - name: Create the FlareSolverr container when absent
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --detach
+              - --name
+              - "{{ flaresolverr_container }}"
+              - --label
+              - "io.tms.component={{ flaresolverr_component_label }}"
+              - --network
+              - host
+              - --restart
+              - unless-stopped
+              - --memory
+              - 1g
+              - --cpus
+              - "1"
+              - --pids-limit
+              - "256"
+              - --shm-size
+              - 256m
+              - --env
+              - HOST=127.0.0.1
+              - --env
+              - PORT=8191
+              - --env
+              - LOG_LEVEL=warn
+              - --env
+              - LOG_HTML=false
+              - --env
+              - PROMETHEUS_ENABLED=false
+              - "{{ flaresolverr_image }}"
+          when: flaresolverr_container_presence.rc != 0
+
+        - name: Start the matching container if it is stopped
+          ansible.builtin.command:
+            argv: [docker, start, "{{ flaresolverr_container }}"]
+          when:
+            - flaresolverr_container_presence.rc == 0
+            - not flaresolverr_existing.State.Running
+
+        - name: Wait for the local FlareSolverr health endpoint
+          ansible.builtin.uri:
+            url: http://127.0.0.1:8191/
+            method: GET
+            status_code: 200
+            return_content: true
+          register: flaresolverr_health
+          retries: 30
+          delay: 2
+          until: (flaresolverr_health.status | default(-1)) == 200 and (flaresolverr_health.json.version | default('')) == '3.5.2'
+          changed_when: false
+
+        - name: Verify the managed container remains running
+          ansible.builtin.command:
+            argv: [docker, container, inspect, --format, "{{ '{{' }}.State.Running{{ '}}' }}", "{{ flaresolverr_container }}"]
+          register: flaresolverr_running
+          changed_when: false
+          failed_when: flaresolverr_running.rc != 0 or flaresolverr_running.stdout != 'true'
+
+        - name: Check that FlareSolverr listens only on loopback
+          ansible.builtin.command:
+            argv: [ss, -H, -ltn, "sport = :8191"]
+          register: flaresolverr_listener
+          changed_when: false
+
+        - name: Require a loopback-only listener
+          ansible.builtin.assert:
+            that:
+              - flaresolverr_listener.stdout_lines | length == 1
+              - flaresolverr_listener.stdout is search('127\\.0\\.0\\.1:8191')
+              - flaresolverr_listener.stdout is not search('0\\.0\\.0\\.0:8191|\\*:8191|\\[::\\]:8191')
+            fail_msg: FlareSolverr did not bind exclusively to 127.0.0.1:8191.
